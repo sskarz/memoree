@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { SESSIONS_COLUMNS } from "../../src/deeplake-schema.js";
+import { SESSIONS_COLUMNS } from "../../src/storage/schema.js";
 
 /**
  * Every agent builds its own `sessions` INSERT as an inline SQL string — a

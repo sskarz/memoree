@@ -20,7 +20,7 @@ describe("query-cache", () => {
   });
 
   it("writes and reads cached index content per session", () => {
-    const cacheRoot = mkdtempSync(join(tmpdir(), "hivemind-query-cache-"));
+    const cacheRoot = mkdtempSync(join(tmpdir(), "memoree-query-cache-"));
     tempRoots.push(cacheRoot);
 
     writeCachedIndexContent("session-1", "# Memory Index", { cacheRoot });
@@ -30,7 +30,7 @@ describe("query-cache", () => {
   });
 
   it("returns null for missing cache files and logs non-ENOENT read and write failures", () => {
-    const cacheRoot = mkdtempSync(join(tmpdir(), "hivemind-query-cache-"));
+    const cacheRoot = mkdtempSync(join(tmpdir(), "memoree-query-cache-"));
     tempRoots.push(cacheRoot);
     const logFn = vi.fn();
 
@@ -51,7 +51,7 @@ describe("query-cache", () => {
   });
 
   it("clears a session cache directory and swallows removal errors", () => {
-    const cacheRoot = mkdtempSync(join(tmpdir(), "hivemind-query-cache-"));
+    const cacheRoot = mkdtempSync(join(tmpdir(), "memoree-query-cache-"));
     tempRoots.push(cacheRoot);
     writeCachedIndexContent("session-2", "cached", { cacheRoot });
 

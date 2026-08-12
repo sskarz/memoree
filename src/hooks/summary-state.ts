@@ -160,7 +160,7 @@ export function ownerLiveness(sessionId: string): "alive" | "dead" | "unknown" {
  * SessionEnd marker, no further events) lets the window lapse.
  */
 export function activeWindowMs(): number {
-  const v = Number(process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS ?? "");
+  const v = Number(process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS ?? "");
   return Number.isFinite(v) && v > 0 ? v : 10 * 60 * 1000;
 }
 
@@ -349,8 +349,8 @@ export interface TriggerConfig {
 }
 
 export function loadTriggerConfig(): TriggerConfig {
-  const n = Number(process.env.HIVEMIND_SUMMARY_EVERY_N_MSGS ?? "");
-  const h = Number(process.env.HIVEMIND_SUMMARY_EVERY_HOURS ?? "");
+  const n = Number(process.env.MEMOREE_SUMMARY_EVERY_N_MSGS ?? "");
+  const h = Number(process.env.MEMOREE_SUMMARY_EVERY_HOURS ?? "");
   return {
     everyNMessages: Number.isInteger(n) && n > 0 ? n : 50,
     everyHours: Number.isFinite(h) && h > 0 ? h : 2,
@@ -381,7 +381,7 @@ export function tryAcquireLock(sessionId: string, maxAgeMs = 10 * 60 * 1000): bo
       if (Number.isFinite(ageMs) && ageMs < maxAgeMs) return false;
     } catch (readErr: any) {
       // Unreadable lock content: treat as stale and log for visibility
-      // (HIVEMIND_DEBUG-gated) so we know why stale reclaim fired.
+      // (MEMOREE_DEBUG-gated) so we know why stale reclaim fired.
       dlog(`lock file unreadable for ${sessionId}, treating as stale: ${readErr.message}`);
     }
     try {

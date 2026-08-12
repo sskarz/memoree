@@ -22,10 +22,10 @@ function seedFixture(version: string, targetVersions: Record<string, string> = {
     writeJson(resolve(root, target), { name: target, version: v });
   }
   writeJson(resolve(root, MARKETPLACE_PATH), {
-    name: "hivemind",
+    name: "memoree",
     metadata: { description: "x", version: targetVersions[MARKETPLACE_PATH] ?? "0.0.0-stale" },
     plugins: [
-      { name: "hivemind", version: targetVersions[MARKETPLACE_PATH] ?? "0.0.0-stale", source: "./claude-code" },
+      { name: "memoree", version: targetVersions[MARKETPLACE_PATH] ?? "0.0.0-stale", source: "./claude-code" },
     ],
   });
 }
@@ -73,7 +73,7 @@ describe("syncVersions", () => {
     // Inject a second plugin entry to make sure we don't only update [0]
     const mpPath = resolve(root, MARKETPLACE_PATH);
     const mp = readJson(mpPath);
-    mp.plugins.push({ name: "hivemind-extra", version: "0.0.0-stale", source: "./extra" });
+    mp.plugins.push({ name: "memoree-extra", version: "0.0.0-stale", source: "./extra" });
     writeJson(mpPath, mp);
 
     syncVersions({ root, log: () => {} });

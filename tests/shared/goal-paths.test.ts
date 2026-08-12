@@ -26,10 +26,10 @@ describe("classifyPath", () => {
       expect(classifyPath("/goal/alice/closed/uuid.md")).toBe("goal");
     });
 
-    it("classifies the /memory/ host-FS form (Bash `echo > ~/.deeplake/memory/...`)", () => {
-      expect(classifyPath("/home/emanuele/.deeplake/memory/goal/alice/opened/uuid.md")).toBe("goal");
-      // .deeplake/memory/... arriving from inside the shell with HOME=mount=/
-      expect(classifyPath("/.deeplake/memory/goal/alice/opened/uuid.md")).toBe("goal");
+    it("classifies the /memory/ host-FS form (Bash `echo > ~/.memoree/memory/...`)", () => {
+      expect(classifyPath("/home/emanuele/.memoree/memory/goal/alice/opened/uuid.md")).toBe("goal");
+      // .memoree/memory/... arriving from inside the shell with HOME=mount=/
+      expect(classifyPath("/.memoree/memory/goal/alice/opened/uuid.md")).toBe("goal");
     });
 
     it("classifies the test-mount /memory/ form", () => {
@@ -61,7 +61,7 @@ describe("classifyPath", () => {
     });
 
     it("classifies the /memory/ host-FS form", () => {
-      expect(classifyPath("/home/emanuele/.deeplake/memory/kpi/g-uuid/k-prs.md")).toBe("kpi");
+      expect(classifyPath("/home/emanuele/.memoree/memory/kpi/g-uuid/k-prs.md")).toBe("kpi");
     });
 
     it("rejects missing .md", () => {
@@ -105,7 +105,7 @@ describe("decomposeGoalPath", () => {
   });
 
   it("handles the host-FS /memory/ prefix the same way", () => {
-    expect(decomposeGoalPath("/home/emanuele/.deeplake/memory/goal/alice/closed/uuid.md")).toEqual({
+    expect(decomposeGoalPath("/home/emanuele/.memoree/memory/goal/alice/closed/uuid.md")).toEqual({
       owner: "alice",
       status: "closed",
       goal_id: "uuid",
@@ -140,7 +140,7 @@ describe("decomposeKpiPath", () => {
   });
 
   it("handles the host-FS /memory/ prefix", () => {
-    expect(decomposeKpiPath("/home/x/.deeplake/memory/kpi/g/k.md")).toEqual({
+    expect(decomposeKpiPath("/home/x/.memoree/memory/kpi/g/k.md")).toEqual({
       goal_id: "g",
       kpi_id: "k",
     });
@@ -158,9 +158,9 @@ describe("decomposeKpiPath", () => {
 
 describe("compose round-trip", () => {
   it("composeGoalPath ↔ decomposeGoalPath is identity for valid parts", () => {
-    const original = { owner: "alice@activeloop.ai", status: "in_progress" as const, goal_id: "u-1" };
+    const original = { owner: "alice@sskarz.ai", status: "in_progress" as const, goal_id: "u-1" };
     const p = composeGoalPath(original);
-    expect(p).toBe("/goal/alice@activeloop.ai/in_progress/u-1.md");
+    expect(p).toBe("/goal/alice@sskarz.ai/in_progress/u-1.md");
     expect(decomposeGoalPath(p)).toEqual(original);
   });
 

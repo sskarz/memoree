@@ -10,9 +10,9 @@
 
 ## Overview
 
-This sub-feature shows a developer the skills they have mined locally and lets them share a chosen one with the team in a single click. Hivemind mines reusable skills from real sessions, but a newly mined skill defaults to `me` scope and the `project` install location (`src/skillify/scope-config.ts:44`), so it lives only on the machine that mined it and in the repo it was mined from. Sharing it with the team is a multi-step CLI affair: the only signal the skill even exists is a count-only SessionStart banner ("N local skills ... Run `hivemind login` to start sharing," `src/skillify/local-mined-banner.ts:32-40`), and acting on it means knowing the combination of `hivemind skillify promote <name>`, `scope team`, and `install global` (`src/cli/skillify-spec.ts:53-56`).
+This sub-feature shows a developer the skills they have mined locally and lets them share a chosen one with the team in a single click. Memoree mines reusable skills from real sessions, but a newly mined skill defaults to `me` scope and the `project` install location (`src/skillify/scope-config.ts:44`), so it lives only on the machine that mined it and in the repo it was mined from. Sharing it with the team is a multi-step CLI affair: the only signal the skill even exists is a count-only SessionStart banner ("N local skills ... Run the removed cloud sign-in command to start sharing," `src/skillify/local-mined-banner.ts:32-40`), and acting on it means knowing the combination of `memoree skillify promote <name>`, `scope team`, and `install global` (`src/cli/skillify-spec.ts:53-56`).
 
-This sub-feature renders the developer's locally mined skills as a list in the PRD-003 dashboard Webview, drawn from the same skillify state the CLI reports (`src/commands/skillify.ts:45-96`), and exposes promotion as a button. Promotion is honest about being a two-step reality: `hivemind skillify promote` moves a skill from the project location to the global location on the local filesystem so it is visible across all the developer's projects and agents (`src/commands/skillify.ts:122-137`), and reaching teammates additionally requires the skill to be shared at `team` scope on the org `skills` table so it lands in everyone's auto-pull (`src/skillify/scope-promotion.ts:34-41`, `src/skillify/skill-org-publish.ts:108-142`). The promoter drives both and tells the developer plainly what each step does.
+This sub-feature renders the developer's locally mined skills as a list in the PRD-003 dashboard Webview, drawn from the same skillify state the CLI reports (`src/commands/skillify.ts:45-96`), and exposes promotion as a button. Promotion is honest about being a two-step reality: `memoree skillify promote` moves a skill from the project location to the global location on the local filesystem so it is visible across all the developer's projects and agents (`src/commands/skillify.ts:122-137`), and reaching teammates additionally requires the skill to be shared at `team` scope on the org `skills` table so it lands in everyone's auto-pull (`src/skillify/scope-promotion.ts:34-41`, `src/skillify/skill-org-publish.ts:108-142`). The promoter drives both and tells the developer plainly what each step does.
 
 The value is that good local skills stop dying on the machine that mined them. The path from "I mined something useful" to "my team has it" becomes visible and one click long, and (closing the loop with PRD-005a) once shared, the skill flows back into the promoter's own Cursor agent on the next pull.
 
@@ -34,8 +34,8 @@ export function renderLocalMinedNote(input: LocalMinedBannerInput): string {
   if (totalCount <= 0) return "";
   const plural = totalCount === 1 ? "" : "s";
   return (
-    `\n\n${totalCount} local skill${plural} from past 'hivemind skillify mine-local' run(s) live in ~/.claude/skills/. ` +
-    `Run 'hivemind login' to start sharing new mining results with your team.`
+    `\n\n${totalCount} local skill${plural} from past 'memoree skillify mine-local' run(s) live in ~/.claude/skills/. ` +
+    `Run 'the removed cloud sign-in command' to start sharing new mining results with your team.`
   );
 }
 ```
@@ -44,7 +44,7 @@ And `promote` itself only moves a skill project-to-global on disk; it refuses to
 
 ```122:137:src/commands/skillify.ts
 function promoteSkill(name: string, cwd: string): void {
-  if (!name) { console.error("Usage: hivemind skillify promote <skill-name>"); process.exit(1); }
+  if (!name) { console.error("Usage: memoree skillify promote <skill-name>"); process.exit(1); }
   const projectPath = join(cwd, ".claude", "skills", name);
   const globalPath = join(homedir(), ".claude", "skills", name);
   if (!existsSync(join(projectPath, "SKILL.md"))) {
@@ -90,7 +90,7 @@ The pane lists locally mined skills and offers a single promote action per skill
 
 | UI element | Reads / writes | Existing artifact | Notes |
 |---|---|---|---|
-| Local skills list | Reads | Skillify per-project state (`skillsGenerated[]`), scope/install config | The same data `hivemind skillify` status prints (`src/commands/skillify.ts:74-95`); replaces the count-only banner (`src/skillify/local-mined-banner.ts:32-40`) with named, actionable rows. |
+| Local skills list | Reads | Skillify per-project state (`skillsGenerated[]`), scope/install config | The same data `memoree skillify` status prints (`src/commands/skillify.ts:74-95`); replaces the count-only banner (`src/skillify/local-mined-banner.ts:32-40`) with named, actionable rows. |
 | Shared-or-local badge | Reads | `scope` (`me` vs `team`) and `install` (`project` vs `global`) | Tells the developer which skills the team can already pull and which are stuck local-only (`src/skillify/scope-config.ts:26-35`). |
 | Promote (step 1) | Writes | `promoteSkill` (project to global on disk) | Makes the skill visible across all the developer's projects and agents; refuses to overwrite an existing global skill of the same name (`src/commands/skillify.ts:122-137`). |
 | Promote (step 2) | Writes | Scope promotion to `team` + republish to the org `skills` table | Lands the skill on the org table at `team` scope so teammates pull it next session (`src/skillify/scope-promotion.ts:34-41`, `src/skillify/skill-org-publish.ts:108-142`). |
@@ -136,7 +136,7 @@ Because `promote` and team-sharing are genuinely two operations on two different
 - **Native-feeling.** Respects Cursor's theme and editor tokens; reads as a first-party surface, consistent with PRD-003a.
 - **Truthful state badges.** Every row's local-only versus shared state is shown and is derived from real scope/install state, never assumed.
 - **In-flight and error states.** A promote shows progress and reconciles against refreshed skillify state on completion; failures surface the underlying message and leave the skill in its prior state.
-- **Not-logged-in honesty.** Sharing to the org table requires login; if the developer is not logged in, the pane offers the same path PRD-002b owns rather than failing silently, mirroring the banner's own "run `hivemind login`" intent (`src/skillify/local-mined-banner.ts:38-39`).
+- **Not-logged-in honesty.** Sharing to the org table requires login; if the developer is not logged in, the pane offers the same path PRD-002b owns rather than failing silently, mirroring the banner's own "run the removed cloud sign-in command" intent (`src/skillify/local-mined-banner.ts:38-39`).
 - **No secret leakage.** The pane payload and logs show skill names, scope, and install state only, never tokens or API keys (defers to PRD-002b).
 
 ---

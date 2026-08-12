@@ -10,7 +10,7 @@
 
 ## Overview
 
-This sub-feature is Hivemind's visible face inside Cursor. It is one persistent status-bar item that answers the only question a developer asks day to day, "is Hivemind healthy and capturing my work right now?", and a small command palette surface that lets them act on the answer. It owns no detection logic of its own; it renders the structured health result from [`prd-002a`](./prd-002a-health-check.md) and the login state from [`prd-002b`](./prd-002b-auth-secrets.md), and it routes the developer to the right remediation when something is off.
+This sub-feature is Memoree's visible face inside Cursor. It is one persistent status-bar item that answers the only question a developer asks day to day, "is Memoree healthy and capturing my work right now?", and a small command palette surface that lets them act on the answer. It owns no detection logic of its own; it renders the structured health result from [`prd-002a`](./prd-002a-health-check.md) and the login state from [`prd-002b`](./prd-002b-auth-secrets.md), and it routes the developer to the right remediation when something is off.
 
 The value is constant, honest presence. The single biggest cause of distrust in the current integration is invisibility: capture and summarization happen (or fail) entirely off-screen. A developer cannot tell a working install from a broken one. This sub-feature replaces "no signal" with "one glance," and replaces "open a terminal and read a log" with "click the status bar."
 
@@ -24,7 +24,7 @@ A status indicator is not decoration; it is the mechanism that makes silent fail
 
 ## Goals
 
-- Present one persistent status-bar item whose appearance reflects overall Hivemind health at a glance.
+- Present one persistent status-bar item whose appearance reflects overall Memoree health at a glance.
 - Map the four health dimensions (D1-D4 from PRD-002a) plus login state (PRD-002b) into a small, unambiguous set of visible states.
 - Make the item interactive: clicking it reveals detail and the relevant remediation actions.
 - Provide a basic command palette surface for the core actions: re-run onboarding, log in, log out, show status detail, open logs.
@@ -49,7 +49,7 @@ The status item collapses the health dimensions into a small set of honest state
 | **Healthy / Capturing** | All prerequisites present, logged in, hooks wired & current. | D1-D4 pass + login valid | Identity, what's wired, "everything's working" detail. |
 | **Degraded** | Capture works but something is impaired (e.g. `cursor-agent` logged out so summaries will fail). | D1, D4 pass; D2/D3 or summary path impaired | The specific impairment + its one-click fix. |
 | **Not configured** | Hooks not wired or prerequisites missing; setup incomplete. | D1/D2/D4 failing | "Run onboarding" entry point. |
-| **Logged out** | Hivemind login missing/invalid; shared memory inactive. | login state false | "Log in" action (browser flow or API key). |
+| **Logged out** | the removed cloud sign-in command missing/invalid; shared memory inactive. | login state false | "Log in" action (browser flow or API key). |
 | **Unknown / Offline** | Health could not be determined (e.g. offline validity check). | inconclusive checks | Honest "couldn't verify" detail + retry. |
 
 > The **Degraded** state is the direct antidote to silent failure: a logged-out `cursor-agent` shows here as a visible, actionable problem rather than an empty summary nobody notices.
@@ -78,14 +78,14 @@ A small, dependable set of commands. Each maps to logic owned by 002a/002b; this
 
 | Command (intent) | What it does | Delegates to |
 |---|---|---|
-| **Hivemind: Run Onboarding** | Re-runs the full guided setup (prereqs → auth → wiring). | PRD-002a + PRD-002b |
-| **Hivemind: Log In** | Starts the browser device-flow or API-key entry. | PRD-002b |
-| **Hivemind: Log Out** | Clears credentials with an honest summary of what's removed. | PRD-002b |
-| **Hivemind: Show Status** | Opens the detail view with all dimensions and identity. | PRD-002a (result) |
-| **Hivemind: Wire / Refresh Hooks** | Triggers idempotent (re)wiring. | PRD-002a |
-| **Hivemind: Open Logs** | Opens the extension output channel / wiki-worker log location. | this sub-feature |
+| **Memoree: Run Onboarding** | Re-runs the full guided setup (prereqs → auth → wiring). | PRD-002a + PRD-002b |
+| **Memoree: Log In** | Starts the browser device-flow or API-key entry. | PRD-002b |
+| **Memoree: Log Out** | Clears credentials with an honest summary of what's removed. | PRD-002b |
+| **Memoree: Show Status** | Opens the detail view with all dimensions and identity. | PRD-002a (result) |
+| **Memoree: Wire / Refresh Hooks** | Triggers idempotent (re)wiring. | PRD-002a |
+| **Memoree: Open Logs** | Opens the extension output channel / wiki-worker log location. | this sub-feature |
 
-The detail view mirrors what `hivemind status` reports on the CLI (`src/cli/index.ts` `runStatus`: version, "logged in: yes/no", detected assistants), so the editor and terminal tell the same story.
+The detail view mirrors what `memoree status` reports on the CLI (`src/cli/index.ts` `runStatus`: version, "logged in: yes/no", detected assistants), so the editor and terminal tell the same story.
 
 ---
 
@@ -107,10 +107,10 @@ The detail view mirrors what `hivemind status` reports on the CLI (`src/cli/inde
 | AC-1 | Given all health dimensions pass and login is valid, when the status item renders, then it shows the "Healthy / Capturing" state and the tooltip confirms all dimensions pass. |
 | AC-2 | Given `cursor-agent` is logged out, when the status item renders, then it shows "Degraded" (not green) and clicking it surfaces the `cursor-agent` login remediation. |
 | AC-3 | Given hooks are not wired, when the status item renders, then it shows "Not configured" and offers a "Run Onboarding" entry point. |
-| AC-4 | Given the developer is not logged in to Hivemind, when the status item renders, then it shows "Logged out" and offers a "Log In" action. |
+| AC-4 | Given the developer is not logged in to Memoree, when the status item renders, then it shows "Logged out" and offers a "Log In" action. |
 | AC-5 | Given health cannot be determined (offline), when the status item renders, then it shows "Unknown / Offline" rather than a false green or red. |
 | AC-6 | Given any health dimension changes during a session, when the next poll completes, then the status item updates to the new state without requiring a window reload. |
-| AC-7 | Given the command palette, when the developer opens it, then the six core Hivemind commands are present and each routes to its owning logic (002a/002b) or opens logs. |
+| AC-7 | Given the command palette, when the developer opens it, then the six core Memoree commands are present and each routes to its owning logic (002a/002b) or opens logs. |
 | AC-8 | Given the detail view or logs are opened, when their contents are inspected, then no token or API key value appears anywhere. |
 
 ---

@@ -2,8 +2,8 @@
 
 /**
  * Codex SessionStart hook (fast path):
- * Only reads local credentials and injects context into Codex's developer prompt.
- * All server calls (table setup, placeholder, version check) are handled by
+ * Reads local configuration and injects context into Codex's developer prompt.
+ * Storage setup and placeholder work are handled by
  * session-start-setup.js which runs as a separate async hook.
  *
  * Codex input:  { session_id, transcript_path, cwd, hook_event_name, model, source }
@@ -13,7 +13,6 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { loadCredentials, healDriftedOrgToken } from "../../commands/auth.js";
 import { readStdin } from "../../utils/stdin.js";
 import { countLocalManifestEntries } from "../../skillify/local-manifest.js";
 import { maybeAutoMineLocal } from "../../skillify/spawn-mine-local-worker.js";
@@ -27,10 +26,10 @@ const log = (msg: string) => _log("codex-session-start", msg);
 const __bundleDir = dirname(fileURLToPath(import.meta.url));
 // Codex DOES NOT have a model-only context channel for SessionStart hooks: any
 // `additionalContext` we emit is rendered as a `hook context: <text>` history
-// cell, user-visible. The big HIVEMIND MEMORY tier doc + hivemind/skillify
+// cell, user-visible. The big MEMOREE MEMORY tier doc + memoree/skillify
 // command list that Claude Code's hook injects via `additionalContext` would
 // clobber the Codex UI every session, so we omit it entirely here. Codex's
-// skill autoloader already exposes the hivemind/* skills as Skill tool entries,
+// skill autoloader already exposes the memoree/* skills as Skill tool entries,
 // and the model can discover memory tiers and CLI flags on demand via bash.
 // See src/notifications/AGENT_CHANNELS.md → "Codex" for the source-level reasoning.
 
@@ -44,32 +43,18 @@ interface CodexSessionStartInput {
 }
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   const input = await readStdin<CodexSessionStartInput>();
-
-  let creds = loadCredentials();
   const config = loadConfig();
-  const storageAvailable = Boolean(creds?.token || (config?.storage && config.storage.kind !== "deeplake"));
-
-  if (!creds?.token) {
-    log("no credentials found — run auth login to authenticate");
-    const auto = maybeAutoMineLocal();
-    log(`auto-mine: ${auto.triggered ? "triggered (background)" : `skipped (${auto.reason})`}`);
-  } else {
-    log(`credentials loaded: org=${creds.orgName ?? creds.orgId}`);
-    creds = await healDriftedOrgToken(creds, log);
-  }
+  const storageAvailable = Boolean(config);
 
   // Spawn async setup (graph-deps provisioning, table creation, placeholder,
   // version check) as a detached process. Codex doesn't support async hooks,
   // so we use the same pattern as the wiki worker.
   //
-  // Spawned UNCONDITIONALLY — not gated on creds. The setup worker runs
-  // ensureGraphDeps() (purely local code-graph provisioning) BEFORE its own
-  // credentials early-return, so it must fire even when logged out. The
-  // remote/credentialed work (autoupdate, table + placeholder) stays gated
-  // INSIDE the worker on its `if (!creds?.token) return`.
+  // Spawned unconditionally so local graph dependency checks and database
+  // setup do not block the SessionStart fast path.
   {
     const setupScript = join(__bundleDir, "session-start-setup.js");
     const child = spawn("node", [setupScript], {
@@ -86,19 +71,19 @@ async function main(): Promise<void> {
     log("spawned async setup process");
   }
 
-  // Auto-pull skills from all org users on every SessionStart (5s timeout).
+  // Auto-pull shared skills on every SessionStart (5s timeout).
   // File writes inside runPull are idempotent (skipped when local version
   // is at-or-newer than remote), so re-running every session is cheap on
   // disk; the only per-call cost is the SQL round-trip. autoPullSkills
   // never rejects — all errors are swallowed inside. Hard opt-out:
-  // HIVEMIND_AUTOPULL_DISABLED=1.
+  // MEMOREE_AUTOPULL_DISABLED=1.
   const pullResult = await autoPullSkills();
   log(`autopull: pulled=${pullResult.pulled} skipped=${pullResult.skipped}`);
 
   let versionNotice = "";
   const current = getInstalledVersion(__bundleDir, ".codex-plugin");
   if (current) {
-    versionNotice = `\nHivemind v${current}`;
+    versionNotice = `\nMemoree v${current}`;
   }
 
   const localMined = countLocalManifestEntries();
@@ -118,43 +103,37 @@ async function main(): Promise<void> {
   //     there is no model-only path. `suppressOutput: true` is parsed but
   //     ignored for SessionStart, so we can't hide it either.
   // Practical consequence: keep additionalContext MINIMAL on Codex. The
-  // bulky HIVEMIND MEMORY tier doc + hivemind/skillify command list that
+  // bulky MEMOREE MEMORY tier doc + memoree/skillify command list that
   // claude-code's hook injects via `context` would clobber the Codex UI
-  // every session. Codex's skill autoloader already exposes hivemind/skillify
+  // every session. Codex's skill autoloader already exposes memoree/skillify
   // command surfaces via per-skill SKILL.md files; the model can discover
-  // memory tiers via `hivemind --help` and `ls ~/.deeplake/memory/` on demand.
-  // We therefore emit only login-state + version here, and trust the model
+  // memory tiers via `memoree --help` and `ls ~/.memoree/memory/` on demand.
+  // We therefore emit only storage-state + version here, and trust the model
   // to bootstrap the rest.
   // The proactive memory instruction (check team memory + pull rules/goals)
   // is NOT injected here. Codex has no model-only channel — every
   // additionalContext byte is also rendered to the user as a `hook context:`
   // cell, so a per-session block would be visible noise. Instead that guidance
-  // lives in the managed hivemind block of `~/.codex/AGENTS.md` (written by
+  // lives in the managed memoree block of `~/.codex/AGENTS.md` (written by
   // install-codex.ts), which Codex auto-loads into the model context every
   // session SILENTLY — no TUI cell. Empirically verified: a sentinel placed in
   // ~/.codex/AGENTS.md reaches the model without surfacing in the transcript.
-  // So additionalContext stays minimal: login-state + version only.
+  // So additionalContext stays minimal: storage-state + version only.
 
-  // Async auto-pull of the latest cloud snapshot for HEAD. Detached and
+  // Async auto-pull of the latest backend snapshot for HEAD. Detached and
   // truly fire-and-forget — see src/graph/spawn-pull-worker.ts and
   // src/hooks/graph-pull-worker.ts. Lands for the NEXT SessionStart.
   //
-  // Gate on creds: pullSnapshot would early-return "skipped-no-auth"
-  // anyway when there's no token, but spawning a worker just to have it
-  // exit is wasted process churn. The check also keeps the codex
-  // session-start "spawn must not fire when unauthenticated" contract
-  // (tests/codex/codex-session-start-hook.test.ts).
+  // Skip the worker when the selected storage backend is unavailable.
   if (storageAvailable) spawnGraphPullWorker(input.cwd, __bundleDir);
 
-  const provider = config?.storage?.kind ?? "deeplake";
+  const provider = config?.storage.kind ?? "sqlite";
   const additionalContext = storageAvailable
-    ? (provider === "deeplake"
-        ? `Hivemind: logged in as org ${creds?.orgName ?? creds?.orgId} (workspace: ${creds?.workspaceId ?? "default"}).${versionNotice}`
-        : `Hivemind memory backend: ${provider}.${versionNotice}`)
-    : `Hivemind: not logged in. Run \`hivemind login\` to enable shared memory + skill sharing.${versionNotice}`;
+    ? `Memoree memory backend: ${provider}.${versionNotice}`
+    : `Memoree storage is unavailable. Run \`memoree doctor\`.${versionNotice}`;
 
   const systemMessage = (!storageAvailable && localMined > 0)
-    ? `💡 ${localMined} ${skillNoun} mined from your local sessions live in ~/.claude/skills/. Run 'hivemind login' to share them with your team.`
+    ? `💡 ${localMined} ${skillNoun} mined from your local sessions live in ~/.claude/skills/. Run 'memoree doctor' to check storage.`
     : undefined;
   const output: Record<string, unknown> = {
     hookSpecificOutput: {

@@ -11,7 +11,7 @@ import {
 let TEMP_DIR = "";
 
 beforeEach(() => {
-  TEMP_DIR = mkdtempSync(join(tmpdir(), "hivemind-transcript-test-"));
+  TEMP_DIR = mkdtempSync(join(tmpdir(), "memoree-transcript-test-"));
 });
 
 afterEach(() => {
@@ -49,7 +49,7 @@ function toolResultUserLine(toolUseId: string, content: unknown) {
 
 describe("parseTranscript — robustness", () => {
   it("returns zeros + fallback id when file does not exist", () => {
-    const r = parseTranscript("/tmp/does-not-exist-hivemind-test.jsonl", "fb-xyz");
+    const r = parseTranscript("/tmp/does-not-exist-memoree-test.jsonl", "fb-xyz");
     expect(r.memorySearchCount).toBe(0);
     expect(r.memorySearchBytes).toBe(0);
     expect(r.sessionId).toBe("fb-xyz");
@@ -65,7 +65,7 @@ describe("parseTranscript — robustness", () => {
     writeFileSync(
       path,
       [
-        JSON.stringify(toolUseAssistantLine("toolu_1", "grep -r 'x' ~/.deeplake/memory/")),
+        JSON.stringify(toolUseAssistantLine("toolu_1", "grep -r 'x' ~/.memoree/memory/")),
         "not-json",
         JSON.stringify(toolResultUserLine("toolu_1", "some result")),
       ].join("\n") + "\n",
@@ -89,10 +89,10 @@ describe("parseTranscript — robustness", () => {
 });
 
 describe("parseTranscript — memorySearchCount", () => {
-  it("counts Bash tool calls that reference .deeplake/memory", () => {
+  it("counts Bash tool calls that reference .memoree/memory", () => {
     const path = writeTranscript([
-      toolUseAssistantLine("toolu_1", "grep -r 'auth' ~/.deeplake/memory/summaries/"),
-      toolUseAssistantLine("toolu_2", "cat ~/.deeplake/memory/index.md"),
+      toolUseAssistantLine("toolu_1", "grep -r 'auth' ~/.memoree/memory/summaries/"),
+      toolUseAssistantLine("toolu_2", "cat ~/.memoree/memory/index.md"),
       toolUseAssistantLine("toolu_3", "ls /tmp"), // not a memory lookup
     ]);
     expect(parseTranscript(path, "fb").memorySearchCount).toBe(2);
@@ -112,7 +112,7 @@ describe("parseTranscript — memorySearchCount", () => {
         type: "assistant",
         message: {
           role: "assistant",
-          content: [{ type: "tool_use", id: "toolu_x", name: "Read", input: { file_path: "/home/ubuntu/.deeplake/memory/index.md" } }],
+          content: [{ type: "tool_use", id: "toolu_x", name: "Read", input: { file_path: "/home/ubuntu/.memoree/memory/index.md" } }],
         },
         timestamp: "2026-05-13T10:01:00Z",
       },
@@ -125,7 +125,7 @@ describe("parseTranscript — memorySearchBytes (bytes returned from memory look
   it("sums string-form tool_result.content matched by tool_use_id", () => {
     const result = "match1\nmatch2\nmatch3";
     const path = writeTranscript([
-      toolUseAssistantLine("toolu_xyz", "grep -r 'foo' ~/.deeplake/memory/summaries"),
+      toolUseAssistantLine("toolu_xyz", "grep -r 'foo' ~/.memoree/memory/summaries"),
       toolResultUserLine("toolu_xyz", result),
     ]);
     expect(parseTranscript(path, "fb").memorySearchBytes).toBe(Buffer.byteLength(result, "utf-8"));
@@ -135,7 +135,7 @@ describe("parseTranscript — memorySearchBytes (bytes returned from memory look
     const t1 = "abc";
     const t2 = "defgh";
     const path = writeTranscript([
-      toolUseAssistantLine("toolu_a", "cat ~/.deeplake/memory/index.md"),
+      toolUseAssistantLine("toolu_a", "cat ~/.memoree/memory/index.md"),
       toolResultUserLine("toolu_a", [{ type: "text", text: t1 }, { type: "text", text: t2 }]),
     ]);
     expect(parseTranscript(path, "fb").memorySearchBytes).toBe(Buffer.byteLength(t1 + t2, "utf-8"));
@@ -153,9 +153,9 @@ describe("parseTranscript — memorySearchBytes (bytes returned from memory look
     const r1 = "x".repeat(100);
     const r2 = "y".repeat(250);
     const path = writeTranscript([
-      toolUseAssistantLine("toolu_1", "grep -r foo ~/.deeplake/memory/"),
+      toolUseAssistantLine("toolu_1", "grep -r foo ~/.memoree/memory/"),
       toolResultUserLine("toolu_1", r1),
-      toolUseAssistantLine("toolu_2", "cat ~/.deeplake/memory/notes/x.md"),
+      toolUseAssistantLine("toolu_2", "cat ~/.memoree/memory/notes/x.md"),
       toolResultUserLine("toolu_2", r2),
     ]);
     expect(parseTranscript(path, "fb").memorySearchBytes).toBe(350);
@@ -163,7 +163,7 @@ describe("parseTranscript — memorySearchBytes (bytes returned from memory look
 
   it("returns 0 when tool_use precedes tool_result with no match (orphan use)", () => {
     const path = writeTranscript([
-      toolUseAssistantLine("toolu_orphan", "grep -r foo ~/.deeplake/memory/"),
+      toolUseAssistantLine("toolu_orphan", "grep -r foo ~/.memoree/memory/"),
       // no tool_result line
     ]);
     expect(parseTranscript(path, "fb").memorySearchBytes).toBe(0);
@@ -171,7 +171,7 @@ describe("parseTranscript — memorySearchBytes (bytes returned from memory look
 
   it("handles tool_result content of unexpected shape without throwing", () => {
     const path = writeTranscript([
-      toolUseAssistantLine("toolu_w", "cat ~/.deeplake/memory/index.md"),
+      toolUseAssistantLine("toolu_w", "cat ~/.memoree/memory/index.md"),
       toolResultUserLine("toolu_w", { weird: "shape", n: 42 }),
     ]);
     expect(() => parseTranscript(path, "fb")).not.toThrow();
@@ -180,12 +180,12 @@ describe("parseTranscript — memorySearchBytes (bytes returned from memory look
 });
 
 describe("isMemoryLookupCommand (helper)", () => {
-  it("matches commands that reference .deeplake/memory", () => {
-    expect(isMemoryLookupCommand("grep -r foo ~/.deeplake/memory/summaries")).toBe(true);
-    expect(isMemoryLookupCommand("cat /home/x/.deeplake/memory/index.md")).toBe(true);
+  it("matches commands that reference .memoree/memory", () => {
+    expect(isMemoryLookupCommand("grep -r foo ~/.memoree/memory/summaries")).toBe(true);
+    expect(isMemoryLookupCommand("cat /home/x/.memoree/memory/index.md")).toBe(true);
   });
   it("does not match unrelated commands", () => {
     expect(isMemoryLookupCommand("ls /tmp")).toBe(false);
-    expect(isMemoryLookupCommand("grep deeplake ~/.config")).toBe(false);
+    expect(isMemoryLookupCommand("grep memoree ~/.config")).toBe(false);
   });
 });

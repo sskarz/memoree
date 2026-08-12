@@ -105,7 +105,7 @@ describe("embeddingsStatus / embeddingsDisabled — transformers-presence branch
 
   it("real default resolver finds @huggingface/transformers via the shared-deps probe", () => {
     // Smoke check: in the dev / CI environment the package IS installed
-    // (either at ~/.hivemind/embed-deps/ or in the worktree's node_modules
+    // (either at ~/.memoree/embed-deps/ or in the worktree's node_modules
     // via the bundle walk fallback). Guards against a regression in the
     // resolver chain (wrong base URL, wrong package name, build-time vs
     // runtime path drift, etc.).

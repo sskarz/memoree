@@ -156,7 +156,7 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
 
   for (const qa of REAL_QAS) {
     describe(qa.name, () => {
-      it("Read /home/.deeplake/memory/index.md intercept returns file_path (Read-tool shape) pointing to the real session listing", async () => {
+      it("Read /home/.memoree/memory/index.md intercept returns file_path (Read-tool shape) pointing to the real session listing", async () => {
         const api = makeBaselineWorkspaceApi();
         const capturedReadFiles: Array<{ sessionId: string; virtualPath: string; content: string; returnedPath: string }> = [];
 
@@ -164,7 +164,7 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
           {
             session_id: `s-${qa.expected_session_file}`,
             tool_name: "Read",
-            tool_input: { file_path: "~/.deeplake/memory/index.md" },
+            tool_input: { file_path: "~/.memoree/memory/index.md" },
             tool_use_id: "tu-read-index",
           },
           {
@@ -214,7 +214,7 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
           {
             session_id: `s-bash-${qa.expected_session_file}`,
             tool_name: "Bash",
-            tool_input: { command: "cat ~/.deeplake/memory/index.md" },
+            tool_input: { command: "cat ~/.memoree/memory/index.md" },
             tool_use_id: "tu-cat-index",
           },
           {
@@ -244,8 +244,8 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
   // In `baseline_cloud_9qa_read_candidates_fix2` (2026-04-20), haiku chose
   // to call the Read tool directly against session files — not just
   // /index.md. Specifically, qa_3 did three Read calls including
-  // Read /home/.deeplake/memory/sessions/conv_0_session_1.json and
-  // Read /home/.deeplake/memory/sessions/conv_0_session_2.json, and all
+  // Read /home/.memoree/memory/sessions/conv_0_session_1.json and
+  // Read /home/.memoree/memory/sessions/conv_0_session_2.json, and all
   // three succeeded (zero "path must be of type string" errors) after
   // fix #2 landed. The previous run on the same workspace without the fix
   // produced that error on every memory-path Read call.
@@ -281,7 +281,7 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
       {
         session_id: "s-qa3-session-read",
         tool_name: "Read",
-        tool_input: { file_path: "~/.deeplake/memory/sessions/conv_0_session_1.json" },
+        tool_input: { file_path: "~/.memoree/memory/sessions/conv_0_session_1.json" },
         tool_use_id: "tu-read-session-1",
       },
       {
@@ -312,7 +312,7 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
   // ── writeReadCacheFile security guard ─────────────────────────────────────
   //
   // Claude Code's Read intercept materializes fetched content into
-  // ~/.deeplake/query-cache/<session_id>/read/<virtualPath>. DB-derived
+  // ~/.memoree/query-cache/<session_id>/read/<virtualPath>. DB-derived
   // virtualPaths are user-controlled (anyone with write access to the
   // `sessions` / `memory` tables controls them), so `..` segments must not
   // be allowed to escape the per-session cache dir. The PR #63 bot review
@@ -394,7 +394,7 @@ describe("baseline_cloud 3-QA regression: sessions-only workspace", () => {
       {
         session_id: "s-index-fallback",
         tool_name: "Read",
-        tool_input: { file_path: "~/.deeplake/memory/index.md" },
+        tool_input: { file_path: "~/.memoree/memory/index.md" },
         tool_use_id: "tu-fallback",
       },
       {

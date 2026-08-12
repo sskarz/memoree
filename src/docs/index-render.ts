@@ -138,7 +138,7 @@ export function buildDocsIndex(
   }
 
   if (subdirs.size === 0 && files.length === 0) {
-    lines.push(atDir === "" ? "_(no docs yet — run `hivemind docs generate`)_" : `_(no docs under ${atDir}/)_`);
+    lines.push(atDir === "" ? "_(no docs yet — run `memoree docs generate`)_" : `_(no docs under ${atDir}/)_`);
     lines.push("");
   }
 

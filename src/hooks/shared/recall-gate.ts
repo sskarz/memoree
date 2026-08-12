@@ -17,7 +17,7 @@
  * Opt-out for PROACTIVE RECALL specifically — the aggressive behavior of
  * auto-searching team memory on every recall-worthy prompt and INJECTING a hit
  * into the agent's context. This is distinct from:
- *   - session CAPTURE (HIVEMIND_CAPTURE) — storing your sessions, and
+ *   - session CAPTURE (MEMOREE_CAPTURE) — storing your sessions, and
  *   - the agent's own REACTIVE recall (grep / the memory skill) — which it
  *     initiates itself.
  * Disabling this leaves capture and reactive recall untouched; it only stops
@@ -25,12 +25,12 @@
  *
  * ENABLED BY DEFAULT. Disable via EITHER (both accepted; case-insensitive,
  * whitespace-tolerant):
- *   - HIVEMIND_PROACTIVE_RECALL          = 0 | false | no | off
- *   - HIVEMIND_PROACTIVE_RECALL_DISABLED = 1 | true | yes | on
+ *   - MEMOREE_PROACTIVE_RECALL          = 0 | false | no | off
+ *   - MEMOREE_PROACTIVE_RECALL_DISABLED = 1 | true | yes | on
  */
 export function proactiveRecallDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (/^(1|true|yes|on)$/i.test((env.HIVEMIND_PROACTIVE_RECALL_DISABLED ?? "").trim())) return true;
-  if (/^(0|false|no|off)$/i.test((env.HIVEMIND_PROACTIVE_RECALL ?? "").trim())) return true;
+  if (/^(1|true|yes|on)$/i.test((env.MEMOREE_PROACTIVE_RECALL_DISABLED ?? "").trim())) return true;
+  if (/^(0|false|no|off)$/i.test((env.MEMOREE_PROACTIVE_RECALL ?? "").trim())) return true;
   return false;
 }
 
@@ -41,7 +41,7 @@ export function proactiveRecallDisabled(env: NodeJS.ProcessEnv = process.env): b
  * `query` vs the `document` embedding of a long wiki summary can land in the
  * 0.50–0.55 band even when relevant — but that's SEMANTIC-only and didn't
  * reliably improve outcomes in measurement, so it's left as an operator override
- * (HIVEMIND_RECALL_THRESHOLD=0.5) rather than the default.
+ * (MEMOREE_RECALL_THRESHOLD=0.5) rather than the default.
  */
 const DEFAULT_RECALL_THRESHOLD = 0.55;
 
@@ -122,15 +122,15 @@ export function parsePositive(raw: string | undefined, fallback: number): number
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-export const MIN_LEXICAL_OVERLAP = parsePositive(process.env.HIVEMIND_RECALL_MIN_OVERLAP, 2);
+export const MIN_LEXICAL_OVERLAP = parsePositive(process.env.MEMOREE_RECALL_MIN_OVERLAP, 2);
 
 /**
- * Operator-tunable cosine injection threshold. Honors HIVEMIND_RECALL_THRESHOLD
+ * Operator-tunable cosine injection threshold. Honors MEMOREE_RECALL_THRESHOLD
  * but only when it is a sane probability (0 < t <= 1); anything else falls back
  * to the default so a typo can't silently disable or over-restrict recall.
  */
 export const RECALL_THRESHOLD: number = (() => {
-  const n = Number(process.env.HIVEMIND_RECALL_THRESHOLD);
+  const n = Number(process.env.MEMOREE_RECALL_THRESHOLD);
   return Number.isFinite(n) && n > 0 && n <= 1 ? n : DEFAULT_RECALL_THRESHOLD;
 })();
 

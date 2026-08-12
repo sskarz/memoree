@@ -10,14 +10,14 @@ import { getEmbeddingsEnabled } from "../user-config.js";
  *
  * Embeddings are off when EITHER:
  *
- * 1. The user has opted out via `~/.deeplake/config.json` →
- *    `embeddings.enabled: false`. Set by `hivemind embeddings disable` or
- *    `hivemind embeddings uninstall`, or by the one-shot migration that
- *    seeds the config from `HIVEMIND_EMBEDDINGS` on first run.
+ * 1. The user has opted out via `~/.memoree/config.json` →
+ *    `embeddings.enabled: false`. Set by `memoree embeddings disable` or
+ *    `memoree embeddings uninstall`, or by the one-shot migration that
+ *    seeds the config from `MEMOREE_EMBEDDINGS` on first run.
  *
  * 2. `@huggingface/transformers` is not resolvable — the plugin ships
  *    without it (native deps can't be bundled). A fresh marketplace install
- *    lacks it until the user runs `hivemind embeddings install`. When
+ *    lacks it until the user runs `memoree embeddings install`. When
  *    absent, we degrade silently to lexical-only mode rather than spawning
  *    a daemon that will crash on import.
  *
@@ -27,7 +27,7 @@ import { getEmbeddingsEnabled } from "../user-config.js";
  * readable.
  *
  * Read-once: the status is cached for the lifetime of the (short-lived)
- * hook process. `hivemind embeddings enable|disable` takes effect on the
+ * hook process. `memoree embeddings enable|disable` takes effect on the
  * next session, after the daemon is recycled.
  */
 
@@ -37,11 +37,11 @@ let cachedStatus: EmbeddingsStatus | null = null;
 
 function defaultResolveTransformers(): void {
   // Try the canonical shared-deps location first — this is the location
-  // `hivemind embeddings install` populates, and the location the daemon
+  // `memoree embeddings install` populates, and the location the daemon
   // resolves from in production. Probing here matches what will actually
   // be loaded at runtime, eliminating the previous probe/use asymmetry
   // (probe said enabled, daemon then failed with MODULE_NOT_FOUND).
-  const sharedDir = join(homedir(), ".hivemind", "embed-deps");
+  const sharedDir = join(homedir(), ".memoree", "embed-deps");
   try {
     createRequire(pathToFileURL(`${sharedDir}/`).href).resolve("@huggingface/transformers");
     return;

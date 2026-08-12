@@ -2,9 +2,9 @@ import { existsSync, copyFileSync, rmSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import { HOME, pkgRoot, ensureDir, copyDir, writeVersionStamp, log, warn, symlinkForce } from "./util.js";
 import { getVersion } from "./version.js";
-import { ensureHivemindAllowlisted } from "../../harnesses/openclaw/src/setup-config.js";
+import { ensureMemoreeAllowlisted } from "../../harnesses/openclaw/src/setup-config.js";
 
-const PLUGIN_DIR = join(HOME, ".openclaw", "extensions", "hivemind");
+const PLUGIN_DIR = join(HOME, ".openclaw", "extensions", "memoree");
 
 export function installOpenclaw(): void {
   const srcDist = join(pkgRoot(), "harnesses", "openclaw", "dist");
@@ -41,14 +41,14 @@ export function installOpenclaw(): void {
   // Graph workers (graph-on-stop / graph-pull-worker) externalize tree-sitter
   // native addons — link embed-deps so builds can resolve them at runtime.
   const pluginNm = join(PLUGIN_DIR, "node_modules");
-  const embedDepsNm = join(HOME, ".hivemind", "embed-deps", "node_modules");
+  const embedDepsNm = join(HOME, ".memoree", "embed-deps", "node_modules");
   if (existsSync(embedDepsNm)) {
     try { const st = lstatSync(pluginNm); if (st.isDirectory() && !st.isSymbolicLink()) rmSync(pluginNm, { recursive: true }); } catch { /* ok */ }
     symlinkForce(embedDepsNm, pluginNm);
   } else {
     warn(
       `  OpenClaw       graph workers need tree-sitter native deps at ${embedDepsNm} — ` +
-      "run `hivemind embeddings install`, then `hivemind claw install` again",
+      "run `memoree embeddings install`, then `memoree claw install` again",
     );
   }
 
@@ -57,7 +57,7 @@ export function installOpenclaw(): void {
 
   // Patch ~/.openclaw/openclaw.json so the gateway actually loads us.
   // Without this, plugins.allow gates the plugin out — the files land
-  // on disk but the loader never registers them, so `/hivemind_setup`
+  // on disk but the loader never registers them, so `/memoree_setup`
   // is unreachable from inside the agent (chicken-and-egg). The same
   // helper is shared with the slash command, so behavior stays
   // identical across both surfaces. See issue #121.
@@ -67,7 +67,7 @@ export function installOpenclaw(): void {
   // absent/empty (default-allow), we leave it alone — only patch
   // explicit allowlists so we never flip the user into restrictive
   // mode and break their other plugins.
-  const result = ensureHivemindAllowlisted();
+  const result = ensureMemoreeAllowlisted();
   if (result.status === "added") {
     const touched: string[] = [];
     if (result.delta.pluginsAllow) touched.push("plugins.allow");
@@ -77,16 +77,16 @@ export function installOpenclaw(): void {
     log(`  OpenClaw       restart the gateway to activate: systemctl --user restart openclaw-gateway.service`);
     log(`  OpenClaw       capture starts on the NEXT turn — earlier turns are NOT backfilled`);
   } else if (result.status === "already-set") {
-    log(`  OpenClaw       allowlist already covers hivemind in ${result.configPath}`);
+    log(`  OpenClaw       allowlist already covers memoree in ${result.configPath}`);
   } else if (result.status === "error") {
     // "openclaw config file not found" is the common no-op case (gateway
     // never started). Log it at info-level — installer is non-fatal, the
-    // /hivemind_setup slash command will patch on first openclaw run.
+    // /memoree_setup slash command will patch on first openclaw run.
     // Other errors (malformed JSON, write failure) are user-actionable
     // and get a warn so they're visible. CodeRabbit on #124 caught the
     // previous silent-error path.
     if (result.error === "openclaw config file not found") {
-      log(`  OpenClaw       openclaw.json not present at ${result.configPath} — run openclaw once, then \`hivemind claw install\` again`);
+      log(`  OpenClaw       openclaw.json not present at ${result.configPath} — run openclaw once, then \`memoree claw install\` again`);
     } else {
       warn(`  OpenClaw       could not patch allowlist in ${result.configPath}: ${result.error}`);
     }

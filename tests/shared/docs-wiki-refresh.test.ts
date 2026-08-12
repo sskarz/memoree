@@ -16,7 +16,7 @@ import type { GitRunner } from "../../src/docs/candidates.js";
 import type { GraphNode, GraphSnapshot } from "../../src/graph/types.js";
 
 const P = "projkey";
-const T = "hivemind_docs";
+const T = "memoree_docs";
 const HEAD = "headsha";
 const PREV = "prevsha";
 const NOW = () => new Date("2026-07-08T12:00:00.000Z");
@@ -143,7 +143,7 @@ describe("runWikiRefreshCycle", () => {
 
   it("private: on a branch, a committed-clean UNPUSHED page is written to the local store, not the cloud", async () => {
     const privDir = mkdtempSync(join(tmpdir(), "wref-priv-"));
-    process.env.HIVEMIND_DOCS_PRIVATE_DIR = privDir;
+    process.env.MEMOREE_DOCS_PRIVATE_DIR = privDir;
     try {
       const backend = makeBackend({
         scope: "b:feat",
@@ -178,7 +178,7 @@ describe("runWikiRefreshCycle", () => {
       expect(report.status).toBe("incomplete");
       expect((backend.state.meta as { last_refresh_sha: string }).last_refresh_sha).toBe(PREV);
     } finally {
-      delete process.env.HIVEMIND_DOCS_PRIVATE_DIR;
+      delete process.env.MEMOREE_DOCS_PRIVATE_DIR;
       rmSync(privDir, { recursive: true, force: true });
     }
   });
@@ -478,13 +478,13 @@ describe("runLocalWikiRefresh (--local preview)", () => {
   it("patches ONLY the local materialized file — no query function even exists in its API", async () => {
     const { readFileSync: rf, writeFileSync: wf } = await import("node:fs");
     const { appendFilesIndex: afi } = await import("../../src/docs/wiki-generate.js");
-    wf(join(dir, "pkg", "core.wiki.hivemind.md"), afi("## Purpose\nfoo returns 1.", ["pkg/core/a.ts"]));
+    wf(join(dir, "pkg", "core.wiki.memoree.md"), afi("## Purpose\nfoo returns 1.", ["pkg/core/a.ts"]));
     const { outcomes } = await runLocalWikiRefresh({
       snap: SNAP(), repoRoot: dir, git: gitLocal(["pkg/core/a.ts"]),
       run: async () => "## Purpose\nfoo returns 7.",
     });
-    expect(outcomes).toEqual([{ file: "pkg/core.wiki.hivemind.md", action: "patched" }]);
-    const body = rf(join(dir, "pkg", "core.wiki.hivemind.md"), "utf-8");
+    expect(outcomes).toEqual([{ file: "pkg/core.wiki.memoree.md", action: "patched" }]);
+    const body = rf(join(dir, "pkg", "core.wiki.memoree.md"), "utf-8");
     expect(body).toContain("foo returns 7.");
     expect(body).toContain("## Files"); // mechanics re-appended
   });
@@ -508,13 +508,13 @@ describe("runLocalWikiRefresh (--local preview)", () => {
     const { writeFileSync: wf, readFileSync: rf } = await import("node:fs");
     const { appendFilesIndex: afi } = await import("../../src/docs/wiki-generate.js");
     const before = afi("## Purpose\nshort.", ["pkg/core/a.ts"]);
-    wf(join(dir, "pkg", "core.wiki.hivemind.md"), before);
+    wf(join(dir, "pkg", "core.wiki.memoree.md"), before);
     const huge = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n");
     const { outcomes } = await runLocalWikiRefresh({
       snap: SNAP(), repoRoot: dir, git: gitLocal(["pkg/core/a.ts"]),
       run: async () => huge,
     });
     expect(outcomes[0].action).toBe("escalate-skipped");
-    expect(rf(join(dir, "pkg", "core.wiki.hivemind.md"), "utf-8")).toBe(before); // untouched
+    expect(rf(join(dir, "pkg", "core.wiki.memoree.md"), "utf-8")).toBe(before); // untouched
   });
 });

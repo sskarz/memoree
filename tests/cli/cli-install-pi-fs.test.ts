@@ -6,13 +6,13 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
 /**
  * Tests for the disk-side of src/cli/install-pi.ts. The pure helpers
- * (`upsertHivemindBlock`, `stripHivemindBlock`) already have coverage
+ * (`upsertMemoreeBlock`, `stripMemoreeBlock`) already have coverage
  * in install-helpers.test.ts. Here we drive installPi / uninstallPi
  * end-to-end against a tmp ~/.pi/agent/ tree, exercising:
  *   - AGENTS.md create + idempotent re-install
  *   - extension copy + version stamp
  *   - legacy SKILL.md cleanup
- *   - uninstall preserving non-hivemind AGENTS.md content
+ *   - uninstall preserving non-memoree AGENTS.md content
  */
 
 let tmpRoot: string;
@@ -26,7 +26,7 @@ beforeEach(() => {
   mkdirSync(tmpHome, { recursive: true });
 
   mkdirSync(join(tmpPkg, "harnesses", "pi", "extension-source"), { recursive: true });
-  writeFileSync(join(tmpPkg, "harnesses", "pi", "extension-source", "hivemind.ts"), "// fake pi extension");
+  writeFileSync(join(tmpPkg, "harnesses", "pi", "extension-source", "memoree.ts"), "// fake pi extension");
   writeFileSync(join(tmpPkg, "package.json"), JSON.stringify({ version: "7.7.7" }));
 
   setFakeHome(tmpHome);
@@ -50,11 +50,11 @@ async function importInstaller(): Promise<typeof import("../../src/cli/install-p
   return await import("../../src/cli/install-pi.js");
 }
 
-const BEGIN = "<!-- BEGIN hivemind-memory -->";
-const END = "<!-- END hivemind-memory -->";
+const BEGIN = "<!-- BEGIN memoree-memory -->";
+const END = "<!-- END memoree-memory -->";
 
 describe("installPi — cold install", () => {
-  it("creates AGENTS.md with exactly one hivemind marker pair", async () => {
+  it("creates AGENTS.md with exactly one memoree marker pair", async () => {
     const { installPi } = await importInstaller();
     installPi();
     const agents = readFileSync(join(tmpHome, ".pi", "agent", "AGENTS.md"), "utf-8");
@@ -66,14 +66,14 @@ describe("installPi — cold install", () => {
   it("copies the extension source verbatim", async () => {
     const { installPi } = await importInstaller();
     installPi();
-    const dst = readFileSync(join(tmpHome, ".pi", "agent", "extensions", "hivemind.ts"), "utf-8");
+    const dst = readFileSync(join(tmpHome, ".pi", "agent", "extensions", "memoree.ts"), "utf-8");
     expect(dst).toBe("// fake pi extension");
   });
 
-  it("stamps the version under the .hivemind sentinel directory", async () => {
+  it("stamps the version under the .memoree sentinel directory", async () => {
     const { installPi } = await importInstaller();
     installPi();
-    expect(readFileSync(join(tmpHome, ".pi", "agent", ".hivemind", ".hivemind_version"), "utf-8"))
+    expect(readFileSync(join(tmpHome, ".pi", "agent", ".memoree", ".memoree_version"), "utf-8"))
       .toBe("7.7.7");
   });
 
@@ -81,12 +81,12 @@ describe("installPi — cold install", () => {
     rmSync(join(tmpPkg, "harnesses", "pi", "extension-source"), { recursive: true, force: true });
     const { installPi } = await importInstaller();
     expect(() => installPi()).toThrow(/pi extension source missing/);
-    expect(() => installPi()).toThrow(/Reinstall the @deeplake\/hivemind package/);
+    expect(() => installPi()).toThrow(/Reinstall the memoree package/);
   });
 });
 
 describe("installPi — re-install / cleanup", () => {
-  it("preserves a user's pre-existing AGENTS.md content; appends the hivemind block once", async () => {
+  it("preserves a user's pre-existing AGENTS.md content; appends the memoree block once", async () => {
     mkdirSync(join(tmpHome, ".pi", "agent"), { recursive: true });
     writeFileSync(join(tmpHome, ".pi", "agent", "AGENTS.md"), "# My Pi notes\nUser content here.\n");
     const { installPi } = await importInstaller();
@@ -106,10 +106,10 @@ describe("installPi — re-install / cleanup", () => {
   });
 
   it("cleans up the legacy per-agent SKILL.md drop on install", async () => {
-    // Older installer dropped a SKILL.md under skills/hivemind-memory/ —
+    // Older installer dropped a SKILL.md under skills/memoree-memory/ —
     // now removed because pi reads the shared agentskills location too,
     // creating a collision with the codex installer.
-    const legacy = join(tmpHome, ".pi", "agent", "skills", "hivemind-memory");
+    const legacy = join(tmpHome, ".pi", "agent", "skills", "memoree-memory");
     mkdirSync(legacy, { recursive: true });
     writeFileSync(join(legacy, "SKILL.md"), "stale skill body");
     const { installPi } = await importInstaller();
@@ -119,7 +119,7 @@ describe("installPi — re-install / cleanup", () => {
 });
 
 describe("uninstallPi", () => {
-  it("strips the hivemind block from AGENTS.md while preserving user content", async () => {
+  it("strips the memoree block from AGENTS.md while preserving user content", async () => {
     mkdirSync(join(tmpHome, ".pi", "agent"), { recursive: true });
     writeFileSync(
       join(tmpHome, ".pi", "agent", "AGENTS.md"),
@@ -146,12 +146,12 @@ describe("uninstallPi", () => {
     const { installPi, uninstallPi } = await importInstaller();
     installPi();
     uninstallPi();
-    expect(existsSync(join(tmpHome, ".pi", "agent", "extensions", "hivemind.ts"))).toBe(false);
-    expect(existsSync(join(tmpHome, ".pi", "agent", ".hivemind"))).toBe(false);
+    expect(existsSync(join(tmpHome, ".pi", "agent", "extensions", "memoree.ts"))).toBe(false);
+    expect(existsSync(join(tmpHome, ".pi", "agent", ".memoree"))).toBe(false);
   });
 
   it("removes the legacy SKILL.md drop if it survived from an older installer", async () => {
-    const legacy = join(tmpHome, ".pi", "agent", "skills", "hivemind-memory");
+    const legacy = join(tmpHome, ".pi", "agent", "skills", "memoree-memory");
     mkdirSync(legacy, { recursive: true });
     writeFileSync(join(legacy, "SKILL.md"), "stale");
     const { uninstallPi } = await importInstaller();

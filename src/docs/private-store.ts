@@ -6,7 +6,7 @@
  * source is pushed and the next refresh promotes it to the cloud branch overlay.
  *
  * Layout: one JSON file per (project, scope) under
- *   ~/.hivemind/docs-private/<project>__<scopeSlug>.json
+ *   ~/.memoree/docs-private/<project>__<scopeSlug>.json
  * holding a map `{ [doc_id]: PrivateDoc }`. A whole-file read/write keeps it
  * trivially consistent at the per-branch scale (dozens of pages).
  *
@@ -34,7 +34,7 @@ export interface PrivateDoc {
 export function privateStoreRoot(): string {
   // `||` (not `??`): an empty override must fall through to the default, not
   // resolve the store to a relative path under cwd.
-  return process.env.HIVEMIND_DOCS_PRIVATE_DIR || join(homedir(), ".hivemind", "docs-private");
+  return process.env.MEMOREE_DOCS_PRIVATE_DIR || join(homedir(), ".memoree", "docs-private");
 }
 
 /**

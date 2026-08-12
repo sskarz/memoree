@@ -1,5 +1,5 @@
 import { sqlIdent, sqlStr } from "../../utils/sql.js";
-import type { StorageDialect } from "../../deeplake-schema.js";
+import type { StorageDialect } from "../../storage/schema.js";
 import { jsonLiteral } from "../../storage/sql-dialect.js";
 
 /**
@@ -34,7 +34,7 @@ export interface DirectSessionInsertParams {
  *
  * Idempotent by construction: the row is inserted via `INSERT ... SELECT ...
  * WHERE NOT EXISTS (SELECT 1 FROM <table> WHERE id = <id>)` rather than a plain
- * `VALUES` insert. The Deeplake sessions table has no UNIQUE constraint on `id`,
+ * `VALUES` insert. The Memoree sessions table has no UNIQUE constraint on `id`,
  * so a plain INSERT that the API layer retries after a transient 5xx (the
  * request committed but the gateway returned 502/503) creates a duplicate row.
  * The `WHERE NOT EXISTS` guard makes the re-send a no-op instead — verified
@@ -42,13 +42,13 @@ export interface DirectSessionInsertParams {
  * documented ~5s read-your-writes window (see probe results / PR notes).
  *
  * The column list starts with `id, path, filename, message,` so the query is
- * still recognised by isSessionInsertQuery() in deeplake-api.ts (which enables
+ * still recognised by isSessionInsertQuery() in memoree-api.ts (which enables
  * the transient-403 retry path for session writes).
  */
 export function buildDirectSessionInsertSql(
   sessionsTable: string,
   p: DirectSessionInsertParams,
-  dialect: StorageDialect = "deeplake",
+  dialect: StorageDialect = "postgres",
 ): string {
   const table = sqlIdent(sessionsTable);
   const id = sqlStr(p.id);

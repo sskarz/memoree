@@ -13,8 +13,8 @@ import { embeddingsDisabled } from "../embeddings/disable.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const SEMANTIC_ENABLED = process.env.HIVEMIND_SEMANTIC_SEARCH !== "false" && !embeddingsDisabled();
-const SEMANTIC_TIMEOUT_MS = Number(process.env.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS ?? "500");
+const SEMANTIC_ENABLED = process.env.MEMOREE_SEMANTIC_SEARCH !== "false" && !embeddingsDisabled();
+const SEMANTIC_TIMEOUT_MS = Number(process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS ?? "500");
 
 function resolveDaemonPath(): string {
   // When bundled as bundle/pre-tool-use.js, the daemon sits at
@@ -327,7 +327,7 @@ export async function handleGrepDirect(
   };
 
   // Attempt semantic search. If the daemon is unavailable or the pattern is
-  // regex-heavy, embed returns null and searchDeeplakeTables falls back to
+  // regex-heavy, embed returns null and searchMemoreeTables falls back to
   // lexical LIKE.
   let queryEmbedding: number[] | null = null;
   if (SEMANTIC_ENABLED && patternIsSemanticFriendly(params.pattern, params.fixedString)) {
@@ -339,7 +339,7 @@ export async function handleGrepDirect(
   }
 
   // On a backend error this throws — by design. The pre-tool-use hook's outer
-  // catch then falls through to the sandboxed VFS shell (deeplake-shell.js),
+  // catch then falls through to the sandboxed VFS shell (memoree-shell.js),
   // whose grep-interceptor re-attempts and signals a true backend failure as
   // grep exit-code 2 + stderr (never a silent "(no matches)"). Swallowing the
   // error here would pre-empt that retry and the honest signal.

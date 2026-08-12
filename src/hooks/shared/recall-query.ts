@@ -2,7 +2,7 @@
  * Proactive-recall query — a focused semantic search over the summaries
  * (`memory`) table that returns ONE scored, attributed hit.
  *
- * Distinct from grep-core's searchDeeplakeTables (which returns grep-shaped
+ * Distinct from grep-core's searchMemoreeTables (which returns grep-shaped
  * {path,content} with no score): recall needs the cosine score to threshold
  * on relevance and the author/date/project to attribute the hit. Mirrors the
  * proven cosine pattern: `(summary_embedding <#> vec) AS score ORDER BY score
@@ -69,7 +69,7 @@ export async function recallTopHit(
     return mapTopRow(await query(sql), "semantic");
   } catch (error) {
     // SQLite and vanilla PostgreSQL intentionally have no vector operator.
-    // Preserve Deeplake's server path, but fall back to a bounded candidate
+    // Preserve Memoree's server path, but fall back to a bounded candidate
     // scan when the provider rejects `<#>`.
     const localFilters = [`path LIKE '/summaries/%'`, `summary_embedding IS NOT NULL`];
     if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);

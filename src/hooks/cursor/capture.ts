@@ -40,7 +40,7 @@ import { appendSessionEvent } from "../session-event-cache.js";
 import { tryStopCounterTrigger } from "../../skillify/triggers.js";
 import type { Config } from "../../config.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
-import { isHivemindPluginEnabled } from "../../utils/plugin-state.js";
+import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 const log = (msg: string) => _log("cursor-capture", msg);
 
 function resolveEmbedDaemonPath(): string {
@@ -52,7 +52,7 @@ const PLUGIN_VERSION = getInstalledVersion(__bundleDir, ".claude-plugin") ?? "";
 
 // Self-heal the shared-deps symlink for this plugin version. Marketplace
 // auto-upgrades drop new versioned cache dirs without the symlink that
-// `hivemind embeddings install` originally created; this restores it on
+// `memoree embeddings install` originally created; this restores it on
 // first capture after each upgrade.
 if (!embeddingsDisabled()) {
   try { ensurePluginNodeModulesLink({ bundleDir: __bundleDir }); } catch { /* best-effort */ }
@@ -80,7 +80,7 @@ interface CursorCaptureInput {
   loop_count?: number;
 }
 
-const CAPTURE = process.env.HIVEMIND_CAPTURE !== "false";
+const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
 
 function resolveCwd(input: CursorCaptureInput): string {
   if (typeof input.cwd === "string" && input.cwd) return input.cwd;
@@ -91,7 +91,7 @@ function resolveCwd(input: CursorCaptureInput): string {
 
 async function main(): Promise<void> {
   if (!CAPTURE) return;
-  if (!isHivemindPluginEnabled()) { log("plugin disabled, skipping capture"); return; }
+  if (!isMemoreePluginEnabled()) { log("plugin disabled, skipping capture"); return; }
   const input = await readStdin<CursorCaptureInput>();
   const config = resolveCaptureConfig(resolveCwd(input), log);
   if (!config) return;
@@ -158,7 +158,7 @@ async function main(): Promise<void> {
   const jsonForSql = line.replace(/'/g, "''");
 
   // Best-effort embed: if the daemon is unavailable (no @huggingface/transformers
-  // or HIVEMIND_EMBEDDINGS=false), embed() returns null and the column lands NULL.
+  // or MEMOREE_EMBEDDINGS=false), embed() returns null and the column lands NULL.
   const embedding = embeddingsDisabled()
     ? null
     : await new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() }).embed(line, "document");
@@ -208,8 +208,8 @@ async function main(): Promise<void> {
   // is running INSIDE the wiki/skillify workers (their spawned CLI inherits
   // env vars and would otherwise loop).
   if (event === "afterAgentResponse" &&
-      process.env.HIVEMIND_WIKI_WORKER !== "1" &&
-      process.env.HIVEMIND_SKILLIFY_WORKER !== "1") {
+      process.env.MEMOREE_WIKI_WORKER !== "1" &&
+      process.env.MEMOREE_SKILLIFY_WORKER !== "1") {
     tryStopCounterTrigger({
       config,
       cwd,
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
 }
 
 function maybeTriggerPeriodicSummary(sessionId: string, cwd: string, config: Config): void {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
   try {
     const state = bumpTotalCount(sessionId);
     const cfg = loadTriggerConfig();

@@ -66,23 +66,23 @@ describe("installHermes — cold install", () => {
     const { installHermes } = await importInstaller();
     installHermes();
 
-    expect(existsSync(join(tmpHome, ".hermes", "skills", "hivemind-memory", "SKILL.md"))).toBe(true);
-    expect(existsSync(join(tmpHome, ".hermes", "hivemind", "bundle", "capture.js"))).toBe(true);
-    expect(existsSync(join(tmpHome, ".hivemind", "mcp", "server.js"))).toBe(true);
-    expect(readFileSync(join(tmpHome, ".hermes", "skills", "hivemind-memory", ".hivemind_version"), "utf-8")).toBe("3.4.5");
-    expect(readFileSync(join(tmpHome, ".hermes", "hivemind", ".hivemind_version"), "utf-8")).toBe("3.4.5");
+    expect(existsSync(join(tmpHome, ".hermes", "skills", "memoree-memory", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(tmpHome, ".hermes", "memoree", "bundle", "capture.js"))).toBe(true);
+    expect(existsSync(join(tmpHome, ".memoree", "mcp", "server.js"))).toBe(true);
+    expect(readFileSync(join(tmpHome, ".hermes", "skills", "memoree-memory", ".memoree_version"), "utf-8")).toBe("3.4.5");
+    expect(readFileSync(join(tmpHome, ".hermes", "memoree", ".memoree_version"), "utf-8")).toBe("3.4.5");
   });
 
-  it("config.yaml has hivemind under mcp_servers AND hooks AND hooks_auto_accept=true", async () => {
+  it("config.yaml has memoree under mcp_servers AND hooks AND hooks_auto_accept=true", async () => {
     const { installHermes } = await importInstaller();
     installHermes();
     const cfg = readConfig();
-    expect(cfg.mcp_servers.hivemind.command).toBe("node");
-    expect(cfg.mcp_servers.hivemind.args[0]).toBe(join(tmpHome, ".hivemind", "mcp", "server.js"));
+    expect(cfg.mcp_servers.memoree.command).toBe("node");
+    expect(cfg.mcp_servers.memoree.args[0]).toBe(join(tmpHome, ".memoree", "mcp", "server.js"));
     expect(cfg.hooks_auto_accept).toBe(true);
   });
 
-  it("hooks block contains exactly the 6 hivemind events (count + names) and pre_tool_call has the terminal matcher", async () => {
+  it("hooks block contains exactly the 6 memoree events (count + names) and pre_tool_call has the terminal matcher", async () => {
     const { installHermes } = await importInstaller();
     installHermes();
     const cfg = readConfig();
@@ -104,7 +104,7 @@ describe("installHermes — cold install", () => {
     expect(cfg.hooks.on_session_end.some((h: { command: string }) => h.command.includes("graph-on-stop.js"))).toBe(true);
   });
 
-  it("preserves a user-defined hook on a non-hivemind event", async () => {
+  it("preserves a user-defined hook on a non-memoree event", async () => {
     mkdirSync(join(tmpHome, ".hermes"), { recursive: true });
     writeFileSync(join(tmpHome, ".hermes", "config.yaml"), yaml.dump({
       hooks: { on_message_received: [{ command: "/usr/local/bin/audit.sh", timeout: 5 }] },
@@ -124,10 +124,10 @@ describe("installHermes — cold install", () => {
     writeFileSync(join(tmpHome, ".hermes", "config.yaml"), "::: not yaml :::");
     const { installHermes } = await importInstaller();
     expect(() => installHermes()).not.toThrow();
-    expect(readConfig().mcp_servers.hivemind).toBeDefined();
+    expect(readConfig().mcp_servers.memoree).toBeDefined();
   });
 
-  it("re-install replaces stale hivemind hooks (no duplication after N re-runs)", async () => {
+  it("re-install replaces stale memoree hooks (no duplication after N re-runs)", async () => {
     const { installHermes } = await importInstaller();
     for (let i = 0; i < 4; i++) installHermes();
     const cfg = readConfig();
@@ -144,14 +144,14 @@ describe("installHermes — cold install", () => {
 });
 
 describe("uninstallHermes", () => {
-  it("removes the skill dir, the bundle dir, AND strips hivemind from config.yaml", async () => {
+  it("removes the skill dir, the bundle dir, AND strips memoree from config.yaml", async () => {
     const { installHermes, uninstallHermes } = await importInstaller();
     installHermes();
     uninstallHermes();
-    expect(existsSync(join(tmpHome, ".hermes", "skills", "hivemind-memory"))).toBe(false);
-    expect(existsSync(join(tmpHome, ".hermes", "hivemind"))).toBe(false);
-    // After uninstall: every hivemind-written field is stripped, including
-    // hooks_auto_accept (installer set it to true so the hivemind hooks
+    expect(existsSync(join(tmpHome, ".hermes", "skills", "memoree-memory"))).toBe(false);
+    expect(existsSync(join(tmpHome, ".hermes", "memoree"))).toBe(false);
+    // After uninstall: every memoree-written field is stripped, including
+    // hooks_auto_accept (installer set it to true so the memoree hooks
     // fire silently — leaving it set after uninstall would silently
     // auto-accept any unrelated hooks the user adds later). With nothing
     // left in cfg, the uninstaller deletes config.yaml entirely.
@@ -163,7 +163,7 @@ describe("uninstallHermes", () => {
     }
   });
 
-  it("preserves user hooks while stripping hivemind hooks (mixed config)", async () => {
+  it("preserves user hooks while stripping memoree hooks (mixed config)", async () => {
     const { installHermes, uninstallHermes } = await importInstaller();
     mkdirSync(join(tmpHome, ".hermes"), { recursive: true });
     writeFileSync(join(tmpHome, ".hermes", "config.yaml"), yaml.dump({
@@ -176,11 +176,11 @@ describe("uninstallHermes", () => {
     expect(cfg.mcp_servers).toBeUndefined();
     expect(cfg.hooks.on_message_received).toHaveLength(1);
     expect(cfg.hooks.on_message_received[0].command).toBe("/usr/local/bin/audit.sh");
-    // Hivemind hook events are gone.
+    // Memoree hook events are gone.
     expect(cfg.hooks.pre_llm_call).toBeUndefined();
   });
 
-  it("preserves an unrelated mcp_server entry while removing the hivemind one", async () => {
+  it("preserves an unrelated mcp_server entry while removing the memoree one", async () => {
     const { installHermes, uninstallHermes } = await importInstaller();
     mkdirSync(join(tmpHome, ".hermes"), { recursive: true });
     writeFileSync(join(tmpHome, ".hermes", "config.yaml"), yaml.dump({
@@ -190,7 +190,7 @@ describe("uninstallHermes", () => {
     uninstallHermes();
     const cfg = readConfig();
     expect(cfg.mcp_servers.other).toEqual({ command: "node", args: ["/tmp/other.js"] });
-    expect(cfg.mcp_servers.hivemind).toBeUndefined();
+    expect(cfg.mcp_servers.memoree).toBeUndefined();
   });
 
   it("is a no-op (no throw) when nothing has been installed", async () => {

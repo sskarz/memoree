@@ -106,7 +106,7 @@ describe("spawnDetachedNodeWorker", () => {
  * separators + detach semantics on top of this — see .github/workflows/ci.yaml.)
  */
 describe("spawnDetachedNodeWorker — real process (no mock)", () => {
-  const MISSING = "hivemind-definitely-not-a-real-binary-xyz";
+  const MISSING = "memoree-definitely-not-a-real-binary-xyz";
 
   // The literal bug: the OLD code shape, run in a child node process, must
   // crash with a non-zero exit. If this ever starts exiting 0, the runtime no

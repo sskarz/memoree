@@ -1,5 +1,5 @@
 /**
- * The docs-onboarding step of `hivemind install`, factored out of
+ * The docs-onboarding step of `memoree install`, factored out of
  * `runInstallAll` so it can be tested deterministically (no pty, no network).
  *
  * Behaviour, all decided here:
@@ -80,7 +80,7 @@ export async function runInstallDocsOnboarding(d: InstallDocsDeps): Promise<Inst
     if (d.autoEnabled(cfg.orgId, repoRoot)) {
       d.log("");
       await d.buildGraph(repoRoot);
-      d.log("Docs auto-sync is on for this repo — refreshing in the background. See: hivemind docs list");
+      d.log("Docs auto-sync is on for this repo — refreshing in the background. See: memoree docs list");
       return { kind: "already-enabled", root: repoRoot };
     }
     d.log("");
@@ -88,15 +88,15 @@ export async function runInstallDocsOnboarding(d: InstallDocsDeps): Promise<Inst
     await d.buildGraph(repoRoot);
     const result = await d.onboard({ root: repoRoot, orgId: cfg.orgId, orgName: cfg.orgName });
     if (!result.generate) return { kind: "declined" };
-    // Only the wiki here — same as `hivemind graph init`. Per-file docs are a
+    // Only the wiki here — same as `memoree graph init`. Per-file docs are a
     // separate, heavy `docs generate` (every file × LLM); auto-sync generates
     // them later on commit. `docs refresh` would NOT create missing per-file
     // docs (it only refreshes drifted existing rows), so spawning it is a no-op.
     if (d.spawn(["docs", "wiki", "--cwd", repoRoot])) {
-      d.log("Generating wiki docs in the background — check with: hivemind docs list");
+      d.log("Generating wiki docs in the background — check with: memoree docs list");
       return { kind: "spawned", root: repoRoot };
     }
-    d.log("Run `hivemind docs wiki` to generate the corpus.");
+    d.log("Run `memoree docs wiki` to generate the corpus.");
     return { kind: "no-entry", root: repoRoot };
   } catch (err) {
     d.warn(`docs setup skipped: ${err instanceof Error ? err.message : String(err)}`);

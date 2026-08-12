@@ -1,23 +1,23 @@
-# Installing Hivemind for Codex CLI
+# Installing Memoree for Codex CLI
 
-The fastest path installs hivemind into every AI coding assistant on your machine (Claude Code, Codex, OpenClaw) with one command:
+The fastest path installs memoree into every AI coding assistant on your machine (Claude Code, Codex, OpenClaw) with one command:
 
 ```bash
-npx @deeplake/hivemind@latest install
+npx memoree@latest install
 ```
 
 Or install for Codex only:
 
 ```bash
-npx @deeplake/hivemind@latest codex install
+npx memoree@latest codex install
 ```
 
 The installer:
 
 - Enables the `hooks` feature flag (and strips the legacy `codex_hooks` key, if a previous install added it)
-- Writes `~/.codex/hooks.json` with hivemind entries
-- Copies the plugin bundle to `~/.codex/hivemind/`
-- Symlinks the skill into `~/.agents/skills/hivemind-memory`
+- Writes `~/.codex/hooks.json` with memoree entries
+- Copies the plugin bundle to `~/.codex/memoree/`
+- Symlinks the skill into `~/.agents/skills/memoree-memory`
 - Opens a browser once for login (shared across all assistants)
 
 Restart Codex (quit and relaunch the CLI) to activate.
@@ -31,14 +31,14 @@ Restart Codex (quit and relaunch the CLI) to activate.
 
 ```bash
 cat ~/.codex/hooks.json | head -3
-ls -la ~/.agents/skills/hivemind-memory
-ls ~/.codex/hivemind/bundle/
+ls -la ~/.agents/skills/memoree-memory
+ls ~/.codex/memoree/bundle/
 ```
 
 ## Updating
 
 ```bash
-npx @deeplake/hivemind@latest codex install
+npx memoree@latest codex install
 ```
 
 Re-running is idempotent — hooks and skills get replaced in place.
@@ -46,7 +46,7 @@ Re-running is idempotent — hooks and skills get replaced in place.
 ## Uninstalling
 
 ```bash
-npx @deeplake/hivemind@latest codex uninstall
+npx memoree@latest codex uninstall
 ```
 
-Removes `~/.codex/hooks.json` and the skill symlink. Plugin files remain at `~/.codex/hivemind/` so a reinstall is cheap; delete the directory manually if you want a full cleanup.
+Removes `~/.codex/hooks.json` and the skill symlink. Plugin files remain at `~/.codex/memoree/` so a reinstall is cheap; delete the directory manually if you want a full cleanup.

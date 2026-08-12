@@ -12,7 +12,7 @@
  *
  * Cross-author MERGE policy (issue #118): MERGE is now allowed on any
  * skill in the block, including ones authored by other teammates. When
- * the editor is not the original author, the worker's recordToDeeplake
+ * the editor is not the original author, the worker's recordToMemoree
  * path auto-promotes `scope` from "me" to "team" and appends the editor
  * to the `contributors` array on the v+1 row. The gate prompt declares
  * this so the LLM understands the "promotion" cost is real and only

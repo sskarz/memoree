@@ -1,8 +1,8 @@
 /**
- * Local usage stats — durable per-session record of hivemind memory use,
+ * Local usage stats — durable per-session record of memoree memory use,
  * written at SessionEnd and read at SessionStart for the savings recap.
  *
- * Storage: `~/.deeplake/usage-stats.jsonl`. JSONL, one record per session.
+ * Storage: `~/.memoree/usage-stats.jsonl`. JSONL, one record per session.
  * Append-only at write time. The SessionStart-side reader sums across ALL
  * records (cumulative since install — see plan).
  *
@@ -24,10 +24,10 @@ export interface UsageRecord {
   /** Agent session_id (Claude Code session UUID). */
   sessionId: string;
   /** Bytes of `tool_result.content` returned from Bash tool calls grep'ing
-   *  `~/.deeplake/memory/` during this session — the load-bearing input to
-   *  the savings formula. memorySearchBytes / 4 ≈ tokens hivemind delivered. */
+   *  `~/.memoree/memory/` during this session — the load-bearing input to
+   *  the savings formula. memorySearchBytes / 4 ≈ tokens memoree delivered. */
   memorySearchBytes: number;
-  /** Count of Bash tool calls that referenced `.deeplake/memory` — used for
+  /** Count of Bash tool calls that referenced `.memoree/memory` — used for
    *  the "M memory searches" supporting line in the recap. */
   memorySearchCount: number;
 }
@@ -38,7 +38,7 @@ export interface UsageRecord {
  * test process started with and leak writes to the real $HOME.
  */
 export function statsFilePath(): string {
-  return join(homedir(), ".deeplake", "usage-stats.jsonl");
+  return join(homedir(), ".memoree", "usage-stats.jsonl");
 }
 
 function ensureStatsDir(): void {
@@ -77,7 +77,7 @@ export function readUsageRecords(): UsageRecord[] {
         // (no `memorySearchCount` field yet, or no `memorySearchBytes`)
         // get the missing values defaulted to 0 rather than dropped.
         // Keeping older records in the aggregate matters — the recap
-        // counts "sessions you've used hivemind in," and silently
+        // counts "sessions you've used memoree in," and silently
         // dropping one because its schema lacked a field added later
         // is a subtle bug.
         if (
@@ -119,8 +119,8 @@ export function sumMetric(records: UsageRecord[], key: keyof UsageRecord): numbe
  * Count skills authored by `userName` that are visible locally — i.e.
  * directories under `~/.claude/skills/` matching `<name>--<userName>`.
  *
- * Why this signal: hivemind's skillify pipeline writes mined skills to
- * the deeplake `skills` table tagged with `author`. When a user (or
+ * Why this signal: memoree's skillify pipeline writes mined skills to
+ * the memoree `skills` table tagged with `author`. When a user (or
  * teammate) pulls those skills, they land at
  *   ~/.claude/skills/<name>--<author>/SKILL.md
  * So counting directories whose suffix matches the current `userName`
@@ -128,7 +128,7 @@ export function sumMetric(records: UsageRecord[], key: keyof UsageRecord): numbe
  *
  * What it does NOT count:
  *   - Skills you generated but never pulled to this machine (lives only
- *     in the deeplake table; counting them needs the SQL+network path)
+ *     in the memoree table; counting them needs the SQL+network path)
  *   - Skills you generated and later deleted from disk
  *   - Skills generated under a slightly different author string
  *
@@ -138,7 +138,7 @@ export function sumMetric(records: UsageRecord[], key: keyof UsageRecord): numbe
  *
  * Purely local — no network, no SQL, no LLM. Fail-soft on every step.
  *
- * Earlier version used `~/.deeplake/state/skillify/<projectKey>.json`'s
+ * Earlier version used `~/.memoree/state/skillify/<projectKey>.json`'s
  * `skillsGenerated[]` field, but that's per-project + per-machine and
  * misses skills authored in other projects or on other machines. The
  * filesystem suffix-match is broader AND simpler.

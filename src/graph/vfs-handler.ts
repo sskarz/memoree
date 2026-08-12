@@ -1,6 +1,6 @@
 /**
  * Virtual filesystem handler for graph queries under
- * ~/.deeplake/memory/graph/ — same intercept pattern as the
+ * ~/.memoree/memory/graph/ — same intercept pattern as the
  * memory mount's BM25 grep. Synthesizes text responses on the fly
  * from the local snapshot; no real files exist at these paths.
  *
@@ -18,7 +18,7 @@
  * taxonomy makes future API evolution painful (codex P1 review).
  *
  * Privacy: the handler reads ONLY the local snapshot file on disk.
- * Zero network calls in the read path. Pull-from-cloud happens in
+ * Zero external service calls in the read path. Backend synchronization happens in
  * a separate async worker (src/hooks/graph-pull-worker.ts).
  */
 
@@ -178,7 +178,7 @@ function loadSnapshotOrError(
   if (last === null) {
     return {
       kind: "no-graph",
-      message: "No local graph for this worktree yet. Run `hivemind graph build` (or `hivemind graph pull` if a teammate has built this commit).",
+      message: "No local graph for this worktree yet. Run `memoree graph build` (or `memoree graph pull` if a teammate has built this commit).",
     };
   }
   // CodeRabbit P1: writeSnapshot persists non-git builds under
@@ -262,16 +262,16 @@ function renderIndex(snap: GraphSnapshot, baseDir: string, cwd: string): string 
   lines.push(`Nodes:   ${totalNodes}    Edges: ${totalEdges}`);
   lines.push("");
   lines.push("## How to query");
-  lines.push("  cat ~/.deeplake/memory/graph/query/<pattern>");
+  lines.push("  cat ~/.memoree/memory/graph/query/<pattern>");
   lines.push("    2-in-1: search + expand the top matches with their 1-hop");
   lines.push("    neighbors (callers/callees/imports/heritage). Start here.");
   lines.push("    Multi-token AND: query/<a>+<b> requires both tokens.");
   lines.push("");
-  lines.push("  cat ~/.deeplake/memory/graph/find/<pattern>");
+  lines.push("  cat ~/.memoree/memory/graph/find/<pattern>");
   lines.push("    Case-insensitive substring match on node id + label.");
   lines.push("    Emits numbered handles [1] [2] ... saved for this worktree.");
   lines.push("");
-  lines.push("  cat ~/.deeplake/memory/graph/show/<handle-or-pattern>");
+  lines.push("  cat ~/.memoree/memory/graph/show/<handle-or-pattern>");
   lines.push("    <handle>: a digit from a prior `find/`/`query/` (e.g. 3).");
   lines.push("    <pattern>: a substring; resolves to a unique node if possible,");
   lines.push("               or shows candidates if ambiguous.");
@@ -422,7 +422,7 @@ function renderFind(snap: GraphSnapshot, pattern: string, baseDir: string, workt
     lines.push(`  [${i + 1}]  ${n.id}   ${n.kind} (${tag})`);
   }
   lines.push("");
-  lines.push("Use: cat ~/.deeplake/memory/graph/show/<N> to see node + 1-hop neighbors");
+  lines.push("Use: cat ~/.memoree/memory/graph/show/<N> to see node + 1-hop neighbors");
   return lines.join("\n");
 }
 
@@ -470,7 +470,7 @@ function renderQuery(snap: GraphSnapshot, pattern: string, baseDir: string, work
     renderHopGroup(lines, inByNode.get(n.id) ?? [], "IN", "source");
     lines.push("");
   }
-  lines.push("Use: cat ~/.deeplake/memory/graph/show/<N> for full detail on a match.");
+  lines.push("Use: cat ~/.memoree/memory/graph/show/<N> for full detail on a match.");
   return lines.join("\n");
 }
 
@@ -542,7 +542,7 @@ function renderShow(snap: GraphSnapshot, key: string, baseDir: string, worktreeI
     lines.push(`  [${i + 1}]  ${matches[i]!.id}`);
   }
   lines.push("");
-  lines.push("Use: cat ~/.deeplake/memory/graph/show/<N>");
+  lines.push("Use: cat ~/.memoree/memory/graph/show/<N>");
   return lines.join("\n");
 }
 

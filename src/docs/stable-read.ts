@@ -1,12 +1,12 @@
 /**
- * Read-stability gate for the Deeplake SQL backend.
+ * Read-stability gate for the Memoree SQL backend.
  *
  * The backend exhibits read-after-write inconsistency: for a window after a
  * burst of INSERTs, the SAME `SELECT` returns a NON-DETERMINISTIC PARTIAL
  * subset of the rows (the backend itself reports the partial count). It
  * eventually converges, but any read in that window can silently miss rows —
  * which for the doc system means `refresh` skips stale docs, and a latest-row
- * read can resolve to an OLD version. (Repro: deeplake-readafterwrite-repro.mjs.)
+ * read can resolve to an OLD version. (Repro: memoree-readafterwrite-repro.mjs.)
  *
  * Key property we exploit: every partial read is a SUBSET of the true row set
  * (counts observed range from partial up to the true count, never above). So

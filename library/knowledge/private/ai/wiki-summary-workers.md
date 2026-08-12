@@ -2,7 +2,7 @@
 
 > Category: AI | Version: 1.0 | Date: June 2026 | Status: Active
 
-How Hivemind generates, stores, and incrementally updates AI-written wiki summaries for each session, and how those summaries power the VFS recall surface.
+How Memoree generates, stores, and incrementally updates AI-written wiki summaries for each session, and how those summaries power the VFS recall surface.
 
 **Related:**
 - [`session-capture.md`](session-capture.md)
@@ -10,14 +10,14 @@ How Hivemind generates, stores, and incrementally updates AI-written wiki summar
 - [`skillify-pipeline.md`](skillify-pipeline.md)
 - [`../architecture/session-lifecycle.md`](../architecture/session-lifecycle.md)
 - [`../architecture/system-overview.md`](../architecture/system-overview.md)
-- [`../data/deeplake-tables-schema.md`](../data/deeplake-tables-schema.md)
+- [`../data/memoree-tables-schema.md`](../data/memoree-tables-schema.md)
 - [`../../../../docs/SUMMARIES.md`](../../../../docs/SUMMARIES.md)
 
 ---
 
 ## What summaries are for
 
-Raw session rows in the `sessions` table are precise but verbose. Searching across them for "what did we decide about the database schema last week" would require ranking thousands of individual messages. Summaries solve this by collapsing each session into a structured markdown document that names entities, decisions, files modified, and open questions. That document is what shows up when you `Grep` across `~/.deeplake/memory/` or follow links from `~/.deeplake/memory/index.md`.
+Raw session rows in the `sessions` table are precise but verbose. Searching across them for "what did we decide about the database schema last week" would require ranking thousands of individual messages. Summaries solve this by collapsing each session into a structured markdown document that names entities, decisions, files modified, and open questions. That document is what shows up when you `Grep` across `~/.memoree/memory/` or follow links from `~/.memoree/memory/index.md`.
 
 Summaries also carry a `summary_embedding` vector so semantic recall can promote a session even when the search terms do not match the exact words used at the time.
 
@@ -30,7 +30,7 @@ Each agent fires a wiki worker on two triggers:
 | Trigger | When |
 |---|---|
 | **Final** | At session end: `Stop`, `SessionEnd`, or `session_shutdown`, once per session |
-| **Periodic** | Mid-session, when messages since last summary reach `HIVEMIND_SUMMARY_EVERY_N_MSGS` (default 50) OR elapsed time since last summary reaches `HIVEMIND_SUMMARY_EVERY_HOURS` (default 2) |
+| **Periodic** | Mid-session, when messages since last summary reach `MEMOREE_SUMMARY_EVERY_N_MSGS` (default 50) OR elapsed time since last summary reaches `MEMOREE_SUMMARY_EVERY_HOURS` (default 2) |
 
 The periodic threshold check lives inside `maybeTriggerPeriodicSummary()` in `src/hooks/capture.ts`. After each capture INSERT, the function bumps a per-session counter in `~/.claude/hooks/summary-state/<sessionId>.json` and calls `shouldTrigger()` to decide whether to proceed.
 
@@ -45,10 +45,10 @@ A sidecar JSON at `~/.claude/hooks/summary-state/<sessionId>.json` tracks `{ las
 The worker runs as a detached Node process, spawned by `src/hooks/spawn-wiki-worker.ts`. The spawn function serializes a `WorkerConfig` object to a temp JSON file and invokes:
 
 ```
-node wiki-worker.js /tmp/hivemind-wiki-<uuid>/config.json
+node wiki-worker.js /tmp/memoree-wiki-<uuid>/config.json
 ```
 
-The worker sets `HIVEMIND_WIKI_WORKER=1` and `HIVEMIND_CAPTURE=false` in the subprocess environment to prevent the `claude -p` call inside from triggering its own capture loop.
+The worker sets `MEMOREE_WIKI_WORKER=1` and `MEMOREE_CAPTURE=false` in the subprocess environment to prevent the `claude -p` call inside from triggering its own capture loop.
 
 ### Step 1: fetch session events
 
@@ -60,7 +60,7 @@ WHERE path LIKE '/sessions/%<sessionId>%'
 ORDER BY creation_date ASC
 ```
 
-Because capture hooks INSERT asynchronously, Deeplake's eventual-consistency model means rows can lag behind the `SessionEnd` event. The worker retries with linear backoff up to `HIVEMIND_WIKI_EVENT_RETRIES` (default 5) times at `HIVEMIND_WIKI_EVENT_BACKOFF_MS` (default 1500 ms) intervals before giving up.
+Because capture hooks INSERT asynchronously, Memoree's eventual-consistency model means rows can lag behind the `SessionEnd` event. The worker retries with linear backoff up to `MEMOREE_WIKI_EVENT_RETRIES` (default 5) times at `MEMOREE_WIKI_EVENT_BACKOFF_MS` (default 1500 ms) intervals before giving up.
 
 If no events appear after all retries, the worker removes the "in progress" placeholder from the `memory` table (a row written by the SessionStart hook to reserve the slot) rather than leaving it stranded forever.
 
@@ -76,7 +76,7 @@ The worker builds a structured prompt from a template, substituting the temp JSO
 const inv = buildClaudeInvocation(cfg.claudeBin, prompt);
 execFileSync(inv.file, inv.args, {
   timeout: 120_000,
-  env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+  env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
 });
 ```
 
@@ -99,21 +99,21 @@ sequenceDiagram
     participant capture as capture.ts
     participant spawner as spawn-wiki-worker.ts
     participant worker as wiki-worker.ts
-    participant deeplake as Deeplake
+    participant memoree as Memoree
     participant gate as claude -p (gate CLI)
     participant embed as EmbedDaemon
 
     capture ->> spawner: maybeTriggerPeriodicSummary (threshold crossed)
     spawner ->> worker: node wiki-worker.js config.json (detached)
-    worker ->> deeplake: SELECT events for sessionId (with retries)
-    deeplake -->> worker: rows[]
-    worker ->> deeplake: SELECT existing summary (for offset)
-    deeplake -->> worker: prev summary or empty
+    worker ->> memoree: SELECT events for sessionId (with retries)
+    memoree -->> worker: rows[]
+    worker ->> memoree: SELECT existing summary (for offset)
+    memoree -->> worker: prev summary or empty
     worker ->> gate: execFileSync(claudeBin, prompt)
     gate -->> worker: writes summary.md to tmp dir
     worker ->> embed: EmbedClient.embed(summaryText)
     embed -->> worker: number[] or null
-    worker ->> deeplake: UPSERT /summaries/<user>/<sessionId>.md
+    worker ->> memoree: UPSERT /summaries/<user>/<sessionId>.md
     worker ->> worker: finalizeSummary (update sidecar)
     worker ->> worker: releaseLock (finally block)
 ```
@@ -122,7 +122,7 @@ sequenceDiagram
 
 ## Error handling and resilience
 
-**Retries on empty events.** The five-attempt linear backoff ensures that sessions captured under heavy load (many concurrent agent sessions) still get summarized even when Deeplake read consistency lags behind the INSERT timestamps.
+**Retries on empty events.** The five-attempt linear backoff ensures that sessions captured under heavy load (many concurrent agent sessions) still get summarized even when Memoree read consistency lags behind the INSERT timestamps.
 
 **No orphan placeholders.** If events never arrive, the worker deletes the "in progress" placeholder row. The guard `AND description = 'in progress'` means a concurrent worker that already wrote a real summary is never clobbered.
 
@@ -144,7 +144,7 @@ The wiki worker is bundled inside each per-agent plugin. The only variation is t
 | hermes | `hermes -z <prompt> --provider <provider> -m <model> --yolo --ignore-user-config` |
 | pi | `pi --print --provider <provider> --model <model> <prompt>` |
 
-For pi specifically, the wiki worker is bundled separately at `~/.pi/agent/hivemind/wiki-worker.js` (deposited by `hivemind pi install`). The other agents ship the worker inside their per-agent plugin bundle.
+For pi specifically, the wiki worker is bundled separately at `~/.pi/agent/memoree/wiki-worker.js` (deposited by `memoree pi install`). The other agents ship the worker inside their per-agent plugin bundle.
 
 ---
 
@@ -152,15 +152,15 @@ For pi specifically, the wiki worker is bundled separately at `~/.pi/agent/hivem
 
 | Env var | Default | Effect |
 |---|---|---|
-| `HIVEMIND_SUMMARY_EVERY_N_MSGS` | `50` | Message threshold for periodic trigger |
-| `HIVEMIND_SUMMARY_EVERY_HOURS` | `2` | Time threshold for periodic trigger |
-| `HIVEMIND_WIKI_EVENT_RETRIES` | `5` | Retry attempts when no session events are found |
-| `HIVEMIND_WIKI_EVENT_BACKOFF_MS` | `1500` | Linear backoff base for event fetch retries |
-| `HIVEMIND_CURSOR_MODEL` | `auto` | (cursor) Model passed to `cursor-agent --print --model` |
-| `HIVEMIND_HERMES_PROVIDER` | `openrouter` | (hermes) Provider for the gate call |
-| `HIVEMIND_HERMES_MODEL` | `anthropic/claude-haiku-4-5` | (hermes) Model for the gate call |
-| `HIVEMIND_PI_PROVIDER` | `google` | (pi) Provider for the gate call |
-| `HIVEMIND_PI_MODEL` | `gemini-2.5-flash` | (pi) Model for the gate call |
-| `HIVEMIND_CAPTURE` | `true` | Set to `false` to disable capture and summary generation |
+| `MEMOREE_SUMMARY_EVERY_N_MSGS` | `50` | Message threshold for periodic trigger |
+| `MEMOREE_SUMMARY_EVERY_HOURS` | `2` | Time threshold for periodic trigger |
+| `MEMOREE_WIKI_EVENT_RETRIES` | `5` | Retry attempts when no session events are found |
+| `MEMOREE_WIKI_EVENT_BACKOFF_MS` | `1500` | Linear backoff base for event fetch retries |
+| `MEMOREE_CURSOR_MODEL` | `auto` | (cursor) Model passed to `cursor-agent --print --model` |
+| `MEMOREE_HERMES_PROVIDER` | `openrouter` | (hermes) Provider for the gate call |
+| `MEMOREE_HERMES_MODEL` | `anthropic/claude-haiku-4-5` | (hermes) Model for the gate call |
+| `MEMOREE_PI_PROVIDER` | `google` | (pi) Provider for the gate call |
+| `MEMOREE_PI_MODEL` | `gemini-2.5-flash` | (pi) Model for the gate call |
+| `MEMOREE_CAPTURE` | `true` | Set to `false` to disable capture and summary generation |
 
 Worker activity logs to `~/.claude/hooks/wiki.log`. Each line shows the session being processed, the event count, the gate exit code, and the upload result.

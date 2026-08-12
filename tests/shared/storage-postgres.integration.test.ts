@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,15 +7,15 @@ import { createStorageBackend } from "../../src/storage/factory.js";
 import { PostgresBackend } from "../../src/storage/postgres.js";
 import { registerSqlStorageFeatureParity } from "./helpers/sql-storage-feature-parity.js";
 
-const connectionUrl = process.env.HIVEMIND_TEST_POSTGRES_URL;
+const connectionUrl = process.env.MEMOREE_TEST_POSTGRES_URL;
 const run = connectionUrl ? describe : describe.skip;
 
 run("PostgreSQL storage contract", () => {
   it("creates, heals, transacts, and round-trips native JSON and vectors", async () => {
-    const schema = `hivemind_test_${process.pid}_${Date.now()}`;
+    const schema = `memoree_test_${process.pid}_${Date.now()}`;
     const names = {
-      memory: "memory", sessions: "sessions", skills: "skills", rules: "hivemind_rules",
-      goals: "hivemind_goals", kpis: "hivemind_kpis", docs: "hivemind_docs", codebase: "codebase",
+      memory: "memory", sessions: "sessions", skills: "skills", rules: "memoree_rules",
+      goals: "memoree_goals", kpis: "memoree_kpis", docs: "memoree_docs", codebase: "codebase",
     };
     const backend = new PostgresBackend(connectionUrl!, schema, "memory", names);
     try {
@@ -45,16 +45,9 @@ run("PostgreSQL storage contract", () => {
 });
 
 registerSqlStorageFeatureParity("PostgreSQL", Boolean(connectionUrl), async () => {
-  const root = mkdtempSync(join(tmpdir(), "hivemind-postgres-parity-"));
-  const schema = `hivemind_parity_${process.pid}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const root = mkdtempSync(join(tmpdir(), "memoree-postgres-parity-"));
+  const schema = `memoree_parity_${process.pid}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const configPath = join(root, "config.json");
-  mkdirSync(join(root, ".deeplake"), { recursive: true });
-  writeFileSync(join(root, ".deeplake", "credentials.json"), JSON.stringify({
-    token: "unused-local-token",
-    orgId: "local",
-    userName: "alice",
-    workspaceId: "default",
-  }));
   const storage: PostgresStorageConfig = {
     kind: "postgres",
     connectionUrl: connectionUrl!,
@@ -66,10 +59,10 @@ registerSqlStorageFeatureParity("PostgreSQL", Boolean(connectionUrl), async () =
     tableName: "memory",
     sessionsTableName: "sessions",
     skillsTableName: "skills",
-    rulesTableName: "hivemind_rules",
-    goalsTableName: "hivemind_goals",
-    kpisTableName: "hivemind_kpis",
-    docsTableName: "hivemind_docs",
+    rulesTableName: "memoree_rules",
+    goalsTableName: "memoree_goals",
+    kpisTableName: "memoree_kpis",
+    docsTableName: "memoree_docs",
     codebaseTableName: "codebase",
     memoryPath: join(root, "memory"),
     vectorScanLimit: 100,
@@ -83,12 +76,12 @@ registerSqlStorageFeatureParity("PostgreSQL", Boolean(connectionUrl), async () =
       ...process.env,
       HOME: root,
       USERPROFILE: root,
-      HIVEMIND_BACKEND: "postgres",
-      HIVEMIND_POSTGRES_URL: connectionUrl!,
-      HIVEMIND_POSTGRES_SCHEMA: schema,
-      HIVEMIND_CONFIG_PATH: configPath,
-      HIVEMIND_EMBEDDINGS: "false",
-      HIVEMIND_MEMORY_PATH: storage.memoryPath,
+      MEMOREE_BACKEND: "postgres",
+      MEMOREE_POSTGRES_URL: connectionUrl!,
+      MEMOREE_POSTGRES_SCHEMA: schema,
+      MEMOREE_CONFIG_PATH: configPath,
+      MEMOREE_EMBEDDINGS: "false",
+      MEMOREE_MEMORY_PATH: storage.memoryPath,
     },
     malformedVector: [1],
     cleanup: async () => {

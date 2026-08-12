@@ -113,9 +113,9 @@ describe("graph-deps helpers", () => {
       };
     }
 
-    it("HIVEMIND_GRAPH_ON_STOP=0 → provisioning skipped (no npm, no heal, no lock)", () => {
-      const prev = process.env.HIVEMIND_GRAPH_ON_STOP;
-      process.env.HIVEMIND_GRAPH_ON_STOP = "0";
+    it("MEMOREE_GRAPH_ON_STOP=0 → provisioning skipped (no npm, no heal, no lock)", () => {
+      const prev = process.env.MEMOREE_GRAPH_ON_STOP;
+      process.env.MEMOREE_GRAPH_ON_STOP = "0";
       try {
         const runNpm = vi.fn();
         const runHeal = vi.fn();
@@ -124,10 +124,10 @@ describe("graph-deps helpers", () => {
         expect(runNpm).not.toHaveBeenCalled();
         expect(runHeal).not.toHaveBeenCalled();
         expect(existsSync(join(dir, ".graph-deps.lock"))).toBe(false);
-        expect(logFn).toHaveBeenCalledWith(expect.stringContaining("HIVEMIND_GRAPH_ON_STOP=0"));
+        expect(logFn).toHaveBeenCalledWith(expect.stringContaining("MEMOREE_GRAPH_ON_STOP=0"));
       } finally {
-        if (prev === undefined) delete process.env.HIVEMIND_GRAPH_ON_STOP;
-        else process.env.HIVEMIND_GRAPH_ON_STOP = prev;
+        if (prev === undefined) delete process.env.MEMOREE_GRAPH_ON_STOP;
+        else process.env.MEMOREE_GRAPH_ON_STOP = prev;
       }
     });
 
@@ -337,7 +337,7 @@ describe("graph-deps helpers", () => {
         && Array.isArray(c[1]) && String(c[1][0]).endsWith("ensure-tree-sitter.mjs"));
       expect(healCall).toBeDefined();
       const healOpts = healCall![2] as { env?: Record<string, string> } | undefined;
-      expect(healOpts?.env?.HIVEMIND_STRICT_POSTINSTALL).toBe("1");
+      expect(healOpts?.env?.MEMOREE_STRICT_POSTINSTALL).toBe("1");
     });
 
     it("deletes a MATCHING ready marker before repair, so a mid-repair crash leaves no marker", () => {
@@ -436,7 +436,7 @@ describe("graph-deps helpers", () => {
       expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
     });
 
-    it("runs the heal with HIVEMIND_STRICT_POSTINSTALL=1 when the script exists", () => {
+    it("runs the heal with MEMOREE_STRICT_POSTINSTALL=1 when the script exists", () => {
       // Use this test file itself as a stand-in "existing script" so the
       // existsSync gate passes; execFileSync is mocked so nothing really runs.
       const present = join(dir, "heal.mjs");
@@ -448,7 +448,7 @@ describe("graph-deps helpers", () => {
       expect(calls[0][0]).toBe(process.execPath);
       expect(calls[0][1]).toEqual([present]);
       const opts = calls[0][2] as { env?: Record<string, string> };
-      expect(opts.env?.HIVEMIND_STRICT_POSTINSTALL).toBe("1");
+      expect(opts.env?.MEMOREE_STRICT_POSTINSTALL).toBe("1");
     });
   });
 });

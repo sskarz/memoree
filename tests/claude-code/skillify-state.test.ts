@@ -17,28 +17,28 @@ import {
 } from "../../src/skillify/state.js";
 
 /**
- * Redirect state.ts at a throwaway directory via `HIVEMIND_STATE_DIR` so
- * tests never pollute the developer's real `~/.deeplake/state/skillify`.
+ * Redirect state.ts at a throwaway directory via `MEMOREE_STATE_DIR` so
+ * tests never pollute the developer's real `~/.memoree/state/skillify`.
  *
  * Why this matters: this very test file used to `mkdirSync(path, …)` a
  * directory at the lock path inside the developer's REAL home (to
  * exercise the EISDIR branch of `tryAcquireWorkerLock`) and clean it up
  * with a swallow-error `rmdirSync`. Every test run that got SIGKILL'd or
  * crashed before `afterEach` left a stale `<key>.lock` directory in
- * `~/.deeplake/state/skillify/`. 80+ orphans accumulated on dev
+ * `~/.memoree/state/skillify/`. 80+ orphans accumulated on dev
  * machines and bricked every production Stop trigger that happened to
  * hash to the same key (unlinkSync on a directory throws EISDIR, the
- * worker silently no-ops). `getStateDir()` honours `HIVEMIND_STATE_DIR`
+ * worker silently no-ops). `getStateDir()` honours `MEMOREE_STATE_DIR`
  * first, so pointing it at `mkdtempSync()` here keeps the blast radius
  * inside a self-cleaning tmp dir — even a hard kill only leaves debris
  * in `/tmp` (the OS reaps it on boot).
  */
-const PRIOR_STATE_DIR_ENV = process.env.HIVEMIND_STATE_DIR;
+const PRIOR_STATE_DIR_ENV = process.env.MEMOREE_STATE_DIR;
 let STATE_DIR: string;
 
 beforeAll(() => {
   STATE_DIR = mkdtempSync(join(tmpdir(), "skillify-state-test-"));
-  process.env.HIVEMIND_STATE_DIR = STATE_DIR;
+  process.env.MEMOREE_STATE_DIR = STATE_DIR;
 });
 
 afterAll(() => {
@@ -47,8 +47,8 @@ afterAll(() => {
   // force` survives both file and dir entries and silently succeeds if
   // already missing.
   try { rmSync(STATE_DIR, { recursive: true, force: true }); } catch { /* best effort */ }
-  if (PRIOR_STATE_DIR_ENV === undefined) delete process.env.HIVEMIND_STATE_DIR;
-  else process.env.HIVEMIND_STATE_DIR = PRIOR_STATE_DIR_ENV;
+  if (PRIOR_STATE_DIR_ENV === undefined) delete process.env.MEMOREE_STATE_DIR;
+  else process.env.MEMOREE_STATE_DIR = PRIOR_STATE_DIR_ENV;
 });
 
 /**
@@ -143,23 +143,23 @@ describe("normalizeGitRemoteUrl", () => {
   // projects and the dedup gate can't reason across cloners.
   it("collapses all common git URL forms to one canonical string", () => {
     const variants = [
-      "git@github.com:activeloopai/hivemind.git",
-      "git@github.com:activeloopai/hivemind",
-      "https://github.com/activeloopai/hivemind.git",
-      "https://github.com/activeloopai/hivemind",
-      "https://github.com/activeloopai/hivemind/",
-      "https://emanuele@github.com/activeloopai/hivemind.git",
-      "https://emanuele:secret@github.com/activeloopai/hivemind.git",
-      "ssh://git@github.com/activeloopai/hivemind.git",
+      "git@github.com:sskarz/memoree.git",
+      "git@github.com:sskarz/memoree",
+      "https://github.com/sskarz/memoree.git",
+      "https://github.com/sskarz/memoree",
+      "https://github.com/sskarz/memoree/",
+      "https://emanuele@github.com/sskarz/memoree.git",
+      "https://emanuele:secret@github.com/sskarz/memoree.git",
+      "ssh://git@github.com/sskarz/memoree.git",
       // Default ports appearing explicitly must collapse too — otherwise
       // automation/hosting that emits `:443` or `:22` produces divergent
       // project_keys for the same logical remote.
-      "https://github.com:443/activeloopai/hivemind.git",
-      "ssh://git@github.com:22/activeloopai/hivemind.git",
-      "git://github.com:9418/activeloopai/hivemind.git",
-      "http://github.com:80/activeloopai/hivemind.git",
+      "https://github.com:443/sskarz/memoree.git",
+      "ssh://git@github.com:22/sskarz/memoree.git",
+      "git://github.com:9418/sskarz/memoree.git",
+      "http://github.com:80/sskarz/memoree.git",
     ];
-    const canonical = "github.com/activeloopai/hivemind";
+    const canonical = "github.com/sskarz/memoree";
     for (const v of variants) {
       expect(normalizeGitRemoteUrl(v)).toBe(canonical);
     }
@@ -207,7 +207,7 @@ describe("bumpStopCounter", () => {
     expect(s.counter).toBe(3);
   });
 
-  it("persists state to disk under ~/.deeplake/state/skillify", () => {
+  it("persists state to disk under ~/.memoree/state/skillify", () => {
     const cwd = freshCwd();
     const s = bumpStopCounter(cwd);
     track(s.projectKey);
@@ -308,7 +308,7 @@ describe("worker lock", () => {
 describe("worker lock edge cases", () => {
   it("self-heals when the lock path is a stale directory and reacquires", () => {
     // The pre-fix bug: prior runs of this very test file would leak a
-    // `<key>.lock` directory into the dev's real ~/.deeplake on crash.
+    // `<key>.lock` directory into the dev's real ~/.memoree on crash.
     // Once leaked, every future Stop-trigger silently no-op'd because
     // `unlinkSync` on a directory throws EISDIR and the worker bailed.
     // The fix in state.ts catches EISDIR and falls back to `rmSync`
@@ -380,12 +380,12 @@ describe("worker lock edge cases", () => {
   });
 });
 
-describe("HIVEMIND_STATE_DIR routing", () => {
+describe("MEMOREE_STATE_DIR routing", () => {
   it("getStateDir + legacy-migration short-circuit on the tmp dir (no real-home pollution)", async () => {
     // Codex P1: legacy-migration.ts used to hardcode homedir(), so every
     // public state call (called transitively from readState / writeState /
     // withRmwLock / tryAcquireWorkerLock) would stat-and-potentially-rename
-    // the developer's real `~/.deeplake/state/skilify` despite the env
+    // the developer's real `~/.memoree/state/skilify` despite the env
     // override on state.ts.
     //
     // We `vi.resetModules()` before importing so this test truly
@@ -417,9 +417,9 @@ describe("HIVEMIND_STATE_DIR routing", () => {
     expect(fs.existsSync(tmpLegacy)).toBe(false);
   });
 
-  it("migrateLegacyStateDir is a hard no-op when HIVEMIND_STATE_DIR is set, even if a sibling 'skilify' dir coincidentally exists", async () => {
+  it("migrateLegacyStateDir is a hard no-op when MEMOREE_STATE_DIR is set, even if a sibling 'skilify' dir coincidentally exists", async () => {
     // CodeRabbit (#2/#5/#6 on PR #181): without an env-set guard,
-    // an override like HIVEMIND_STATE_DIR=/tmp/foo would still cause
+    // an override like MEMOREE_STATE_DIR=/tmp/foo would still cause
     // the migration to `existsSync('/tmp/skilify')` and — if some
     // unrelated tool happened to have created that dir — renameSync
     // it into the state path. Stage that exact scenario and assert
@@ -441,30 +441,30 @@ describe("HIVEMIND_STATE_DIR routing", () => {
     }
   });
 
-  it("empty/whitespace HIVEMIND_STATE_DIR is treated as unset", async () => {
-    // Defensive: a `HIVEMIND_STATE_DIR=` or `HIVEMIND_STATE_DIR="   "`
+  it("empty/whitespace MEMOREE_STATE_DIR is treated as unset", async () => {
+    // Defensive: a `MEMOREE_STATE_DIR=` or `MEMOREE_STATE_DIR="   "`
     // (forgotten value in a shell script, accidental empty pass-through
     // from CI config) used to win the `??` arm and force
-    // `join("", ".deeplake", ...)` to resolve relative to the worker's
+    // `join("", ".memoree", ...)` to resolve relative to the worker's
     // cwd — silently polluting whatever directory the process was
     // started in. After the trim+truthy guard in state-dir.ts, blank
     // values fall back to the homedir-based default.
     vi.resetModules();
     const { homedir } = await import("node:os");
-    const prior = process.env.HIVEMIND_STATE_DIR;
+    const prior = process.env.MEMOREE_STATE_DIR;
     try {
       const { getStateDir } = await import("../../src/skillify/state-dir.js");
-      process.env.HIVEMIND_STATE_DIR = "";
+      process.env.MEMOREE_STATE_DIR = "";
       expect(getStateDir().startsWith(homedir())).toBe(true);
-      process.env.HIVEMIND_STATE_DIR = "   ";
+      process.env.MEMOREE_STATE_DIR = "   ";
       expect(getStateDir().startsWith(homedir())).toBe(true);
     } finally {
       // Restore so the rest of the suite keeps using the tmp dir.
-      process.env.HIVEMIND_STATE_DIR = prior;
+      process.env.MEMOREE_STATE_DIR = prior;
     }
   });
 
-  it("scope-config + manifest paths land in HIVEMIND_STATE_DIR", async () => {
+  it("scope-config + manifest paths land in MEMOREE_STATE_DIR", async () => {
     // Codex P2: scope-config.ts and manifest.ts used to bypass the env
     // override (module-level STATE_DIR const + homedir() respectively).
     // After the refactor, both should resolve to the tmp dir.

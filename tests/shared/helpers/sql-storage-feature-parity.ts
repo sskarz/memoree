@@ -8,12 +8,12 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { describe, expect, it } from "vitest";
 import type { Config } from "../../../src/config.js";
 import { computeSnapshotSha256 } from "../../../src/graph/snapshot.js";
-import { pullSnapshot } from "../../../src/graph/deeplake-pull.js";
-import { pushSnapshot } from "../../../src/graph/deeplake-push.js";
+import { pullSnapshot } from "../../../src/graph/snapshot-pull.js";
+import { pushSnapshot } from "../../../src/graph/snapshot-push.js";
 import type { GraphSnapshot } from "../../../src/graph/types.js";
 import { listOpenGoals } from "../../../src/hooks/shared/context-renderer.js";
-import { DeeplakeFs } from "../../../src/shell/deeplake-fs.js";
-import { searchDeeplakeTables, searchDocs } from "../../../src/shell/grep-core.js";
+import { MemoreeFs } from "../../../src/shell/memoree-fs.js";
+import { searchMemoreeTables, searchDocs } from "../../../src/shell/grep-core.js";
 import { runPull } from "../../../src/skillify/pull.js";
 import { runPush } from "../../../src/skillify/push.js";
 import type { StorageBackend } from "../../../src/storage/backend.js";
@@ -80,7 +80,7 @@ function snapshotFor(root: string): GraphSnapshot {
     multigraph: true,
     graph: {
       schema_version: 1,
-      generator: "hivemind-graph",
+      generator: "memoree-graph",
       commit_sha: "abc123",
       repo_key: deriveProjectKey(root).key,
     },
@@ -133,23 +133,23 @@ async function callMcpTools(harness: SqlStorageHarness): Promise<void> {
     await client.connect(transport);
     const listed = await client.listTools();
     expect(listed.tools.map(tool => tool.name).sort()).toEqual([
-      "hivemind_docs_search",
-      "hivemind_index",
-      "hivemind_read",
-      "hivemind_search",
+      "memoree_docs_search",
+      "memoree_index",
+      "memoree_read",
+      "memoree_search",
     ]);
 
-    const index = await client.callTool({ name: "hivemind_index", arguments: {} });
+    const index = await client.callTool({ name: "memoree_index", arguments: {} });
     expect(JSON.stringify(index)).toContain("/summaries/alice/mcp.md");
 
     const read = await client.callTool({
-      name: "hivemind_read",
+      name: "memoree_read",
       arguments: { path: "/summaries/alice/mcp.md" },
     });
     expect(JSON.stringify(read)).toContain("MCP lexical needle");
 
     const search = await client.callTool({
-      name: "hivemind_search",
+      name: "memoree_search",
       arguments: { query: "lexical needle", limit: 10 },
     });
     expect(JSON.stringify(search)).toContain("/summaries/alice/mcp.md");
@@ -168,9 +168,9 @@ export function registerSqlStorageFeatureParity(
   suite(`${label} real-backend feature parity`, () => {
     it("round-trips goals and KPIs, transitions status, and isolates latest-version reads", async () => {
       await withHarness(createHarness, async ({ backend }) => {
-        const fs = await DeeplakeFs.create(backend, "memory", "/", "sessions", {
-          goalsTable: "hivemind_goals",
-          kpisTable: "hivemind_kpis",
+        const fs = await MemoreeFs.create(backend, "memory", "/", "sessions", {
+          goalsTable: "memoree_goals",
+          kpisTable: "memoree_kpis",
         });
         await fs.writeFile("/goal/alice/opened/goal-1.md", "Ship SQL storage");
         await fs.writeFile(
@@ -191,12 +191,12 @@ export function registerSqlStorageFeatureParity(
         expect(await fs.readFile("/goal/alice/in_progress/goal-1.md")).toBe("Ship SQL storage");
         expect(await fs.readFile("/kpi/goal-1/k-tests.md")).toContain("current: 2");
         expect(await backend.query(
-          `SELECT status, content, version FROM "hivemind_goals" WHERE goal_id = $1`,
+          `SELECT status, content, version FROM "memoree_goals" WHERE goal_id = $1`,
           ["goal-1"],
         )).toEqual([{ status: "in_progress", content: "Ship SQL storage", version: 1 }]);
 
         await backend.execute(
-          `INSERT INTO "hivemind_goals" (id, goal_id, owner, status, content, version, created_at) VALUES ` +
+          `INSERT INTO "memoree_goals" (id, goal_id, owner, status, content, version, created_at) VALUES ` +
           `($1, $2, $3, $4, $5, $6, $7), ($8, $9, $10, $11, $12, $13, $14), ` +
           `($15, $16, $17, $18, $19, $20, $21)`,
           [
@@ -205,7 +205,7 @@ export function registerSqlStorageFeatureParity(
             randomUUID(), "private", "bob", "opened", "must not leak", 1, "2026-01-03T00:00:00Z",
           ],
         );
-        const goals = await listOpenGoals(queryFor(backend), "hivemind_goals", "alice");
+        const goals = await listOpenGoals(queryFor(backend), "memoree_goals", "alice");
         expect(goals).toEqual(expect.arrayContaining([
           { goal_id: "goal-1", status: "in_progress", content: "Ship SQL storage" },
           { goal_id: "versioned", status: "opened", content: "latest version" },
@@ -216,8 +216,8 @@ export function registerSqlStorageFeatureParity(
 
     it("pushes, discovers, and idempotently updates versioned skills", async () => {
       await withHarness(createHarness, async ({ backend, config, root }) => {
-        const previousState = process.env.HIVEMIND_STATE_DIR;
-        process.env.HIVEMIND_STATE_DIR = join(root, "state");
+        const previousState = process.env.MEMOREE_STATE_DIR;
+        process.env.MEMOREE_STATE_DIR = join(root, "state");
         try {
           writeSkill(root, "## Workflow\n\nVersion one.");
           const base = {
@@ -265,16 +265,16 @@ export function registerSqlStorageFeatureParity(
             ["sql-parity", "alice"],
           )).toEqual([{ version: 1 }, { version: 2 }]);
         } finally {
-          if (previousState === undefined) delete process.env.HIVEMIND_STATE_DIR;
-          else process.env.HIVEMIND_STATE_DIR = previousState;
+          if (previousState === undefined) delete process.env.MEMOREE_STATE_DIR;
+          else process.env.MEMOREE_STATE_DIR = previousState;
         }
       });
     });
 
     it("pushes and pulls graph snapshots through the codebase table", async () => {
       await withHarness(createHarness, async ({ backend, config, root }) => {
-        const previousGraphsHome = process.env.HIVEMIND_GRAPHS_HOME;
-        process.env.HIVEMIND_GRAPHS_HOME = join(root, "graphs");
+        const previousGraphsHome = process.env.MEMOREE_GRAPHS_HOME;
+        process.env.MEMOREE_GRAPHS_HOME = join(root, "graphs");
         try {
           const snapshot = snapshotFor(root);
           const pushed = await pushSnapshot(snapshot, "worktree-a", {
@@ -306,14 +306,14 @@ export function registerSqlStorageFeatureParity(
           });
           expect(pulled.kind).toBe("pulled");
           expect(existsSync(join(
-            process.env.HIVEMIND_GRAPHS_HOME,
+            process.env.MEMOREE_GRAPHS_HOME,
             snapshot.graph.repo_key,
             "snapshots",
             "abc123.json",
           ))).toBe(true);
         } finally {
-          if (previousGraphsHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-          else process.env.HIVEMIND_GRAPHS_HOME = previousGraphsHome;
+          if (previousGraphsHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+          else process.env.MEMOREE_GRAPHS_HOME = previousGraphsHome;
         }
       });
     });
@@ -395,23 +395,23 @@ export function registerSqlStorageFeatureParity(
           escapedPattern: "%FALLBACK%",
           limit: 10,
         };
-        const disabled = await searchDeeplakeTables(backend, "memory", "sessions", {
+        const disabled = await searchMemoreeTables(backend, "memory", "sessions", {
           ...base,
           queryEmbedding: null,
         });
         expect(disabled.map(row => row.path)).toContain("/summaries/alice/fallback.md");
-        const malformed = await searchDeeplakeTables(backend, "memory", "sessions", {
+        const malformed = await searchMemoreeTables(backend, "memory", "sessions", {
           ...base,
           queryEmbedding: [1, 0],
         });
         expect(malformed.map(row => row.path)).toContain("/summaries/alice/fallback.md");
 
         await backend.execute(
-          `INSERT INTO "hivemind_docs" (id, doc_id, path, content, content_embedding, project, status) ` +
+          `INSERT INTO "memoree_docs" (id, doc_id, path, content, content_embedding, project, status) ` +
           `VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [randomUUID(), "src/fallback.ts", "/docs/src/fallback.ts.md", "docs lexical fallback", malformedVector, "parity", "active"],
         );
-        const docs = await searchDocs(queryFor(backend), "hivemind_docs", {
+        const docs = await searchDocs(queryFor(backend), "memoree_docs", {
           ...base,
           escapedPattern: "%LEXICAL%",
           queryEmbedding: [1, 0],

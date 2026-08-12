@@ -6,10 +6,10 @@ import {
   healMissingColumns,
   isMissingTableError,
   isMissingColumnError,
-} from "../deeplake-schema.js";
+} from "../storage/schema.js";
 
 /**
- * Insert one row into the Deeplake `skills` table per skill version.
+ * Insert one row into the Memoree `skills` table per skill version.
  *
  * Append-only: every KEEP/MERGE writes a fresh row. The most recent row for
  * (project_key, name) is the current state — readers ORDER BY version DESC
@@ -21,7 +21,7 @@ export interface InsertSkillRowArgs {
   /** Async SQL executor (the worker's own `query` fn, the API client, or a test mock). */
   query: (sql: string) => Promise<unknown>;
   tableName: string;
-  /** Deeplake workspace id — needed for the heal-pass introspection so the
+  /** repository key — needed for the heal-pass introspection so the
    *  SELECT against `information_schema.columns` targets *this* workspace's
    *  copy of the table (multi-tenant catalog disambiguation). */
   workspaceId: string;
@@ -114,7 +114,7 @@ export async function insertSkillRow(args: InsertSkillRowArgs): Promise<void> {
     if (isMissingColumnError(msg)) {
       // Any missing column — not just `contributors`. Run a heal pass over
       // the full schema (one SELECT info_schema, ALTER only the missing
-      // ones — see deeplake-schema.ts) and retry the INSERT once. If the
+      // ones — see storage/schema.ts) and retry the INSERT once. If the
       // diff said nothing was missing, the original error came from a
       // column outside our schema knowledge; rethrow rather than loop on
       // a retry that can't help. (`altered` being empty isn't enough on

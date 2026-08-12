@@ -1,12 +1,12 @@
 /**
- * Local materialization of canonical docs — `hivemind docs pull`.
+ * Local materialization of canonical docs — `memoree docs pull`.
  *
  * The table is the source of truth; GitHub never sees the docs. Each pulled
- * doc lands next to the code as a GITIGNORED `*.hivemind.md` file:
- *   - wiki page  `wiki/xarray/plot`  → `xarray/plot.hivemind.md`
- *   - file doc   `src/foo.ts`        → `src/foo.ts.hivemind.md`
+ * doc lands next to the code as a GITIGNORED `*.memoree.md` file:
+ *   - wiki page  `wiki/xarray/plot`  → `xarray/plot.memoree.md`
+ *   - file doc   `src/foo.ts`        → `src/foo.ts.memoree.md`
  *
- * Delta protocol: a local manifest (`.hivemind/docs-pull.json`, gitignored)
+ * Delta protocol: a local manifest (`.memoree/docs-pull.json`, gitignored)
  * stores the `updated_at` cursor of the last pull. Each pull reads only rows
  * with `updated_at > cursor` for this (project, scope) — O(changed docs), not
  * O(corpus). Rows are targeted by their composite id prefix
@@ -27,11 +27,11 @@ import { META_DOC_ID } from "./meta.js";
 import { WIKI_DOC_PREFIX } from "./wiki-generate.js";
 import type { QueryFn } from "./read.js";
 
-export const PULL_MANIFEST_DIR = ".hivemind";
+export const PULL_MANIFEST_DIR = ".memoree";
 export const PULL_MANIFEST_FILE = "docs-pull.json";
 
 /** Gitignore lines every pulled repo needs (docs stay off GitHub by design). */
-export const GITIGNORE_ENTRIES = ["*.hivemind.md", ".hivemind/"];
+export const GITIGNORE_ENTRIES = ["*.memoree.md", ".memoree/"];
 
 export interface PullManifest {
   /** Max `updated_at` already materialized. Empty = never pulled. */
@@ -40,7 +40,7 @@ export interface PullManifest {
 
 /**
  * Repo-relative path a doc materializes to. Wiki pages get a distinct
- * `.wiki.hivemind.md` suffix: a root-level file can produce a wiki key equal
+ * `.wiki.memoree.md` suffix: a root-level file can produce a wiki key equal
  * to its own path (`wiki/main.ts` vs file doc `main.ts`), and a shared
  * suffix would let one overwrite the other. Returns null for doc_ids that
  * would escape the repo (absolute, `..` segments) — those are never written.
@@ -50,7 +50,7 @@ export function localDocPath(docId: string): string | null {
   const rel = isWiki ? docId.slice(WIKI_DOC_PREFIX.length) : docId;
   if (rel === "" || rel.startsWith("/") || /^[a-zA-Z]:/.test(rel)) return null;
   if (rel.split("/").some((seg) => seg === ".." || seg === "")) return null;
-  return isWiki ? `${rel}.wiki.hivemind.md` : `${rel}.hivemind.md`;
+  return isWiki ? `${rel}.wiki.memoree.md` : `${rel}.memoree.md`;
 }
 
 export function readPullManifest(repoRoot: string): PullManifest {
@@ -69,7 +69,7 @@ export function writePullManifest(repoRoot: string, manifest: PullManifest): voi
 }
 
 /**
- * Idempotently append the hivemind ignore lines to the repo's `.gitignore`.
+ * Idempotently append the memoree ignore lines to the repo's `.gitignore`.
  * Existing content is preserved byte-for-byte; already-present lines are not
  * duplicated. Returns true when the file was modified.
  */

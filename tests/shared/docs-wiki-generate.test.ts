@@ -154,7 +154,7 @@ describe("generateWikiPages", () => {
     const { calls, query } = mockQuery();
     const run = vi.fn(async () => "## Purpose\nCore logic.");
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
       project: "proj", existing: new Set(), run,
     });
     expect(report.created).toBe(2);
@@ -173,7 +173,7 @@ describe("generateWikiPages", () => {
     const { query } = mockQuery();
     const run = vi.fn(async () => "x");
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
       existing: new Set([wikiDocId("pkg/core"), wikiDocId("pkg/io")]), run,
     });
     expect(report.created).toBe(0);
@@ -183,7 +183,7 @@ describe("generateWikiPages", () => {
   it("a failed generation writes NOTHING (missing beats stale-but-green)", async () => {
     const { calls, query } = mockQuery();
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
       existing: new Set(), run: async () => { throw new Error("LLM down"); },
     });
     expect(report.failed).toBe(2);
@@ -194,7 +194,7 @@ describe("generateWikiPages", () => {
   it("empty model output is a failure, not an empty page", async () => {
     const { calls, query } = mockQuery();
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
       existing: new Set(), run: async () => "   ",
     });
     expect(report.failed).toBe(2);
@@ -207,7 +207,7 @@ describe("generateWikiPages", () => {
     const { query } = mockQuery();
     // Force multi-chunk with a tiny budget: each file lands in its own chunk.
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", minGroupFiles: 0, snap: snap([
+      query, tableName: "memoree_docs", minGroupFiles: 0, snap: snap([
         node("pkg/core/a.ts:foo:function", "pkg/core/a.ts", "L1-L3"),
       ]), repoRoot: dir,
       existing: new Set(), run, chunkChars: 60,
@@ -220,7 +220,7 @@ describe("generateWikiPages", () => {
     prompts.length = 0;
     run.mockClear();
     const report2 = await generateWikiPages({
-      query, tableName: "hivemind_docs", minGroupFiles: 0, snap: snap([
+      query, tableName: "memoree_docs", minGroupFiles: 0, snap: snap([
         node("pkg/core/a.ts:foo:function", "pkg/core/a.ts", "L1-L3"),
         node("pkg/core/c.ts:baz:function", "pkg/core/c.ts", "L1-L3"),
       ]), repoRoot: dir,
@@ -236,7 +236,7 @@ describe("generateWikiPages", () => {
     const { calls, query } = mockQuery();
     const run = vi.fn(async () => "## X\nok");
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir,
       existing: new Set(), run, // default thresholds: 1 tiny file per group
     });
     expect(report.skipped).toBe(2);
@@ -248,7 +248,7 @@ describe("generateWikiPages", () => {
   it("a refusal from the model is FAILED, never persisted (garbage-but-green guard)", async () => {
     const { calls, query } = mockQuery();
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir, minGroupFiles: 0,
       existing: new Set(), run: async () => "I can only see a test file. Could you provide the implementation?",
     });
     expect(report.failed).toBe(2);
@@ -262,7 +262,7 @@ describe("generateWikiPages", () => {
     const pageRun = vi.fn(async (_p: string) => "## Purpose\nAuthored by the strong model.");
     const { calls, query } = mockQuery();
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", minGroupFiles: 0, snap: snap([
+      query, tableName: "memoree_docs", minGroupFiles: 0, snap: snap([
         node("pkg/core/a.ts:foo:function", "pkg/core/a.ts", "L1-L3"),
         node("pkg/core/c.ts:baz:function", "pkg/core/c.ts", "L1-L3"),
       ]), repoRoot: dir,
@@ -279,7 +279,7 @@ describe("generateWikiPages", () => {
   it("group with no readable sources is skipped, not written", async () => {
     const { calls, query } = mockQuery();
     const report = await generateWikiPages({
-      query, tableName: "hivemind_docs", minGroupFiles: 0, snap: snap([
+      query, tableName: "memoree_docs", minGroupFiles: 0, snap: snap([
         node("gone/x/void.ts:f:function", "gone/x/void.ts", "L1"),
       ]), repoRoot: dir,
       existing: new Set(), run: async () => "x",

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { WriteRow } from "../deeplake-api.js";
 import {
   CODEBASE_COLUMNS,
   DOCS_COLUMNS,
@@ -13,13 +12,25 @@ import {
   type StorageDialect,
   buildCreateTableSql,
   renderColumnSql,
-} from "../deeplake-schema.js";
+} from "./schema.js";
 import { SUMMARY_EMBEDDING_COL } from "../embeddings/columns.js";
 import { sqlIdent } from "../utils/sql.js";
 
-export type StorageKind = "deeplake" | "sqlite" | "postgres";
+export type StorageKind = "sqlite" | "postgres";
 export type SqlValue = string | number | boolean | null | Date | readonly number[] | Record<string, unknown>;
 export type QueryRow = Record<string, unknown>;
+
+export interface WriteRow {
+  path: string;
+  filename: string;
+  contentText: string;
+  mimeType: string;
+  sizeBytes: number;
+  project?: string;
+  description?: string;
+  creationDate?: string;
+  lastUpdateDate?: string;
+}
 
 export interface StorageCapabilities {
   serverVectorSearch: boolean;

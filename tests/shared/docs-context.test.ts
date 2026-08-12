@@ -10,7 +10,7 @@ describe("docsWikiContextNote (SessionStart wiki hint)", () => {
     });
     expect(seen).toEqual([["org-a", "proj-1"]]); // exact key, no ambient state
     expect(note).toContain("DOCS WIKI");
-    expect(note).toContain("~/.deeplake/memory/docs/find/");
+    expect(note).toContain("~/.memoree/memory/docs/find/");
     // The benchmark-mandated framing: on-demand orientation, never wiki-first.
     expect(note).toContain("Confirm every claim about code behavior against the source files");
     expect(note).not.toMatch(/wiki (page )?first/i);

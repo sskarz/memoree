@@ -1,6 +1,6 @@
 /**
  * Discover and pre-process local agent session transcripts WITHOUT touching
- * Deeplake. Powers `hivemind skillify mine-local`, which seeds skills for
+ * Memoree. Powers `memoree skillify mine-local`, which seeds skills for
  * fresh installs that haven't logged in yet.
  *
  * Two concerns live here:
@@ -32,9 +32,9 @@ const HOME = homedir();
 /**
  * Claude Code encodes cwd into the projects/ dir name by replacing both `/`
  * and `_` with `-`. Verified against ~/.claude/projects/ entries — the dir
- * for cwd `/home/emanuele/39_claude_code_plugin/deeplake-claude-code-plugins`
- * lands as `-home-emanuele-39-claude-code-plugin-deeplake-claude-code-plugins`,
- * NOT `-home-emanuele-39_claude_code_plugin-deeplake-claude-code-plugins`.
+ * for cwd `/home/emanuele/39_claude_code_plugin/memoree-claude-code-plugins`
+ * lands as `-home-emanuele-39-claude-code-plugin-memoree-claude-code-plugins`,
+ * NOT `-home-emanuele-39_claude_code_plugin-memoree-claude-code-plugins`.
  */
 function encodeCwdClaudeCode(cwd: string): string {
   return cwd.replace(/[/_]/g, "-");
@@ -217,7 +217,7 @@ export function pickSessions(
  *   { type: "assistant", message: { content: <array of blocks> }, timestamp }
  *   { type: "system"|"attachment"|"last-prompt"|... }              ← dropped
  *
- * Semantics mirror what the production capture hook stores in Deeplake:
+ * Semantics mirror what the production capture hook stores in Memoree:
  *   - User: only string-content user messages (the typed prompt). Tool-result
  *     arrays sent back to the model are dropped.
  *   - Assistant: only the LAST text-bearing assistant entry per turn — the

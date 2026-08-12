@@ -1,7 +1,7 @@
 /**
  * Secret redaction for captured session content.
  *
- * Hivemind captures prompts, tool inputs, tool outputs and assistant messages
+ * Memoree captures prompts, tool inputs, tool outputs and assistant messages
  * and persists/embeds them. Those payloads routinely contain credentials —
  * a Bash `export GITHUB_TOKEN=…`, an `Authorization: Bearer …` header echoed
  * by curl, a connection string with an inline password, or an API response

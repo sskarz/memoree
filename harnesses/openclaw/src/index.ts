@@ -1,14 +1,14 @@
 function definePluginEntry<T>(entry: T): T { return entry; }
 
-// Build-time constants injected by esbuild. __HIVEMIND_SKILL__ holds the
+// Build-time constants injected by esbuild. __MEMOREE_SKILL__ holds the
 // SKILL.md body (same file shipped under ./skills/SKILL.md), so we can
 // inject it into the system prompt without any runtime file I/O. Openclaw
 // only puts the skill's name + description + location XML into the prompt
 // via its skill index — not the body — so without this the agent never
-// actually sees the "call hivemind_search first" directives.
-declare const __HIVEMIND_VERSION__: string;
-declare const __HIVEMIND_SKILL__: string;
-declare const __HIVEMIND_GRAPH_SKILL__: string;
+// actually sees the "call memoree_search first" directives.
+declare const __MEMOREE_VERSION__: string;
+declare const __MEMOREE_SKILL__: string;
+declare const __MEMOREE_GRAPH_SKILL__: string;
 // Shared core imports
 // setup-config is imported dynamically at the call sites so esbuild emits it
 // as a separate chunk. That way the chunk holds the openclaw.json read/write
@@ -18,49 +18,32 @@ type SetupConfigModule = typeof import("./setup-config.js");
 function loadSetupConfig(): Promise<SetupConfigModule> {
   return import("./setup-config.js");
 }
-// Network-only helpers stay as static imports — auth.js no longer touches fs
-// (its credential IO moved to ../../../src/commands/auth-creds.js, which we load
-// lazily below so esbuild emits it as a separate chunk).
-import { requestDeviceCode, pollForToken, listOrgs, switchOrg, listWorkspaces, switchWorkspace, healDriftedOrgToken } from "../../../src/commands/auth.js";
-import { DeeplakeApi } from "../../../src/deeplake-api.js";
+// Provider-neutral storage is loaded from the user's local Memoree config.
+import { createStorageBackend } from "../../../src/storage/factory.js";
+import type { StorageBackend } from "../../../src/storage/backend.js";
 
 // Lazy-loaders for the fs-touching shared modules. Each becomes its own
 // esbuild chunk; the main openclaw bundle stays free of fs imports.
-type CredsModule = typeof import("../../../src/commands/auth-creds.js");
 type ConfigModule = typeof import("../../../src/config.js");
-let credsModulePromise: Promise<CredsModule> | null = null;
 let configModulePromise: Promise<ConfigModule> | null = null;
-function loadCredsModule(): Promise<CredsModule> {
-  if (!credsModulePromise) credsModulePromise = import("../../../src/commands/auth-creds.js");
-  return credsModulePromise;
-}
 function loadConfigModule(): Promise<ConfigModule> {
   if (!configModulePromise) configModulePromise = import("../../../src/config.js");
   return configModulePromise;
-}
-async function loadCredentials() {
-  const m = await loadCredsModule();
-  return m.loadCredentials();
-}
-async function saveCredentials(creds: Awaited<ReturnType<CredsModule["loadCredentials"]>>): Promise<void> {
-  if (!creds) return;
-  const m = await loadCredsModule();
-  m.saveCredentials(creds);
 }
 async function loadConfig() {
   const m = await loadConfigModule();
   return m.loadConfig();
 }
 import { sqlStr } from "../../../src/utils/sql.js";
-import { deeplakeClientHeader } from "../../../src/utils/client-header.js";
+import { memoreeClientHeader } from "../../../src/utils/client-header.js";
 // Memory-access primitives reused directly from the CC/Codex hooks so the
 // openclaw agent gets the same search + read semantics (multi-word across
 // memory ∪ sessions, path filters, JSONB normalization, virtual /index.md).
-import { searchDeeplakeTables, buildGrepSearchOptions, compileGrepRegex, normalizeContent, type GrepMatchParams } from "../../../src/shell/grep-core.js";
+import { searchMemoreeTables, buildGrepSearchOptions, compileGrepRegex, normalizeContent, type GrepMatchParams } from "../../../src/shell/grep-core.js";
 import { readVirtualPathContent } from "../../../src/hooks/virtual-table-query.js";
 // Standalone embed client. Produces real document embeddings ONLY when the
-// canonical shared daemon at ~/.hivemind/embed-deps/embed-daemon.js is
-// present (deposited out-of-band by `hivemind embeddings install`). The
+// canonical shared daemon at ~/.memoree/embed-deps/embed-daemon.js is
+// present (deposited out-of-band by `memoree embeddings install`). The
 // helper never installs transformers itself — that's explicit user opt-in
 // per src/user-config.ts. Returns null → caller writes NULL into
 // message_embedding (today's behavior, preserved on every failure mode).
@@ -71,7 +54,7 @@ import { redactSecrets } from "../../../src/hooks/shared/redact.js";
 import { sdkTurnMeta } from "../../../src/notifications/model-usage.js";
 // Resolve sibling skillify-worker.js path at runtime via import.meta.url. The
 // openclaw plugin is bundled to harnesses/openclaw/dist/index.js, then installed to
-// ~/.openclaw/extensions/hivemind/dist/index.js by install-openclaw.ts. The
+// ~/.openclaw/extensions/memoree/dist/index.js by install-openclaw.ts. The
 // worker bundle is its sibling at the same level.
 import { fileURLToPath } from "node:url";
 import { join as joinPath, dirname as dirnamePath } from "node:path";
@@ -113,7 +96,7 @@ _setSpawnImpl(realSpawn);
 // `process.env` referenced via an alias so the bundled main openclaw
 // bundle has zero literal `process.env` substrings. ClawHub's per-bundle
 // static scanner flags any `process.env` access in a file that also
-// `fetch()`-es as critical `env-harvesting`. Specific `HIVEMIND_*` reads
+// `fetch()`-es as critical `env-harvesting`. Specific `MEMOREE_*` reads
 // in this file are inlined to `undefined` via esbuild `define`; the alias
 // covers the worker-spawn env spread which can't be inlined.
 const inheritedEnv = process;
@@ -121,7 +104,6 @@ const inheritedEnv = process;
 interface PluginConfig {
   autoCapture?: boolean;
   autoRecall?: boolean;
-  autoUpdate?: boolean;
 }
 
 interface PluginLogger {
@@ -152,7 +134,7 @@ interface AgentTool {
 
 // Openclaw's memory-corpus federation contract. Other plugins' `memory_search`
 // tools can fan out to us if we register, so memory-core users who keep their
-// own runtime get hivemind hits automatically.
+// own runtime get memoree hits automatically.
 interface MemoryCorpusSearchResult {
   path: string;
   snippet: string;
@@ -191,15 +173,15 @@ interface PluginAPI {
 }
 
 /**
- * Map the `plugins.entries.hivemind.config.tuning` object from openclaw.json
- * into the `globalThis.__hivemind_tuning__` dispatch that esbuild rewrote
- * `process.env.HIVEMIND_X` reads to target. Called once at plugin
+ * Map the `plugins.entries.memoree.config.tuning` object from openclaw.json
+ * into the `globalThis.__memoree_tuning__` dispatch that esbuild rewrote
+ * `process.env.MEMOREE_X` reads to target. Called once at plugin
  * register-time, before any shared module's lazy env read can fire.
  *
  * Why this layer exists: ClawHub's per-bundle static scanner treats any
  * `process.env` access in a file that also `fetch()`-es as critical
- * `env-harvesting`. esbuild's `define` rewrites `process.env.HIVEMIND_X`
- * to `globalThis.__hivemind_tuning__?.HIVEMIND_X` in the bundled output,
+ * `env-harvesting`. esbuild's `define` rewrites `process.env.MEMOREE_X`
+ * to `globalThis.__memoree_tuning__?.MEMOREE_X` in the bundled output,
  * so the bundle has zero `process.env.X` substrings. The values still
  * have to come from somewhere — that's what this function does, sourcing
  * them from the openclaw plugin config the user controls via
@@ -234,193 +216,49 @@ function applyOpenclawTuning(pluginConfig: Record<string, unknown> | undefined):
   };
 
   // Diagnostics
-  setBool("HIVEMIND_DEBUG", tuning.debug);
-  setBool("HIVEMIND_TRACE_SQL", tuning.traceSql);
-  // Deeplake / network
-  setStr("HIVEMIND_QUERY_TIMEOUT_MS", tuning.queryTimeoutMs);
-  setStr("HIVEMIND_INDEX_MARKER_TTL_MS", tuning.indexMarkerTtlMs);
-  setStr("HIVEMIND_INDEX_MARKER_DIR", tuning.indexMarkerDir);
+  setBool("MEMOREE_DEBUG", tuning.debug);
+  setBool("MEMOREE_TRACE_SQL", tuning.traceSql);
+  // Memoree / network
+  setStr("MEMOREE_QUERY_TIMEOUT_MS", tuning.queryTimeoutMs);
+  setStr("MEMOREE_INDEX_MARKER_TTL_MS", tuning.indexMarkerTtlMs);
+  setStr("MEMOREE_INDEX_MARKER_DIR", tuning.indexMarkerDir);
   // Search / semantic
-  setStr("HIVEMIND_SEMANTIC_LIMIT", tuning.semanticLimit);
-  setStr("HIVEMIND_HYBRID_LEXICAL_LIMIT", tuning.hybridLexicalLimit);
-  setStr("HIVEMIND_GREP_LIKE", tuning.grepLike);
-  setStr("HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS", tuning.semanticEmbedTimeoutMs);
-  setFalseOrOmit("HIVEMIND_SEMANTIC_SEARCH", tuning.semanticSearch);
-  setFalseOrOmit("HIVEMIND_SEMANTIC_EMIT_ALL", tuning.semanticEmitAll);
+  setStr("MEMOREE_SEMANTIC_LIMIT", tuning.semanticLimit);
+  setStr("MEMOREE_HYBRID_LEXICAL_LIMIT", tuning.hybridLexicalLimit);
+  setStr("MEMOREE_GREP_LIKE", tuning.grepLike);
+  setStr("MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS", tuning.semanticEmbedTimeoutMs);
+  setFalseOrOmit("MEMOREE_SEMANTIC_SEARCH", tuning.semanticSearch);
+  setFalseOrOmit("MEMOREE_SEMANTIC_EMIT_ALL", tuning.semanticEmitAll);
   // Code graph — knobs read in the gateway process (resolveGraphCwd,
   // graphOnStopDisabled, graphPullDisabled). Accept the documented uppercase
-  // keys (see the hivemind-graph skill + /hivemind_setup hint) with a
+  // keys (see the memoree-graph skill + /memoree_setup hint) with a
   // camelCase fallback for consistency with the flags above. Without this the
-  // schema accepts `config.tuning.HIVEMIND_GRAPH_CWD` but it never reaches the
+  // schema accepts `config.tuning.MEMOREE_GRAPH_CWD` but it never reaches the
   // graph code, so the tool silently falls back to the gateway cwd.
-  setStr("HIVEMIND_GRAPH_CWD", tuning.HIVEMIND_GRAPH_CWD ?? tuning.graphCwd);
-  setStr("HIVEMIND_GRAPH_ON_STOP", tuning.HIVEMIND_GRAPH_ON_STOP ?? tuning.graphOnStop);
-  setStr("HIVEMIND_GRAPH_PULL", tuning.HIVEMIND_GRAPH_PULL ?? tuning.graphPull);
+  setStr("MEMOREE_GRAPH_CWD", tuning.MEMOREE_GRAPH_CWD ?? tuning.graphCwd);
+  setStr("MEMOREE_GRAPH_ON_STOP", tuning.MEMOREE_GRAPH_ON_STOP ?? tuning.graphOnStop);
+  setStr("MEMOREE_GRAPH_PULL", tuning.MEMOREE_GRAPH_PULL ?? tuning.graphPull);
 
-  (globalThis as Record<string, unknown>).__hivemind_tuning__ = dispatch;
-}
-
-const DEFAULT_API_URL = "https://api.deeplake.ai";
-// npm registry — single source of truth for hivemind's "latest" version
-// across all distribution channels (npm, marketplace, ClawHub). Previously
-// we hit ClawHub's package-info API; that worked but reinforced the
-// per-channel divergence we're trying to eliminate (npm bumps could ship
-// while ClawHub lagged, and the in-plugin "update available" notice would
-// disagree with what `hivemind update` actually pulls). npm is now the
-// canonical channel; the user-facing advice points at `hivemind update`.
-const VERSION_URL = "https://registry.npmjs.org/@deeplake/hivemind/latest";
-
-/** Parse `{ version: "X.Y.Z" }` out of the npm registry response. */
-function extractLatestVersion(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) return null;
-  const v = (body as { version?: unknown }).version;
-  return typeof v === "string" && v.length > 0 ? v : null;
+  (globalThis as Record<string, unknown>).__memoree_tuning__ = dispatch;
 }
 
 // Version injected at build time by esbuild's `define` (see esbuild.config.mjs).
 // The constant is the sole source of truth for the installed plugin version
-// used by /hivemind_version and the auto-update check.
+// used to label captured events.
 
 function getInstalledVersion(): string | null {
-  return typeof __HIVEMIND_VERSION__ === "string" && __HIVEMIND_VERSION__.length > 0
-    ? __HIVEMIND_VERSION__
+  return typeof __MEMOREE_VERSION__ === "string" && __MEMOREE_VERSION__.length > 0
+    ? __MEMOREE_VERSION__
     : null;
 }
 
-function isNewer(latest: string, current: string): boolean {
-  const parse = (v: string) => v.replace(/-.*$/, "").split(".").map(Number);
-  const [la, lb, lc] = parse(latest);
-  const [ca, cb, cc] = parse(current);
-  return la > ca || (la === ca && lb > cb) || (la === ca && lb === cb && lc > cc);
-}
-
-async function checkForUpdate(logger: PluginLogger): Promise<void> {
-  try {
-    const current = getInstalledVersion();
-    if (!current) return;
-    // 10s timeout: cold gateway init runs this concurrently with plugin
-    // discovery + Bonjour watchdogs + TLS warm-up. Steady-state npm
-    // registry latency is ~170ms, but 3s and 5s have both been observed
-    // to abort during cold start (see #105, #109). Fire-and-forget call
-    // path (see register() bottom), so a longer budget doesn't block
-    // anything user-visible.
-    const res = await fetch(VERSION_URL, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return;
-    const latest = extractLatestVersion(await res.json());
-    if (latest && isNewer(latest, current)) {
-      pendingUpdate = { current, latest };
-      logger.info?.(`⬆️ Hivemind update available: ${current} → ${latest}. Run: hivemind update`);
-    }
-  } catch (err) {
-    logger.error(`Auto-update check failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-// --- Auth state ---
-let authPending = false;
-let authUrl: string | null = null;
-// Heal the legacy `org switch` regression at most once per process: if
-// creds.token's JWT org_id claim differs from creds.orgId, re-mint a
-// token bound to the destination org and rewrite ~/.deeplake/credentials.json.
-// Promise sentinel — not a boolean — because the heal awaits I/O and a
-// boolean would let a concurrent getApi() caller see `attempted=true`
-// while the first heal was still in flight, then skip ahead and build/cache
-// the api from still-stale credentials. With a promise, the second caller
-// awaits the first's heal and reads the freshly-healed creds.
-let driftHealPromise: Promise<void> | null = null;
-// Set by the background version check in register() when a newer version is
-// available on ClawHub. Read by before_prompt_build to inject an
-// agent-facing directive nudging it to install via its own exec tool.
-let pendingUpdate: { current: string; latest: string } | null = null;
-let justAuthenticated = false;
-
-async function requestAuth(): Promise<string> {
-  if (authPending) return authUrl ?? "";
-  authPending = true;
-
-  try {
-    const code = await requestDeviceCode();
-    authUrl = code.verification_uri_complete;
-
-    // Poll in background
-    const pollMs = Math.max(code.interval || 5, 5) * 1000;
-    const deadline = Date.now() + code.expires_in * 1000;
-    (async () => {
-      while (Date.now() < deadline && authPending) {
-        await new Promise(r => setTimeout(r, pollMs));
-        try {
-          const result = await pollForToken(code.device_code);
-          if (result) {
-            const token = result.access_token;
-
-            // Fetch Deeplake user identity so captured sessions are attributed
-            // to the logged-in user (not the OS login — `userInfo().username`
-            // falls through to "ubuntu" on cloud boxes, which is never what we
-            // want). Mirrors the canonical login flow in src/commands/auth.ts.
-            let userName: string | undefined;
-            try {
-              const meResp = await fetch(`${DEFAULT_API_URL}/me`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (meResp.ok) {
-                const me = await meResp.json() as { name?: string; email?: string };
-                userName = me.name || (me.email ? me.email.split("@")[0] : undefined);
-              }
-            } catch { /* fall through: userName stays undefined, config.ts falls back */ }
-
-            const orgs = await listOrgs(token);
-            const personal = orgs.find(o => o.name.endsWith("'s Organization"));
-            const org = personal ?? orgs[0];
-            const orgId = org?.id ?? "";
-            const orgName = org?.name ?? orgId;
-
-            // Create long-lived API token
-            let savedToken = token;
-            if (orgId) {
-              try {
-                const resp = await fetch(`${DEFAULT_API_URL}/users/me/tokens`, {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                    "X-Activeloop-Org-Id": orgId,
-                    ...deeplakeClientHeader(),
-                  },
-                  body: JSON.stringify({ name: `hivemind-${new Date().toISOString().split("T")[0]}`, duration: 365 * 24 * 60 * 60, organization_id: orgId }),
-                });
-                if (resp.ok) {
-                  const data = await resp.json() as { token: string | { token: string } };
-                  savedToken = typeof data.token === "string" ? data.token : data.token.token;
-                }
-              } catch {}
-            }
-
-            await saveCredentials({ token: savedToken, orgId, orgName, userName, apiUrl: DEFAULT_API_URL, savedAt: new Date().toISOString() });
-            authPending = false;
-            authUrl = null;
-            justAuthenticated = true;
-            return;
-          }
-        } catch {}
-      }
-      authPending = false;
-      authUrl = null;
-    })();
-
-    return code.verification_uri_complete;
-  } catch (err) {
-    authPending = false;
-    throw err;
-  }
-}
-
 // --- API instance ---
-let api: DeeplakeApi | null = null;
+let api: StorageBackend | null = null;
 let sessionsTable = "sessions";
 let memoryTable = "memory";
 let skillsTable = "skills";  // lazy-created on first INSERT by the worker
-let goalsTable = "hivemind_goals";  // lazy-created by hivemind_goal_add tool
-let kpisTable = "hivemind_kpis";    // lazy-created by hivemind_kpi_add tool
+let goalsTable = "memoree_goals";  // lazy-created by memoree_goal_add tool
+let kpisTable = "memoree_kpis";    // lazy-created by memoree_kpi_add tool
 let captureEnabled = true;
 const capturedCounts = new Map<string, number>();
 const fallbackSessionId = crypto.randomUUID();
@@ -450,8 +288,8 @@ const __openclaw_dirname = dirnamePath(__openclaw_filename);
 const OPENCLAW_SKILLIFY_WORKER_PATH = joinPath(__openclaw_dirname, "skillify-worker.js");
 const OPENCLAW_GRAPH_ON_STOP_PATH = joinPath(__openclaw_dirname, "graph-on-stop.js");
 const OPENCLAW_GRAPH_PULL_WORKER_PATH = joinPath(__openclaw_dirname, "graph-pull-worker.js");
-const OPENCLAW_SKILLIFY_STATE_DIR = joinPath(homedir(), ".deeplake", "state", "skillify");
-const OPENCLAW_SKILLIFY_LEGACY_STATE_DIR = joinPath(homedir(), ".deeplake", "state", "skilify");
+const OPENCLAW_SKILLIFY_STATE_DIR = joinPath(homedir(), ".memoree", "state", "skillify");
+const OPENCLAW_SKILLIFY_LEGACY_STATE_DIR = joinPath(homedir(), ".memoree", "state", "skilify");
 
 // One-shot rename of the pre-rename state dir. Mirrors src/skillify/legacy-migration.ts;
 // inlined because openclaw is a self-contained bundle that can't import from src/skillify.
@@ -546,6 +384,7 @@ function tryAcquireOpenclawSkillifyLock(projectKey: string): boolean {
 }
 
 interface OpenclawSpawnArgs {
+  storageKind: "sqlite" | "postgres";
   orgId: string;
   workspaceId: string;
   userName: string;
@@ -553,12 +392,12 @@ interface OpenclawSpawnArgs {
   sessionId: string;
   loggerWarn?: (msg: string) => void;
   /**
-   * The same `globalThis.__hivemind_tuning__` dispatch the openclaw main
+   * The same `globalThis.__memoree_tuning__` dispatch the openclaw main
    * bundle uses, captured so the spawned worker bundle (which is its own
    * process and re-evaluates `globalThis`) can restore the user's
    * pluginConfig.tuning values before any shared module's lazy env read
    * fires. The worker entry reads this from the config JSON we write
-   * below and populates its own `globalThis.__hivemind_tuning__` at
+   * below and populates its own `globalThis.__memoree_tuning__` at
    * startup. See PR #170 for the static-scan-driven rewrite that this
    * dispatch bridges.
    */
@@ -626,7 +465,7 @@ function spawnOpenclawSkillifyWorker(a: OpenclawSpawnArgs): boolean {
     // advance makes the re-fire a no-op).
     return false;
   }
-  const tmpDir = joinPath(tmpdir(), `deeplake-skillify-openclaw-${projectKey}-${Date.now()}`);
+  const tmpDir = joinPath(tmpdir(), `memoree-skillify-openclaw-${projectKey}-${Date.now()}`);
   try { fsMkdir(tmpDir, { recursive: true, mode: 0o700 }); }
   catch (e: any) { a.loggerWarn?.(`skillify spawn: mkdir failed: ${e?.message ?? e}`); return false; }
   const configPath = joinPath(tmpDir, "config.json");
@@ -636,7 +475,7 @@ function spawnOpenclawSkillifyWorker(a: OpenclawSpawnArgs): boolean {
   // rather than a per-project tree that would bear no relation to the user's
   // actual project layout.
   const config = {
-    storage: { kind: "deeplake" as const, orgId: a.orgId, workspaceId: a.workspaceId },
+    storage: { kind: a.storageKind },
     sessionsTable,
     skillsTable,
     userName: a.userName,
@@ -653,16 +492,16 @@ function spawnOpenclawSkillifyWorker(a: OpenclawSpawnArgs): boolean {
     cursorModel: undefined,
     hermesProvider: undefined,
     hermesModel: undefined,
-    skillifyLog: joinPath(homedir(), ".deeplake", "hivemind-openclaw-skillify.log"),
+    skillifyLog: joinPath(homedir(), ".memoree", "memoree-openclaw-skillify.log"),
     currentSessionId: a.sessionId,
     // Pass the tuning dispatch through so the worker can repopulate its
     // own globalThis (each process has its own globalThis). The worker
     // entry reads cfg.tuning before any shared module's env read fires.
-    // Also force HIVEMIND_SKILLIFY_WORKER="1" so the recursion guard in
+    // Also force MEMOREE_SKILLIFY_WORKER="1" so the recursion guard in
     // triggers.ts / auto-pull.ts short-circuits inside the worker.
     tuning: {
       ...(a.tuning ?? {}),
-      HIVEMIND_SKILLIFY_WORKER: "1",
+      MEMOREE_SKILLIFY_WORKER: "1",
     },
   };
   try { fsWriteFile(configPath, JSON.stringify(config), { mode: 0o600 }); }
@@ -674,7 +513,7 @@ function spawnOpenclawSkillifyWorker(a: OpenclawSpawnArgs): boolean {
       stdio: "ignore",
       // SW_HIDE: libuv applies it alongside detached. No-op on POSIX.
       windowsHide: true,
-      env: { ...inheritedEnv.env, HIVEMIND_SKILLIFY_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+      env: { ...inheritedEnv.env, MEMOREE_SKILLIFY_WORKER: "1", MEMOREE_CAPTURE: "false" },
     }).unref();
     return true;
   } catch (e: any) {
@@ -696,30 +535,10 @@ function normalizeVirtualPath(p: string | undefined | null): string {
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
 
-async function getApi(): Promise<DeeplakeApi | null> {
+async function getApi(): Promise<StorageBackend | null> {
   if (api) return api;
-
-  // Heal token/org drift before loadConfig reads credentials.json. Heal is
-  // a no-op when claim matches orgId or when the JWT carries no claim, so
-  // the only added cost on the steady-state path is a base64 decode.
-  // First caller initiates the promise; subsequent concurrent callers
-  // await the same promise so they all see freshly-healed creds before
-  // loadConfig() runs (see comment on driftHealPromise above).
-  if (!driftHealPromise) {
-    driftHealPromise = (async () => {
-      try {
-        const creds = await loadCredentials();
-        if (creds?.token) await healDriftedOrgToken(creds);
-      } catch { /* heal never throws; this catch is belt + braces */ }
-    })();
-  }
-  await driftHealPromise;
-
   const config = await loadConfig();
-  if (!config) {
-    if (!authPending) await requestAuth();
-    return null;
-  }
+  if (!config) return null;
 
   sessionsTable = config.sessionsTableName;
   memoryTable = config.tableName;
@@ -734,7 +553,7 @@ async function getApi(): Promise<DeeplakeApi | null> {
   // scratch. (Previously the api was cached before ensureX ran, so a single
   // failed CREATE would leave subsequent SELECTs hitting a non-existent
   // table forever until plugin restart.)
-  const candidate = new DeeplakeApi(config.token, config.apiUrl, config.orgId, config.workspaceId, config.tableName);
+  const candidate = createStorageBackend(config, config.tableName);
   await candidate.ensureTable();
   await candidate.ensureSessionsTable(sessionsTable);
   api = candidate;
@@ -742,16 +561,16 @@ async function getApi(): Promise<DeeplakeApi | null> {
 }
 
 export default definePluginEntry({
-  id: "hivemind",
-  name: "Hivemind",
-  description: "Cloud-backed shared memory powered by Deeplake",
+  id: "memoree",
+  name: "Memoree",
+  description: "Local-first memory backed by SQLite or PostgreSQL",
 
   register(pluginApi: PluginAPI) {
-    // Tuning bridge: the openclaw bundle's `process.env.HIVEMIND_X` reads
+    // Tuning bridge: the openclaw bundle's `process.env.MEMOREE_X` reads
     // were replaced by esbuild's `define` with
-    // `globalThis.__hivemind_tuning__?.HIVEMIND_X` lookups (the
+    // `globalThis.__memoree_tuning__?.MEMOREE_X` lookups (the
     // ClawHub-scan workaround — see PR #170). Populate that global from
-    // the user's `plugins.entries.hivemind.config.tuning` before any
+    // the user's `plugins.entries.memoree.config.tuning` before any
     // shared module's lazy reads can run. Empty object is safe; lookups
     // become `undefined` and fall back to defaults.
     applyOpenclawTuning(pluginApi.pluginConfig);
@@ -764,207 +583,39 @@ export default definePluginEntry({
     // login prompt + version check) runs off the synchronous path.
     void (async () => {
     try {
-    // Login command — works immediately after install, no hook dependency
-      pluginApi.registerCommand({
-        name: "hivemind_login",
-        description: "Log in to Hivemind (or switch accounts)",
-        handler: async () => {
-          // Always return a fresh auth URL — even when already logged in —
-          // so the command doubles as a switch-account / re-auth path.
-          // Completed device flows overwrite the existing credentials, so the
-          // caller can cleanly change orgs without having to delete
-          // ~/.deeplake/credentials.json by hand.
-          const existing = await loadCredentials();
-          const url = await requestAuth();
-          if (existing?.token) {
-            return {
-              text: `ℹ️ Currently logged in as ${existing.orgName ?? existing.orgId}.\n\nTo re-authenticate or switch accounts:\n\n${url}\n\nAfter signing in, send another message.`,
-            };
-          }
-          return { text: `🔐 Sign in to activate Hivemind memory:\n\n${url}\n\nAfter signing in, send another message.` };
-        },
-      });
 
       pluginApi.registerCommand({
-        name: "hivemind_capture",
+        name: "memoree_capture",
         description: "Toggle conversation capture on/off",
         handler: async () => {
           captureEnabled = !captureEnabled;
-          return { text: captureEnabled ? "✅ Capture enabled — conversations will be stored to Hivemind." : "⏸️ Capture paused — conversations will NOT be stored until you run /hivemind_capture again." };
+          return { text: captureEnabled ? "✅ Capture enabled — conversations will be stored to Memoree." : "⏸️ Capture paused — conversations will NOT be stored until you run /memoree_capture again." };
         },
       });
 
       pluginApi.registerCommand({
-        name: "hivemind_whoami",
-        description: "Show current Hivemind org and workspace",
+        name: "memoree_setup",
+        description: "Add Memoree tools to your openclaw allowlist (needed once per install)",
         handler: async () => {
-          const creds = await loadCredentials();
-          if (!creds?.token) return { text: "Not logged in. Run /hivemind_login" };
-          return { text: `Org: ${creds.orgName ?? creds.orgId}\nWorkspace: ${creds.workspaceId ?? "default"}` };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_orgs",
-        description: "List available organizations",
-        handler: async () => {
-          const creds = await loadCredentials();
-          if (!creds?.token) return { text: "Not logged in. Run /hivemind_login" };
-          const orgs = await listOrgs(creds.token, creds.apiUrl);
-          if (!orgs.length) return { text: "No organizations found." };
-          const lines = orgs.map(o => `${o.id === creds.orgId ? "→ " : "  "}${o.name}`);
-          return { text: lines.join("\n") };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_switch_org",
-        description: "Switch to a different organization",
-        acceptsArgs: true,
-        handler: async (ctx: CommandContext) => {
-          const creds = await loadCredentials();
-          if (!creds?.token) return { text: "Not logged in. Run /hivemind_login" };
-          const target = ctx.args?.trim();
-          if (!target) return { text: "Usage: /hivemind_switch_org <name-or-id>" };
-          const orgs = await listOrgs(creds.token, creds.apiUrl);
-          const lc = target.toLowerCase();
-          const match =
-            orgs.find(o => o.id === target || o.name.toLowerCase() === lc) ??
-            orgs.find(o => o.name.toLowerCase().includes(lc) || o.id.toLowerCase().includes(lc));
-          if (!match) {
-            const available = orgs.length
-              ? orgs.map(o => `  - ${o.name} (id: ${o.id})`).join("\n")
-              : "  (none — your current token has no organization access)";
-            return { text: `Org not found: ${target}\n\nAvailable:\n${available}` };
-          }
-          await switchOrg(match.id, match.name);
-          api = null;
-          return { text: `Switched to org: ${match.name}` };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_workspaces",
-        description: "List available workspaces",
-        handler: async () => {
-          const creds = await loadCredentials();
-          if (!creds?.token) return { text: "Not logged in. Run /hivemind_login" };
-          const ws = await listWorkspaces(creds.token, creds.apiUrl, creds.orgId);
-          if (!ws.length) return { text: "No workspaces found." };
-          const lines = ws.map(w => `${w.id === (creds.workspaceId ?? "default") ? "→ " : "  "}${w.name}`);
-          return { text: lines.join("\n") };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_switch_workspace",
-        description: "Switch to a different workspace",
-        acceptsArgs: true,
-        handler: async (ctx: CommandContext) => {
-          const creds = await loadCredentials();
-          if (!creds?.token) return { text: "Not logged in. Run /hivemind_login" };
-          const target = ctx.args?.trim();
-          if (!target) return { text: "Usage: /hivemind_switch_workspace <name-or-id>" };
-          const ws = await listWorkspaces(creds.token, creds.apiUrl, creds.orgId);
-          const lc = target.toLowerCase();
-          const match =
-            ws.find(w => w.id === target || w.name.toLowerCase() === lc) ??
-            ws.find(w => w.name.toLowerCase().includes(lc) || w.id.toLowerCase().includes(lc));
-          if (!match) {
-            const available = ws.length
-              ? ws.map(w => `  - ${w.name} (id: ${w.id})`).join("\n")
-              : "  (none in current org — try /hivemind_switch_org first)";
-            return { text: `Workspace not found: ${target}\n\nAvailable:\n${available}` };
-          }
-          await switchWorkspace(match.id);
-          api = null;
-          return { text: `Switched to workspace: ${match.name}` };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_setup",
-        description: "Add Hivemind tools to your openclaw allowlist (needed once per install)",
-        handler: async () => {
-          const { ensureHivemindAllowlisted } = await loadSetupConfig();
-          const result = ensureHivemindAllowlisted();
+          const { ensureMemoreeAllowlisted } = await loadSetupConfig();
+          const result = ensureMemoreeAllowlisted();
           // Phase C: surface skillify CLI in setup output. OpenClaw users have no
           // session-start banner equivalent and no Bash tool — without this hint
           // they can't discover that mining runs in the background or that they
           // can pull teammates' skills. The CLI itself runs from the user's
           // terminal, not from the agent.
-          const skillifyHint = `\n\nSkill mining (skillify) runs in the background after each turn — your conversations get crystallised into reusable skills automatically. From your terminal:\n  hivemind skillify status   — see what's been mined\n  hivemind skillify pull     — fetch teammates' skills`;
-          const graphHint = `\n\nCode graph: hivemind_graph_search + hivemind_graph_neighborhood tools query the local AST map (auto-rebuilds after each turn). Set plugins.entries.hivemind.config.tuning.HIVEMIND_GRAPH_CWD to your git repo root if the gateway cwd isn't the project.`;
+          const skillifyHint = `\n\nSkill mining (skillify) runs in the background after each turn — your conversations get crystallised into reusable skills automatically. From your terminal:\n  memoree skillify status   — see what's been mined\n  memoree skillify pull     — fetch teammates' skills`;
+          const graphHint = `\n\nCode graph: memoree_graph_search + memoree_graph_neighborhood tools query the local AST map (auto-rebuilds after each turn). Set plugins.entries.memoree.config.tuning.MEMOREE_GRAPH_CWD to your git repo root if the gateway cwd isn't the project.`;
           if (result.status === "already-set") {
-            return { text: `✅ Hivemind tools are already enabled in your allowlist.\n\nNo changes needed — memory tools are available to the agent.${skillifyHint}${graphHint}` };
+            return { text: `✅ Memoree tools are already enabled in your allowlist.\n\nNo changes needed — memory tools are available to the agent.${skillifyHint}${graphHint}` };
           }
           if (result.status === "added") {
             const touched: string[] = [];
-            if (result.delta.pluginsAllow) touched.push(`"hivemind" → plugins.allow`);
-            if (result.delta.toolsAlsoAllow) touched.push(`"hivemind" → tools.alsoAllow`);
-            return { text: `✅ Added:\n  • ${touched.join("\n  • ")}\n\nOpenclaw will detect the config change and restart. On the next turn, the agent will have access to hivemind_search, hivemind_read, hivemind_index, hivemind_graph_search, and hivemind_graph_neighborhood. **Capture starts on the next turn — earlier turns are NOT backfilled.**\n\nBackup of previous config: ${result.backupPath}${skillifyHint}${graphHint}` };
+            if (result.delta.pluginsAllow) touched.push(`"memoree" → plugins.allow`);
+            if (result.delta.toolsAlsoAllow) touched.push(`"memoree" → tools.alsoAllow`);
+            return { text: `✅ Added:\n  • ${touched.join("\n  • ")}\n\nOpenclaw will detect the config change and restart. On the next turn, the agent will have access to memoree_search, memoree_read, memoree_index, memoree_graph_search, and memoree_graph_neighborhood. **Capture starts on the next turn — earlier turns are NOT backfilled.**\n\nBackup of previous config: ${result.backupPath}${skillifyHint}${graphHint}` };
           }
-          return { text: `⚠️ Could not update allowlist: ${result.error}\n\nManual fix: open ${result.configPath}. If \`plugins.allow\` exists as a non-empty array, add "hivemind" to it. If \`tools.alsoAllow\` exists as a non-empty array, add "hivemind" to it. If either is absent or empty, leave it as-is (openclaw treats that as default-allow).` };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_version",
-        description: "Show the installed Hivemind version and check for updates",
-        handler: async () => {
-          const current = getInstalledVersion();
-          if (!current) return { text: "Could not determine installed version." };
-          try {
-            // 10s timeout matches checkForUpdate (see #105, #109). The 3s
-            // budget here was too aggressive even off cold start, since
-            // /hivemind_version is often the first command after a fresh
-            // login and runs while other plugins are still initializing.
-            const res = await fetch(VERSION_URL, { signal: AbortSignal.timeout(10000) });
-            if (!res.ok) return { text: `Current version: ${current}. Could not check for updates.` };
-            const latest = extractLatestVersion(await res.json());
-            if (!latest) return { text: `Current version: ${current}. Could not parse latest version.` };
-            if (isNewer(latest, current)) {
-              return { text: `⬆️ Update available: ${current} → ${latest}\n\nRun /hivemind_update to install it now.` };
-            }
-            return { text: `✅ Hivemind v${current} is up to date.` };
-          } catch {
-            return { text: `Current version: ${current}. Could not check for updates.` };
-          }
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_update",
-        description: "Install the latest Hivemind version from npm",
-        handler: async () => {
-          const current = getInstalledVersion() ?? "unknown";
-          return { text:
-            `Hivemind v${current} installed. To install the latest:\n\n` +
-            `• Ask me in chat: "update hivemind" — I'll run \`hivemind update\` via my exec tool.\n` +
-            `• Or run in your terminal: \`hivemind update\`\n\n` +
-            `The gateway restarts automatically once the install completes.`
-          };
-        },
-      });
-
-      pluginApi.registerCommand({
-        name: "hivemind_autoupdate",
-        description: "Toggle Hivemind auto-update on/off",
-        acceptsArgs: true,
-        handler: async (ctx: CommandContext) => {
-          const arg = ctx.args?.trim().toLowerCase();
-          let setTo: boolean | undefined;
-          if (arg === "on" || arg === "true" || arg === "enable") setTo = true;
-          else if (arg === "off" || arg === "false" || arg === "disable") setTo = false;
-          const { toggleAutoUpdateConfig } = await loadSetupConfig();
-          const result = toggleAutoUpdateConfig(setTo);
-          if (result.status === "error") {
-            return { text: `⚠️ Could not update auto-update setting: ${result.error}` };
-          }
-          return { text: result.newValue
-            ? "✅ Auto-update is ON. Hivemind will install new versions automatically when the gateway starts."
-            : "⏸️ Auto-update is OFF. Run /hivemind_update manually to install new versions."
-          };
+          return { text: `⚠️ Could not update allowlist: ${result.error}\n\nManual fix: open ${result.configPath}. If \`plugins.allow\` exists as a non-empty array, add "memoree" to it. If \`tools.alsoAllow\` exists as a non-empty array, add "memoree" to it. If either is absent or empty, leave it as-is (openclaw treats that as default-allow).` };
         },
       });
 
@@ -974,10 +625,10 @@ export default definePluginEntry({
     // tables, drill-down into a specific path, and a rendered index of what's
     // available.
       pluginApi.registerTool({
-        name: "hivemind_search",
-        label: "Hivemind Search",
+        name: "memoree_search",
+        label: "Memoree Search",
         description:
-          "Search Hivemind shared memory (summaries + past session turns) for keywords, phrases, or regex. Returns matching path + snippet pairs from BOTH the memory and sessions tables. Use this FIRST when the user asks about past work, decisions, people, or anything that might live in memory.",
+          "Search Memoree shared memory (summaries + past session turns) for keywords, phrases, or regex. Returns matching path + snippet pairs from BOTH the memory and sessions tables. Use this FIRST when the user asks about past work, decisions, people, or anything that might live in memory.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -1019,7 +670,7 @@ export default definePluginEntry({
           const dl = await getApi();
           if (!dl) {
             return {
-              content: [{ type: "text", text: "Not logged in. Run /hivemind_login first." }],
+              content: [{ type: "text", text: "Memoree storage is unavailable. Run memoree doctor." }],
             };
           }
           const targetPath = normalizeVirtualPath(params.path);
@@ -1037,7 +688,7 @@ export default definePluginEntry({
           searchOpts.limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
           const t0 = Date.now();
           try {
-            const rawRows = await searchDeeplakeTables(dl, memoryTable, sessionsTable, searchOpts);
+            const rawRows = await searchMemoreeTables(dl, memoryTable, sessionsTable, searchOpts);
             // `buildGrepSearchOptions` sets `contentScanOnly: true` for any
             // regex pattern; when no literal prefilter can be extracted
             // (e.g. `\d+`, `[foo]bar`, or a non-literal alternation) the
@@ -1050,7 +701,7 @@ export default definePluginEntry({
                   return rawRows.filter(r => re.test(normalizeContent(r.path, r.content)));
                 })()
               : rawRows;
-            pluginApi.logger.info?.(`hivemind_search "${params.query.slice(0, 60)}" → ${matchedRows.length}/${rawRows.length} hits in ${Date.now() - t0}ms`);
+            pluginApi.logger.info?.(`memoree_search "${params.query.slice(0, 60)}" → ${matchedRows.length}/${rawRows.length} hits in ${Date.now() - t0}ms`);
             if (matchedRows.length === 0) {
               return { content: [{ type: "text", text: `No memory matches for "${params.query}" under ${targetPath}.` }] };
             }
@@ -1063,17 +714,17 @@ export default definePluginEntry({
             return { content: [{ type: "text", text }], details: { hits: matchedRows.length, path: targetPath } };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_search failed: ${msg}`);
+            pluginApi.logger.error(`memoree_search failed: ${msg}`);
             return { content: [{ type: "text", text: `Search failed: ${msg}` }] };
           }
         },
       });
 
       pluginApi.registerTool({
-        name: "hivemind_read",
-        label: "Hivemind Read",
+        name: "memoree_read",
+        label: "Memoree Read",
         description:
-          "Read the full content of a specific Hivemind memory path (e.g. '/summaries/alice/abc.md' or '/sessions/alice/alice_org_ws_xyz.jsonl' or '/index.md'). Use this after hivemind_search to drill into a hit, or after hivemind_index to fetch a specific session.",
+          "Read the full content of a specific Memoree memory path (e.g. '/summaries/alice/abc.md' or '/sessions/alice/alice_org_ws_xyz.jsonl' or '/index.md'). Use this after memoree_search to drill into a hit, or after memoree_index to fetch a specific session.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -1090,7 +741,7 @@ export default definePluginEntry({
           const params = rawParams as { path: string };
           const dl = await getApi();
           if (!dl) {
-            return { content: [{ type: "text", text: "Not logged in. Run /hivemind_login first." }] };
+            return { content: [{ type: "text", text: "Memoree storage is unavailable. Run memoree doctor." }] };
           }
           const virtualPath = normalizeVirtualPath(params.path);
           try {
@@ -1101,17 +752,17 @@ export default definePluginEntry({
             return { content: [{ type: "text", text: content }], details: { path: virtualPath } };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_read failed: ${msg}`);
+            pluginApi.logger.error(`memoree_read failed: ${msg}`);
             return { content: [{ type: "text", text: `Read failed: ${msg}` }] };
           }
         },
       });
 
       pluginApi.registerTool({
-        name: "hivemind_index",
-        label: "Hivemind Index",
+        name: "memoree_index",
+        label: "Memoree Index",
         description:
-          "List every summary and session available in Hivemind (with paths, dates, descriptions). Use this when the user asks 'what's in memory?' or you don't know where to start looking.",
+          "List every summary and session available in Memoree (with paths, dates, descriptions). Use this when the user asks 'what's in memory?' or you don't know where to start looking.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -1120,22 +771,22 @@ export default definePluginEntry({
         execute: async () => {
           const dl = await getApi();
           if (!dl) {
-            return { content: [{ type: "text", text: "Not logged in. Run /hivemind_login first." }] };
+            return { content: [{ type: "text", text: "Memoree storage is unavailable. Run memoree doctor." }] };
           }
           try {
             const text = await readVirtualPathContent(dl, memoryTable, sessionsTable, "/index.md");
             return { content: [{ type: "text", text: text ?? "(memory is empty)" }] };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_index failed: ${msg}`);
+            pluginApi.logger.error(`memoree_index failed: ${msg}`);
             return { content: [{ type: "text", text: `Index build failed: ${msg}` }] };
           }
         },
       });
 
       pluginApi.registerTool({
-        name: "hivemind_graph_search",
-        label: "Hivemind Graph Search",
+        name: "memoree_graph_search",
+        label: "Memoree Graph Search",
         description:
           "Search the local AST-derived code graph for symbols by name or substring. Returns matches with 1-hop neighbors (callers, callees, imports). Use for structural questions: what calls X, where is Y defined, what imports Z. Multi-token AND: pattern 'auth+handler'.",
         parameters: {
@@ -1158,15 +809,15 @@ export default definePluginEntry({
             return { content: [{ type: "text", text }] };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_graph_search failed: ${msg}`);
+            pluginApi.logger.error(`memoree_graph_search failed: ${msg}`);
             return { content: [{ type: "text", text: `Graph search failed: ${msg}` }] };
           }
         },
       });
 
       pluginApi.registerTool({
-        name: "hivemind_graph_neighborhood",
-        label: "Hivemind Graph Neighborhood",
+        name: "memoree_graph_neighborhood",
+        label: "Memoree Graph Neighborhood",
         description:
           "Show every symbol in a source file plus its cross-file relationships (callers, callees, imports). Use when you know the file path and want its structural context.",
         parameters: {
@@ -1189,22 +840,22 @@ export default definePluginEntry({
             return { content: [{ type: "text", text }] };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_graph_neighborhood failed: ${msg}`);
+            pluginApi.logger.error(`memoree_graph_neighborhood failed: ${msg}`);
             return { content: [{ type: "text", text: `Graph neighborhood failed: ${msg}` }] };
           }
         },
       });
 
-      // Write-side: create a goal in the team-shared hivemind_goals table.
-      // Mirrors the `hivemind goal add` CLI subcommand (src/commands/goal.ts)
+      // Write-side: create a goal in the team-shared memoree_goals table.
+      // Mirrors the `memoree goal add` CLI subcommand (src/commands/goal.ts)
       // — see [[per-agent-tool-intercept-scope]] memory for why openclaw
       // needs explicit tools rather than going through a Write-tool
       // intercept like claude-code/codex.
       pluginApi.registerTool({
-        name: "hivemind_goal_add",
-        label: "Hivemind Goal Add",
+        name: "memoree_goal_add",
+        label: "Memoree Goal Add",
         description:
-          "Create a new Hivemind team goal. Persists to the org-shared hivemind_goals table — teammates see it on next SessionStart. Returns the generated goal_id. Use when the user wants to track a measurable objective or milestone.",
+          "Create a new Memoree team goal. Persists to the org-shared memoree_goals table — teammates see it on next SessionStart. Returns the generated goal_id. Use when the user wants to track a measurable objective or milestone.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -1221,7 +872,7 @@ export default definePluginEntry({
           const params = rawParams as { text: string };
           const dl = await getApi();
           if (!dl) {
-            return { content: [{ type: "text", text: "Not logged in. Run /hivemind_login first." }] };
+            return { content: [{ type: "text", text: "Memoree storage is unavailable. Run memoree doctor." }] };
           }
           try {
             const config = await loadConfig();
@@ -1244,26 +895,26 @@ export default definePluginEntry({
               `''` +
               `)`
             );
-            pluginApi.logger.info?.(`hivemind_goal_add → ${goalId}`);
+            pluginApi.logger.info?.(`memoree_goal_add → ${goalId}`);
             return { content: [{ type: "text", text: `Goal created.\ngoal_id: ${goalId}\nowner: ${owner}\nstatus: opened\ntext: ${params.text}` }], details: { goal_id: goalId } };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_goal_add failed: ${msg}`);
+            pluginApi.logger.error(`memoree_goal_add failed: ${msg}`);
             return { content: [{ type: "text", text: `Goal add failed: ${msg}` }] };
           }
         },
       });
 
       pluginApi.registerTool({
-        name: "hivemind_kpi_add",
-        label: "Hivemind KPI Add",
+        name: "memoree_kpi_add",
+        label: "Memoree KPI Add",
         description:
-          "Add a measurable KPI to an existing Hivemind goal. Persists to the org-shared hivemind_kpis table. Only call after the user has explicitly asked for KPIs — do NOT auto-generate them.",
+          "Add a measurable KPI to an existing Memoree goal. Persists to the org-shared memoree_kpis table. Only call after the user has explicitly asked for KPIs — do NOT auto-generate them.",
         parameters: {
           type: "object",
           additionalProperties: false,
           properties: {
-            goal_id: { type: "string", minLength: 1, description: "Existing goal_id (UUID) returned by hivemind_goal_add." },
+            goal_id: { type: "string", minLength: 1, description: "Existing goal_id (UUID) returned by memoree_goal_add." },
             kpi_id: { type: "string", minLength: 1, description: "Short slug for this KPI (e.g. 'k-prs')." },
             target: { type: "integer", minimum: 1, description: "Positive integer target." },
             unit: { type: "string", minLength: 1, description: "Unit label (e.g. 'count', 'PRs', 'lines')." },
@@ -1275,7 +926,7 @@ export default definePluginEntry({
           const params = rawParams as { goal_id: string; kpi_id: string; target: number; unit: string; name?: string };
           const dl = await getApi();
           if (!dl) {
-            return { content: [{ type: "text", text: "Not logged in. Run /hivemind_login first." }] };
+            return { content: [{ type: "text", text: "Memoree storage is unavailable. Run memoree doctor." }] };
           }
           try {
             await dl.ensureKpisTable(kpisTable);
@@ -1296,11 +947,11 @@ export default definePluginEntry({
               `''` +
               `)`
             );
-            pluginApi.logger.info?.(`hivemind_kpi_add → ${params.goal_id}/${params.kpi_id}`);
+            pluginApi.logger.info?.(`memoree_kpi_add → ${params.goal_id}/${params.kpi_id}`);
             return { content: [{ type: "text", text: `KPI added.\ngoal_id: ${params.goal_id}\nkpi_id: ${params.kpi_id}\ntarget: ${params.target} ${params.unit}` }] };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            pluginApi.logger.error(`hivemind_kpi_add failed: ${msg}`);
+            pluginApi.logger.error(`memoree_kpi_add failed: ${msg}`);
             return { content: [{ type: "text", text: `KPI add failed: ${msg}` }] };
           }
         },
@@ -1326,7 +977,7 @@ export default definePluginEntry({
           const searchOpts = buildGrepSearchOptions(grepParams, "/");
           searchOpts.limit = Math.min(Math.max(maxResults ?? 10, 1), 50);
           try {
-            const rows = await searchDeeplakeTables(dl, memoryTable, sessionsTable, searchOpts);
+            const rows = await searchMemoreeTables(dl, memoryTable, sessionsTable, searchOpts);
             // Score field is consumed by memory-core's federation ranker
             // (src/plugins/memory-state.ts MemoryCorpusSearchResult). We don't
             // have a true relevance signal yet, so rank summaries slightly
@@ -1335,7 +986,7 @@ export default definePluginEntry({
             return rows.map((r, i) => ({
               path: r.path,
               snippet: normalizeContent(r.path, r.content).slice(0, 400),
-              corpus: "hivemind",
+              corpus: "memoree",
               kind: r.path.startsWith("/summaries/") ? "summary" : "session",
               score: r.path.startsWith("/summaries/")
                 ? 0.8 - i * 0.005
@@ -1364,13 +1015,8 @@ export default definePluginEntry({
       pluginApi.on(event, handler);
     };
 
-    // (Auto-update notice runs further down via the single
-    // checkForUpdate(logger) call, gated on config.autoUpdate. Do NOT
-    // duplicate the npm-registry probe here — see CodeRabbit feedback
-    // on PR #97.)
-
     // Inject SKILL.md body into the system prompt so the agent actually sees
-    // the "call hivemind_search first" directives + anti-conflation rules.
+    // the "call memoree_search first" directives + anti-conflation rules.
     // Openclaw's built-in skill loader only puts <available_skills> name +
     // description + location XML into the prompt (src/agents/system-prompt.ts
     // buildSkillsSection), and expects the agent to `Read` the SKILL.md body
@@ -1378,7 +1024,7 @@ export default definePluginEntry({
     // this hook the directives never reach the model. Using
     // `prependSystemContext` (not `prependContext`) so it's cached by the
     // provider's prompt-cache path instead of costing tokens per turn.
-    if (typeof __HIVEMIND_SKILL__ === "string" && __HIVEMIND_SKILL__.length > 0) {
+    if (typeof __MEMOREE_SKILL__ === "string" && __MEMOREE_SKILL__.length > 0) {
       // Allowlist detection lives in the dynamically-imported setup-config
       // chunk so the main bundle has no fs reads. We kick off the import at
       // register-time so the first hook invocation doesn't block on it.
@@ -1386,91 +1032,39 @@ export default definePluginEntry({
       hook("before_prompt_build", async () => {
         const { detectAllowlistMissing } = await setupConfigPromise;
         const allowlistNudge = detectAllowlistMissing()
-          ? "\n\n<hivemind-setup-needed>\n" +
-            "The user hasn't run /hivemind_setup yet, so hivemind_search, " +
-            "hivemind_read, hivemind_index, hivemind_graph_search, and " +
-            "hivemind_graph_neighborhood are NOT available to you. If they ask " +
+          ? "\n\n<memoree-setup-needed>\n" +
+            "The user hasn't run /memoree_setup yet, so memoree_search, " +
+            "memoree_read, memoree_index, memoree_graph_search, and " +
+            "memoree_graph_neighborhood are NOT available to you. If they ask " +
             "about memory or the code graph and you can't help, tell them to run " +
-            "/hivemind_setup to enable Hivemind tools.\n" +
-            "</hivemind-setup-needed>\n"
+            "/memoree_setup to enable Memoree tools.\n" +
+            "</memoree-setup-needed>\n"
           : "";
-        const updateNudge = pendingUpdate
-          ? "\n\n<hivemind-update-available>\n" +
-            `A newer Hivemind version is available: ${pendingUpdate.current} → ${pendingUpdate.latest}. ` +
-            "Install command: `hivemind update`. " +
-            "The gateway reloads the plugin after install.\n" +
-            "</hivemind-update-available>\n"
-          : "";
+        const updateNudge = "";
         const graphCwd = resolveGraphCwd();
         spawnOpenclawGraphPullWorker(OPENCLAW_GRAPH_PULL_WORKER_PATH, graphCwd);
         let graphBlock = "";
         try {
           const graphLine = await graphContextInject(graphCwd);
-          if (graphLine) graphBlock = `\n\n<hivemind-graph-context>\n${graphLine}\n</hivemind-graph-context>\n`;
+          if (graphLine) graphBlock = `\n\n<memoree-graph-context>\n${graphLine}\n</memoree-graph-context>\n`;
         } catch { /* graph hint is best-effort */ }
         const graphSkillBlock =
-          typeof __HIVEMIND_GRAPH_SKILL__ === "string" && __HIVEMIND_GRAPH_SKILL__.length > 0
-            ? `\n\n<hivemind-graph-skill>\n${__HIVEMIND_GRAPH_SKILL__}\n</hivemind-graph-skill>\n`
+          typeof __MEMOREE_GRAPH_SKILL__ === "string" && __MEMOREE_GRAPH_SKILL__.length > 0
+            ? `\n\n<memoree-graph-skill>\n${__MEMOREE_GRAPH_SKILL__}\n</memoree-graph-skill>\n`
             : "";
         return {
           prependSystemContext:
             allowlistNudge +
             updateNudge +
-            "\n\n<hivemind-skill>\n" + __HIVEMIND_SKILL__ + "\n</hivemind-skill>\n" +
+            "\n\n<memoree-skill>\n" + __MEMOREE_SKILL__ + "\n</memoree-skill>\n" +
             graphSkillBlock +
             graphBlock,
         };
       });
     }
 
-    // before_agent_start handles two narrow paths that legitimately fire
-    // before the agent starts:
-    //   1. Login nudge — when the user isn't authenticated yet, drop the
-    //      device-flow URL into the agent's context so it can show it.
-    //   2. Welcome banner — once after a successful device-flow auth.
-    //
-    // The previous version of this hook also did a proactive recall query
-    // across the memory + sessions tables on every turn. That made every
-    // openclaw turn pay Deeplake's `sessions`-table latency (200ms–10s+)
-    // even when the prompt needed no memory at all, and a slow Deeplake
-    // would block the agent for the full timeout before it could reply.
-    // Other agents (claude-code, codex, cursor, hermes, pi) don't do
-    // this — they let the agent decide when to search by intercepting its
-    // Grep tool calls. Openclaw now matches that pattern: the agent gets
-    // memory via the registered tools (hivemind_search/_read/_index), with
-    // the SKILL.md body in the system prompt directing it to call them
-    // first. See issue #121 for the original report (plugins.allow gating
-    // also fixed in the same PR).
-    // No `config.autoRecall` gate here: the hook body no longer does any
-    // recall (CodeRabbit on #124 caught this). Both remaining paths — the
-    // login URL nudge and the post-auth welcome banner — must run for
-    // every user, including those who set autoRecall=false. Gating the
-    // whole hook registration would silently break their auth flow.
-    hook("before_agent_start", async (event: { prompt?: string }) => {
-      if (!event.prompt || event.prompt.length < 5) return;
-      try {
-        const dl = await getApi();
-
-        if (!dl && authUrl) {
-          return {
-            prependContext: `\n\nIMPORTANT: The user needs to authenticate with Hivemind. Include this link in your reply: ${authUrl}\nTell them to click it and sign in, then send another message.\n`,
-          };
-        }
-        if (!dl) return;
-
-        if (justAuthenticated) {
-          justAuthenticated = false;
-          const creds = await loadCredentials();
-          const orgName = creds?.orgName ?? creds?.orgId ?? "unknown";
-          return { prependContext: `\n\n🐝 Welcome to Hivemind!\n\nCurrent org: ${orgName}\n\nYour agents now share memory across sessions, teammates, and machines.\n\nGet started:\n1. Verify sync: spin up multiple sessions and confirm agents share context\n2. Invite a teammate: ask the agent to add them over email\n3. Switch orgs: ask the agent to list or switch your organizations\n\nOne brain for every agent on your team.\n` };
-        }
-      } catch (err) {
-        logger.error(`before_agent_start failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    });
-
     // Code graph auto-build on every successful turn — independent of capture,
-    // login, and Deeplake availability (parity with codex/cursor/hermes hooks).
+    // login, and Memoree availability (parity with codex/cursor/hermes hooks).
     hook("agent_end", async (event) => {
       const ev = event as { success?: boolean };
       if (!ev.success) return;
@@ -1538,8 +1132,8 @@ export default definePluginEntry({
             // failed, timeout, etc.) — embeddingSqlLiteral then yields
             // the literal `NULL`, preserving today's "row lands with
             // NULL in message_embedding" behavior on every failure mode.
-            // Real vectors land only when `hivemind embeddings install`
-            // has populated ~/.hivemind/embed-deps/embed-daemon.js, in
+            // Real vectors land only when `memoree embeddings install`
+            // has populated ~/.memoree/embed-deps/embed-daemon.js, in
             // line with the explicit-opt-in rule from src/user-config.ts.
             const embedding = await tryEmbedStandalone(line, "document");
             const embeddingSql = embeddingSqlLiteral(embedding);
@@ -1599,6 +1193,7 @@ export default definePluginEntry({
             // runtime. CodeRabbit on #172.
             try {
               if (spawnOpenclawSkillifyWorker({
+                storageKind: cfg.storage.kind,
                 orgId: cfg.orgId,
                 workspaceId: cfg.workspaceId,
                 userName: cfg.userName,
@@ -1608,7 +1203,7 @@ export default definePluginEntry({
                 // Pass the same tuning dispatch the plugin populated at
                 // register-time. The worker will repopulate its own
                 // globalThis from this.
-                tuning: (globalThis as Record<string, unknown>).__hivemind_tuning__ as Record<string, string | undefined> | undefined,
+                tuning: (globalThis as Record<string, unknown>).__memoree_tuning__ as Record<string, string | undefined> | undefined,
               })) {
                 skillifySpawnedFor.add(sid);
               }
@@ -1622,31 +1217,9 @@ export default definePluginEntry({
       });
     }
 
-    // Prompt login if not authenticated
-    const creds = await loadCredentials();
-    if (!creds?.token) {
-      logger.info?.("Hivemind installed. Run /hivemind_login to authenticate and activate shared memory.");
-      if (!authPending) {
-        requestAuth().catch(err => {
-          logger.error(`Pre-auth failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
-      }
-    }
-
-    // Non-blocking version check. Gated on `config.autoUpdate` (default
-    // true). The plugin bundle stubs out node:child_process so we can't
-    // spawn `hivemind update` from in-process — checkForUpdate just sets
-    // pendingUpdate (read by before_prompt_build) and prints a notice
-    // pointing the user at `hivemind update`. The real upgrade fires
-    // when ANY other agent's session-start hook calls autoUpdate, which
-    // refreshes the openclaw bundle along with everything else.
-    if (config.autoUpdate !== false) {
-      checkForUpdate(logger).catch(() => {});
-    }
-
-    logger.info?.("Hivemind plugin registered");
+    logger.info?.("Memoree plugin registered");
     } catch (err) {
-      pluginApi.logger?.error?.(`Hivemind register failed: ${err instanceof Error ? err.message : String(err)}`);
+      pluginApi.logger?.error?.(`Memoree register failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     })();
   },

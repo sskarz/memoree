@@ -1,8 +1,8 @@
 /**
- * `hivemind skillify mine-local` — seed reusable skills from a fresh user's
- * own local agent transcripts, no Deeplake auth required.
+ * `memoree skillify mine-local` — seed reusable skills from a fresh user's
+ * own local agent transcripts, no Memoree auth required.
  *
- * Why this exists: a user who just installed hivemind hasn't logged in yet
+ * Why this exists: a user who just installed memoree hasn't logged in yet
  * but already has weeks of local Claude Code sessions on disk. Mining those
  * once at install time produces an immediate "huh, this thing is useful"
  * moment without first asking them to sign up.
@@ -14,7 +14,7 @@
  *   4. Run a single LLM gate call on all combined pairs.
  *   5. Write KEEP verdict via writeNewSkill, log to manifest.
  *
- * Manifest at ~/.claude/hivemind/local-mined.json doubles as a one-shot
+ * Manifest at ~/.claude/memoree/local-mined.json doubles as a one-shot
  * sentinel — re-runs require --force. The manifest also tracks which
  * skills came from local mining so a later `push-local` (when the user
  * signs in) can upload exactly those.
@@ -120,7 +120,7 @@ function runGateViaStdin(opts: {
     ];
     const child = spawn(opts.bin, args, {
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+      env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
       // CREATE_NO_WINDOW: this runs inside the detached, console-less mine-local
       // worker, so without it Windows pops a visible console window for the
       // summarizer CLI child. No-op on POSIX.
@@ -225,7 +225,7 @@ function buildSessionPrompt(pairs: Pair[], session: SessionFile, verdictPath: st
     `- Each body under ~3000 characters.`,
     `- Skill names are kebab-case slugs (lowercase letters/digits/hyphens only).`,
     `- For each skill, also emit a one-line "insight": a concrete, quantified, second-person`,
-    `  sentence describing what hivemind found that prompted the skill. Examples:`,
+    `  sentence describing what memoree found that prompted the skill. Examples:`,
     `    "You revisited 4 merged PRs in the last month because the assistant declared 'done'`,
     `     before checking test output."`,
     `    "You corrected the same env-mismatch (beta vs prod) twice in the same week before`,
@@ -405,8 +405,8 @@ export function jaccard(a: Set<string>, b: Set<string>): number {
 
 /** Two skills are considered overlapping if their description-token Jaccard
  *  meets this threshold. Tuned empirically: ~0.4 catches "test agent setup"
- *  vs "agent test e2e setup" but lets "deeplake table diagnostics" coexist
- *  with "deeplake API error handling".
+ *  vs "agent test e2e setup" but lets "memoree table diagnostics" coexist
+ *  with "memoree API error handling".
  */
 const OVERLAP_THRESHOLD = 0.4;
 
@@ -563,7 +563,7 @@ async function runMineLocalImpl(args: string[]): Promise<void> {
     return;
   }
 
-  const tmpDir = join(homedir(), ".claude", "hivemind", `mine-local-${Date.now()}`);
+  const tmpDir = join(homedir(), ".claude", "memoree", `mine-local-${Date.now()}`);
   mkdirSync(tmpDir, { recursive: true });
   console.log(`Running ${picked.length} gate call(s) in parallel (concurrency=${GATE_CONCURRENCY}, timeout=${GATE_TIMEOUT_MS / 1000}s each)...`);
 
@@ -651,7 +651,7 @@ async function runMineLocalImpl(args: string[]): Promise<void> {
 
   // Compute fan-out targets once: which non-Claude agent skill roots are
   // installed on this machine? We reuse the same detector + symlink helper
-  // that `hivemind skillify pull` uses, so a mined skill ends up visible
+  // that `memoree skillify pull` uses, so a mined skill ends up visible
   // to every agent (codex, hermes, pi via ~/.agents/skills/, ~/.hermes/skills/,
   // ~/.pi/agent/skills/). Cursor has no native skill discovery and is
   // intentionally excluded by detectAgentSkillsRoots.
@@ -742,5 +742,5 @@ async function runMineLocalImpl(args: string[]): Promise<void> {
   console.log("");
   console.log(`Mined ${written.length} skill(s) from ${picked.length} session(s) (${results.filter(r => r.skills.length > 0).length} session(s) contributed candidate(s)).`);
   console.log(`Installed to ${skillsRoot}/ — local-only, not shared.`);
-  console.log(`Sign in with 'hivemind login' to share with your team later.`);
+  console.log(`Local mining results remain on this machine.`);
 }

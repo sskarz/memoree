@@ -1,11 +1,11 @@
 /**
  * Path classifier + decompose/compose helpers for goal and KPI paths
- * inside the Deeplake VFS.
+ * inside the Memoree VFS.
  *
  * The agent operates on a normal-looking filesystem under the memory
- * mount; the VFS in deeplake-fs.ts uses these helpers to detect goal
+ * mount; the VFS in memoree-fs.ts uses these helpers to detect goal
  * and KPI paths and dispatch reads/writes to the dedicated
- * hivemind_goals / hivemind_kpis tables instead of the generic memory
+ * memoree_goals / memoree_kpis tables instead of the generic memory
  * table. Path encoding is the source of truth for owner / status /
  * goal_id / kpi_id; the row `content` column stores only the
  * descriptive markdown body.
@@ -47,13 +47,13 @@ export interface KpiPathParts {
  * Strip any leading mount prefix and split the remainder into path
  * segments. Returns `null` for empty paths.
  *
- * The deeplake-shell mount is configurable AND agent writes can
+ * The memoree-shell mount is configurable AND agent writes can
  * arrive in multiple shapes:
  *   - Write tool, mount-relative:           /goal/<u>/<s>/<id>.md
  *   - Some test mounts:                     /memory/goal/<u>/...
  *   - Bash `echo > ~/...` inside the shell
- *     where HOME=mount=/:                   /.deeplake/memory/goal/<u>/...
- *   - Bash on the host filesystem:          /home/<user>/.deeplake/memory/goal/<u>/...
+ *     where HOME=mount=/:                   /.memoree/memory/goal/<u>/...
+ *   - Bash on the host filesystem:          /home/<user>/.memoree/memory/goal/<u>/...
  *
  * We accept all of them by finding the last occurrence of
  * `/memory/` in the path and treating everything after it as the
@@ -63,9 +63,9 @@ export interface KpiPathParts {
 function segmentsUnderMemory(p: string): string[] | null {
   let s = p.replace(/\/+$/, "");
   // If the path contains a /memory/ segment anywhere, take what
-  // follows the LAST such occurrence. This covers .deeplake/memory/
-  // and /home/<user>/.deeplake/memory/ prefixes that arrive from
-  // Bash `echo > ~/...` redirects inside the deeplake-shell.
+  // follows the LAST such occurrence. This covers .memoree/memory/
+  // and /home/<user>/.memoree/memory/ prefixes that arrive from
+  // Bash `echo > ~/...` redirects inside the memoree-shell.
   const memIdx = s.lastIndexOf("/memory/");
   if (memIdx >= 0) {
     s = s.slice(memIdx + "/memory/".length);
@@ -150,7 +150,7 @@ export function decomposeKpiPath(p: string): KpiPathParts {
 /**
  * Build the canonical goal path from its parts. Output matches the
  * VFS-internal form (no mount prefix) because that is what
- * deeplake-fs caches and DB rows store.
+ * memoree-fs caches and DB rows store.
  */
 export function composeGoalPath(parts: GoalPathParts): string {
   return `/goal/${parts.owner}/${parts.status}/${parts.goal_id}.md`;

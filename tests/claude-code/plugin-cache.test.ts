@@ -15,7 +15,7 @@ import {
 } from "../../src/utils/plugin-cache.js";
 
 function mkRoot(): string {
-  const root = join(tmpdir(), `hivemind-cache-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const root = join(tmpdir(), `memoree-cache-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(root, { recursive: true });
   return root;
 }
@@ -62,7 +62,7 @@ describe("resolveVersionedPluginDir", () => {
   it("rejects when version segment isn't semver", () => {
     const root = mkRoot();
     try {
-      const bundle = join(root, "plugins", "cache", "hivemind", "hivemind", "latest", "bundle");
+      const bundle = join(root, "plugins", "cache", "memoree", "memoree", "latest", "bundle");
       mkdirSync(bundle, { recursive: true });
       expect(resolveVersionedPluginDir(bundle)).toBeNull();
     } finally {
@@ -71,7 +71,7 @@ describe("resolveVersionedPluginDir", () => {
   });
 
   it("accepts the real cache layout", () => {
-    const fakeHome = join(homedir(), ".claude", "plugins", "cache", "hivemind", "hivemind", "9.99.99", "bundle");
+    const fakeHome = join(homedir(), ".claude", "plugins", "cache", "memoree", "memoree", "9.99.99", "bundle");
     const resolved = resolveVersionedPluginDir(fakeHome);
     expect(resolved).not.toBeNull();
     expect(resolved?.version).toBe("9.99.99");
@@ -192,7 +192,7 @@ describe("readCurrentVersionFromManifest", () => {
     expect(readCurrentVersionFromManifest(p)).toBeNull();
   });
 
-  it("returns null when hivemind@hivemind entry is missing", () => {
+  it("returns null when memoree@memoree entry is missing", () => {
     const p = join(root, "installed_plugins.json");
     writeFileSync(p, JSON.stringify({ plugins: { "other@scope": [{ version: "1.0.0" }] } }));
     expect(readCurrentVersionFromManifest(p)).toBeNull();
@@ -201,7 +201,7 @@ describe("readCurrentVersionFromManifest", () => {
   it("returns the first valid semver version", () => {
     const p = join(root, "installed_plugins.json");
     writeFileSync(p, JSON.stringify({
-      plugins: { "hivemind@hivemind": [{ version: "0.6.39", installPath: "/x" }] },
+      plugins: { "memoree@memoree": [{ version: "0.6.39", installPath: "/x" }] },
     }));
     expect(readCurrentVersionFromManifest(p)).toBe("0.6.39");
   });
@@ -209,7 +209,7 @@ describe("readCurrentVersionFromManifest", () => {
   it("skips entries with non-semver versions", () => {
     const p = join(root, "installed_plugins.json");
     writeFileSync(p, JSON.stringify({
-      plugins: { "hivemind@hivemind": [{ version: "latest" }, { version: "0.6.40" }] },
+      plugins: { "memoree@memoree": [{ version: "latest" }, { version: "0.6.40" }] },
     }));
     expect(readCurrentVersionFromManifest(p)).toBe("0.6.40");
   });
@@ -217,7 +217,7 @@ describe("readCurrentVersionFromManifest", () => {
   it("returns null when every entry has a non-semver version", () => {
     const p = join(root, "installed_plugins.json");
     writeFileSync(p, JSON.stringify({
-      plugins: { "hivemind@hivemind": [{ version: "latest" }, { version: "unknown" }, {}] },
+      plugins: { "memoree@memoree": [{ version: "latest" }, { version: "unknown" }, {}] },
     }));
     expect(readCurrentVersionFromManifest(p)).toBeNull();
   });

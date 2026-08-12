@@ -38,7 +38,7 @@ export interface AutoRegistry {
 }
 
 export function registryPath(): string {
-  return process.env.HIVEMIND_DOCS_AUTO_FILE ?? join(homedir(), ".deeplake", "docs-auto.json");
+  return process.env.MEMOREE_DOCS_AUTO_FILE ?? join(homedir(), ".memoree", "docs-auto.json");
 }
 
 /** Read the registry. Missing/corrupt file → empty (hooks must never crash). */

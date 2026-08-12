@@ -1,13 +1,13 @@
 /**
- * Extract prompt+answer pairs from Deeplake sessions table rows.
+ * Extract prompt+answer pairs from Memoree sessions table rows.
  *
  * All four agents (claude-code, codex, cursor, hermes) normalize their
- * native JSONL events into the same row taxonomy in Deeplake:
+ * native JSONL events into the same row taxonomy in Memoree:
  *   - type: "user_message"      → conversational prompt
  *   - type: "assistant_message" → conversational answer
  *   - type: "tool_call"         → tool use / result (DROPPED)
  *
- * Thinking blocks never reach Deeplake (capture skips them), so no
+ * Thinking blocks never reach Memoree (capture skips them), so no
  * additional filtering is needed at extraction time.
  *
  * If/when an agent diverges from this taxonomy, add a per-agent extractor

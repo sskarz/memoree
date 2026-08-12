@@ -41,7 +41,7 @@ import { appendSessionEvent } from "../session-event-cache.js";
 import { tryStopCounterTrigger } from "../../skillify/triggers.js";
 import type { Config } from "../../config.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
-import { isHivemindPluginEnabled } from "../../utils/plugin-state.js";
+import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 import { reactSkillOpt } from "../shared/skillopt-hook.js";
 const log = (msg: string) => _log("hermes-capture", msg);
 
@@ -54,7 +54,7 @@ const PLUGIN_VERSION = getInstalledVersion(__bundleDir, ".claude-plugin") ?? "";
 
 // Self-heal the shared-deps symlink for this plugin version. Marketplace
 // auto-upgrades drop new versioned cache dirs without the symlink that
-// `hivemind embeddings install` originally created; this restores it on
+// `memoree embeddings install` originally created; this restores it on
 // first capture after each upgrade.
 if (!embeddingsDisabled()) {
   try { ensurePluginNodeModulesLink({ bundleDir: __bundleDir }); } catch { /* best-effort */ }
@@ -69,7 +69,7 @@ interface HermesCaptureInput {
   extra?: Record<string, unknown>;
 }
 
-const CAPTURE = process.env.HIVEMIND_CAPTURE !== "false";
+const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
 
 function pickString(...candidates: unknown[]): string | undefined {
   for (const c of candidates) {
@@ -80,7 +80,7 @@ function pickString(...candidates: unknown[]): string | undefined {
 
 async function main(): Promise<void> {
   if (!CAPTURE) return;
-  if (!isHivemindPluginEnabled()) { log("plugin disabled, skipping capture"); return; }
+  if (!isMemoreePluginEnabled()) { log("plugin disabled, skipping capture"); return; }
   const input = await readStdin<HermesCaptureInput>();
   const config = resolveCaptureConfig(input.cwd ?? process.cwd(), log);
   if (!config) return;
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
   const jsonForSql = line.replace(/'/g, "''");
 
   // Best-effort embed: if the daemon is unavailable (no @huggingface/transformers
-  // or HIVEMIND_EMBEDDINGS=false), embed() returns null and the column lands NULL.
+  // or MEMOREE_EMBEDDINGS=false), embed() returns null and the column lands NULL.
   const embedding = embeddingsDisabled()
     ? null
     : await new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() }).embed(line, "document");
@@ -203,8 +203,8 @@ async function main(): Promise<void> {
   // would otherwise loop). triggers.ts has the same SKILLIFY_WORKER guard;
   // the WIKI_WORKER guard below covers the wiki-worker-calling-hermes case.
   if (event === "post_llm_call" &&
-      process.env.HIVEMIND_WIKI_WORKER !== "1" &&
-      process.env.HIVEMIND_SKILLIFY_WORKER !== "1") {
+      process.env.MEMOREE_WIKI_WORKER !== "1" &&
+      process.env.MEMOREE_SKILLIFY_WORKER !== "1") {
     tryStopCounterTrigger({
       config,
       cwd,
@@ -216,7 +216,7 @@ async function main(): Promise<void> {
 }
 
 function maybeTriggerPeriodicSummary(sessionId: string, cwd: string, config: Config): void {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
   try {
     const state = bumpTotalCount(sessionId);
     const cfg = loadTriggerConfig();

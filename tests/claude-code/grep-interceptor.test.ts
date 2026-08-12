@@ -21,7 +21,7 @@ vi.mock("../../src/embeddings/disable.js", () => ({
 }));
 
 import { createGrepCommand } from "../../src/shell/grep-interceptor.js";
-import { DeeplakeFs } from "../../src/shell/deeplake-fs.js";
+import { MemoreeFs } from "../../src/shell/memoree-fs.js";
 import * as grepCore from "../../src/shell/grep-core.js";
 
 // ── Minimal mocks ─────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ function makeClient(queryResults: Record<string, string>[] = []) {
   };
 }
 
-function makeCtx(fs: DeeplakeFs, cwd = "/memory") {
+function makeCtx(fs: MemoreeFs, cwd = "/memory") {
   return { fs, cwd, env: new Map<string, string>(), stdin: "" };
 }
 
@@ -59,7 +59,7 @@ describe("grep interceptor", () => {
 
   it("returns exitCode=1 when the pattern is missing", async () => {
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute([], makeCtx(fs) as never);
@@ -73,7 +73,7 @@ describe("grep interceptor", () => {
 
   it("returns exitCode=1 when all target paths resolve to nothing", async () => {
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     vi.spyOn(fs, "resolvePath").mockReturnValue("");
     client.query.mockClear();
     const cmd = createGrepCommand(client as never, fs, "test");
@@ -84,7 +84,7 @@ describe("grep interceptor", () => {
 
   it("returns exitCode=127 for paths outside mount (pass-through)", async () => {
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear(); // clear bootstrap calls
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["foo", "/etc/hosts"], makeCtx(fs) as never);
@@ -94,7 +94,7 @@ describe("grep interceptor", () => {
 
   it("queries both memory and sessions tables with LIKE and returns matches", async () => {
     const client = makeClient([{ path: "/memory/a.txt", content: "hello world" }]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query.mockResolvedValue([{ path: "/memory/a.txt", content: "hello world" }]);
 
@@ -112,7 +112,7 @@ describe("grep interceptor", () => {
 
   it("uses one SQL query even when grep receives multiple target paths", async () => {
     const client = makeClient([{ path: "/memory/a.txt", content: "hello world" }]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query.mockResolvedValue([{ path: "/memory/a.txt", content: "hello world" }]);
 
@@ -130,7 +130,7 @@ describe("grep interceptor", () => {
 
   it("falls back to in-memory scan when SQL returns nothing", async () => {
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     await fs.writeFile("/memory/a.txt", "hello world");
     client.query.mockClear();
     client.query.mockResolvedValue([]); // SQL returns no rows for both tables
@@ -147,7 +147,7 @@ describe("grep interceptor", () => {
 
   it("returns exitCode=1 when no matches found", async () => {
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["zzznomatch", "/memory"], makeCtx(fs) as never);
     expect(result.exitCode).toBe(1);
@@ -159,22 +159,22 @@ describe("grep interceptor", () => {
   // is indistinguishable from a genuine zero-match.
   it("returns exitCode=2 + stderr when the backend errors and nothing else matches", async () => {
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
-    client.query.mockRejectedValue(new Error("deeplake 500: internal error"));
+    client.query.mockRejectedValue(new Error("memoree 500: internal error"));
 
     const cmd = createGrepCommand(client as never, fs, "test", "sessions");
     const result = await cmd.execute(["hello", "/memory"], makeCtx(fs) as never);
 
     expect(result.exitCode).toBe(2);
-    expect(result.stderr.toLowerCase()).toMatch(/error|deeplake|search/);
+    expect(result.stderr.toLowerCase()).toMatch(/error|memoree|search/);
     expect(result.stdout).toBe("");
   });
 
   it("returns a semantic hit directly, without a lexical retry", async () => {
     mockEmbed.mockResolvedValue([0.1, 0.2, 0.3]);
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query.mockResolvedValue([{ path: "/memory/a.txt", content: "hello world" }]);
 
@@ -189,7 +189,7 @@ describe("grep interceptor", () => {
   it("retries lexically when semantic returns nothing, surfacing those matches (exit 0)", async () => {
     mockEmbed.mockResolvedValue([0.1, 0.2, 0.3]);
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query
       .mockResolvedValueOnce([])                                            // semantic → empty
@@ -205,22 +205,22 @@ describe("grep interceptor", () => {
   it("returns exit 2 when semantic finds nothing and the lexical retry errors", async () => {
     mockEmbed.mockResolvedValue([0.1, 0.2, 0.3]);
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query
       .mockResolvedValueOnce([])                              // semantic → empty
-      .mockRejectedValueOnce(new Error("deeplake 500"));      // lexical retry → error
+      .mockRejectedValueOnce(new Error("memoree 500"));      // lexical retry → error
 
     const cmd = createGrepCommand(client as never, fs, "test", "sessions");
     const result = await cmd.execute(["hello", "/memory"], makeCtx(fs) as never);
 
     expect(result.exitCode).toBe(2);
-    expect(result.stderr.toLowerCase()).toMatch(/error|deeplake/);
+    expect(result.stderr.toLowerCase()).toMatch(/error|memoree/);
   });
 
   it("wraps a non-Error rejection from the primary search (String(e) path)", async () => {
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query.mockRejectedValue("primary string failure"); // non-Error, semantic off
 
@@ -234,7 +234,7 @@ describe("grep interceptor", () => {
   it("wraps a non-Error rejection from the lexical retry (String(e) path)", async () => {
     mockEmbed.mockResolvedValue([0.1, 0.2, 0.3]);
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query
       .mockResolvedValueOnce([])                  // semantic → empty
@@ -250,7 +250,7 @@ describe("grep interceptor", () => {
   it("falls through to exit 1 when semantic AND lexical retry both return empty", async () => {
     mockEmbed.mockResolvedValue([0.1, 0.2, 0.3]);
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query
       .mockResolvedValueOnce([])   // semantic → empty
@@ -267,7 +267,7 @@ describe("grep interceptor", () => {
   it("does NOT lexically retry when the embed daemon is unavailable (queryEmbedding null)", async () => {
     mockEmbed.mockRejectedValue(new Error("daemon down")); // → queryEmbedding stays null
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query.mockResolvedValueOnce([]); // single lexical search → empty
 
@@ -281,10 +281,10 @@ describe("grep interceptor", () => {
 
   it("still returns fallback matches (exit 0) even when the backend errors", async () => {
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     await fs.writeFile("/memory/a.txt", "hello world");
     client.query.mockClear();
-    client.query.mockRejectedValue(new Error("deeplake 500: internal error"));
+    client.query.mockRejectedValue(new Error("memoree 500: internal error"));
 
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["hello", "/memory"], makeCtx(fs) as never);
@@ -297,7 +297,7 @@ describe("grep interceptor", () => {
 
   it("respects -i (ignore-case) flag", async () => {
     const client = makeClient([{ path: "/memory/a.txt", content: "Hello World" }]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
 
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["-i", "hello", "/memory"], makeCtx(fs) as never);
@@ -311,7 +311,7 @@ describe("grep interceptor", () => {
       { path: "/memory/a.txt", content: "match here\nmatch again" },
       { path: "/memory/b.txt", content: "also match" },
     ]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
 
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["-l", "match", "/memory"], makeCtx(fs) as never);
@@ -327,7 +327,7 @@ describe("grep interceptor", () => {
     const client = makeClient([
       { path: "/memory/a.txt", content: "keep this\nremove match\nkeep this too" },
     ]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
 
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["-v", "match", "/memory"], makeCtx(fs) as never);
@@ -341,7 +341,7 @@ describe("grep interceptor", () => {
       { path: "/memory/a.txt", content: "hello world" },
       { path: "/memory/b.txt", content: "hello there" },
     ]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
 
     const prefetchSpy = vi.spyOn(fs, "prefetch");
     const readSpy = vi.spyOn(fs, "readFile");
@@ -356,7 +356,7 @@ describe("grep interceptor", () => {
 
   it("fallback path prefetches the FS cache when SQL is empty", async () => {
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     await fs.writeFile("/memory/a.txt", "hello world");
     await fs.writeFile("/memory/b.txt", "hello there");
     client.query.mockClear();
@@ -374,9 +374,9 @@ describe("grep interceptor", () => {
 
   it("falls back to the FS cache when the SQL search rejects", async () => {
     const client = makeClient();
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     await fs.writeFile("/memory/a.txt", "hello world");
-    vi.spyOn(grepCore, "searchDeeplakeTables").mockRejectedValueOnce(new Error("timeout"));
+    vi.spyOn(grepCore, "searchMemoreeTables").mockRejectedValueOnce(new Error("timeout"));
 
     const cmd = createGrepCommand(client as never, fs, "test");
     const result = await cmd.execute(["hello", "/memory"], makeCtx(fs) as never);
@@ -385,15 +385,15 @@ describe("grep interceptor", () => {
     expect(result.stdout).toContain("hello world");
   });
 
-  // ── Semantic path (HIVEMIND_SEMANTIC_SEARCH default=on) ─────────────────
+  // ── Semantic path (MEMOREE_SEMANTIC_SEARCH default=on) ─────────────────
   // These tests exercise the daemon-backed embed + UNION ALL branch of
-  // searchDeeplakeTables. They mock the shared EmbedClient singleton so we
+  // searchMemoreeTables. They mock the shared EmbedClient singleton so we
   // don't actually spawn nomic.
-  it("passes the query embedding into searchDeeplakeTables for semantic-friendly patterns", async () => {
+  it("passes the query embedding into searchMemoreeTables for semantic-friendly patterns", async () => {
     mockEmbed.mockResolvedValueOnce([0.1, 0.2, 0.3]);
     const client = makeClient([{ path: "/memory/a.txt", content: "deploy failed" }]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
-    const searchSpy = vi.spyOn(grepCore, "searchDeeplakeTables")
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
+    const searchSpy = vi.spyOn(grepCore, "searchMemoreeTables")
       .mockResolvedValue([{ path: "/memory/a.txt", content: "deploy failed" }]);
 
     const cmd = createGrepCommand(client as never, fs, "test", "sessions");
@@ -410,7 +410,7 @@ describe("grep interceptor", () => {
     mockEmbed.mockClear();
     mockEmbed.mockResolvedValue([0.5]);
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     const cmd = createGrepCommand(client as never, fs, "test");
     // Three metachars should disqualify the pattern from semantic.
     await cmd.execute(["(foo|bar|baz)\\+", "/memory"], makeCtx(fs) as never);
@@ -420,7 +420,7 @@ describe("grep interceptor", () => {
   it("skips embedding on very short patterns (< 2 chars)", async () => {
     mockEmbed.mockClear();
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     const cmd = createGrepCommand(client as never, fs, "test");
     await cmd.execute(["a", "/memory"], makeCtx(fs) as never);
     expect(mockEmbed).not.toHaveBeenCalled();
@@ -430,7 +430,7 @@ describe("grep interceptor", () => {
     mockEmbed.mockClear();
     mockEmbed.mockRejectedValueOnce(new Error("daemon down"));
     const client = makeClient([{ path: "/memory/a.txt", content: "hello world" }]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
     client.query.mockClear();
     client.query.mockResolvedValue([{ path: "/memory/a.txt", content: "hello world" }]);
 
@@ -446,8 +446,8 @@ describe("grep interceptor", () => {
     mockEmbed.mockClear();
     mockEmbed.mockResolvedValueOnce([0.1]);
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
-    const searchSpy = vi.spyOn(grepCore, "searchDeeplakeTables")
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
+    const searchSpy = vi.spyOn(grepCore, "searchMemoreeTables")
       .mockResolvedValueOnce([]) // first call (semantic+lexical hybrid) → empty
       .mockResolvedValueOnce([{ path: "/memory/a.txt", content: "hi" }]); // lexical retry
 
@@ -468,8 +468,8 @@ describe("grep interceptor", () => {
     mockEmbed.mockClear();
     mockEmbed.mockResolvedValueOnce([0.1, 0.2]);
     const client = makeClient([]);
-    const fs = await DeeplakeFs.create(client as never, "test", "/memory");
-    const searchSpy = vi.spyOn(grepCore, "searchDeeplakeTables")
+    const fs = await MemoreeFs.create(client as never, "test", "/memory");
+    const searchSpy = vi.spyOn(grepCore, "searchMemoreeTables")
       .mockResolvedValue([{ path: "/memory/a.txt", content: "line A\nline B\n\nline C" }]);
 
     const cmd = createGrepCommand(client as never, fs, "test");
@@ -483,7 +483,7 @@ describe("grep interceptor", () => {
     searchSpy.mockRestore();
   });
 
-  it("hits the 3s timeout rejector when searchDeeplakeTables hangs", async () => {
+  it("hits the 3s timeout rejector when searchMemoreeTables hangs", async () => {
     // Force the SQL search to hang forever so Promise.race's setTimeout
     // callback (line 131 of grep-interceptor.ts) fires with a timeout error,
     // covering the reject() arrow function. Use fake timers to fast-forward
@@ -492,10 +492,10 @@ describe("grep interceptor", () => {
     try {
       mockEmbed.mockResolvedValue(null); // skip semantic for a cleaner timeout.
       const client = makeClient([]);
-      const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+      const fs = await MemoreeFs.create(client as never, "test", "/memory");
       await fs.writeFile("/memory/a.txt", "hello world"); // fallback content.
 
-      vi.spyOn(grepCore, "searchDeeplakeTables")
+      vi.spyOn(grepCore, "searchMemoreeTables")
         .mockImplementation(() => new Promise(() => { /* never resolves */ }));
 
       const cmd = createGrepCommand(client as never, fs, "test");
@@ -512,14 +512,14 @@ describe("grep interceptor", () => {
     }
   });
 
-  it("disables the semantic path when HIVEMIND_SEMANTIC_EMIT_ALL=false", async () => {
+  it("disables the semantic path when MEMOREE_SEMANTIC_EMIT_ALL=false", async () => {
     mockEmbed.mockClear();
     mockEmbed.mockResolvedValueOnce([0.1]);
-    const prev = process.env.HIVEMIND_SEMANTIC_EMIT_ALL;
-    process.env.HIVEMIND_SEMANTIC_EMIT_ALL = "false";
+    const prev = process.env.MEMOREE_SEMANTIC_EMIT_ALL;
+    process.env.MEMOREE_SEMANTIC_EMIT_ALL = "false";
     try {
       const client = makeClient([{ path: "/memory/a.txt", content: "hello world\ngoodbye" }]);
-      const fs = await DeeplakeFs.create(client as never, "test", "/memory");
+      const fs = await MemoreeFs.create(client as never, "test", "/memory");
       client.query.mockClear();
       client.query.mockResolvedValue([{ path: "/memory/a.txt", content: "hello world\ngoodbye" }]);
 
@@ -531,8 +531,8 @@ describe("grep interceptor", () => {
       expect(result.stdout).not.toContain("goodbye");
       expect(result.exitCode).toBe(0);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_SEMANTIC_EMIT_ALL;
-      else process.env.HIVEMIND_SEMANTIC_EMIT_ALL = prev;
+      if (prev === undefined) delete process.env.MEMOREE_SEMANTIC_EMIT_ALL;
+      else process.env.MEMOREE_SEMANTIC_EMIT_ALL = prev;
     }
   });
 });

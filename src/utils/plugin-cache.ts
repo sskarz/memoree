@@ -22,7 +22,7 @@ export function compareSemverDesc(a: string, b: string): number {
 /**
  * Resolve the versioned plugin directory from the hook's bundle dir.
  *
- * Expected layout: `<cacheRoot>/plugins/cache/hivemind/hivemind/<version>/bundle/`.
+ * Expected layout: `<cacheRoot>/plugins/cache/memoree/memoree/<version>/bundle/`.
  * Returns null when we're not running from that layout — e.g. a local
  * `--plugin-dir` dev run — so callers skip snapshot/restore/GC entirely.
  */
@@ -35,7 +35,7 @@ export function resolveVersionedPluginDir(bundleDir: string): {
   const versionsRoot = dirname(pluginDir);
   const version = basename(pluginDir);
   if (!isSemver(version)) return null;
-  if (basename(versionsRoot) !== "hivemind") return null;
+  if (basename(versionsRoot) !== "memoree") return null;
   const cacheRoot = resolve(homedir(), ".claude", "plugins", "cache");
   let canonicalRoot = resolve(versionsRoot);
   let canonicalCache = cacheRoot;
@@ -195,14 +195,14 @@ export function restoreOrCleanup(handle: SnapshotHandle | null): RestoreOutcome 
 }
 
 /**
- * Read the currently-installed hivemind version from Claude's plugin
+ * Read the currently-installed memoree version from Claude's plugin
  * manifest. Null when the manifest is missing or malformed.
  */
 export function readCurrentVersionFromManifest(manifestPath: string): string | null {
   try {
     const raw = readFileSync(manifestPath, "utf-8");
     const parsed = JSON.parse(raw);
-    const entries = parsed?.plugins?.["hivemind@hivemind"];
+    const entries = parsed?.plugins?.["memoree@memoree"];
     if (!Array.isArray(entries)) return null;
     for (const e of entries) {
       if (typeof e?.version === "string" && isSemver(e.version)) return e.version;

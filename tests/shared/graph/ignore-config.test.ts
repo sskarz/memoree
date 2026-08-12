@@ -29,7 +29,7 @@ describe("loadGraphIgnore", () => {
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "graph-ignore-")); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-  it("seeds ~/.deeplake/graph-ignore.json with defaults on first call", () => {
+  it("seeds ~/.memoree/graph-ignore.json with defaults on first call", () => {
     const path = join(dir, "graph-ignore.json");
     expect(existsSync(path)).toBe(false);
     const cfg = loadGraphIgnore(dir);

@@ -7,7 +7,7 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 /**
  * Tests for src/cli/install-mcp-shared.ts. The shared MCP server installer
  * is invoked by Tier B consumers (Hermes, future Cline/Roo/Kilo wiring).
- * It owns one disk path: ~/.hivemind/mcp/.
+ * It owns one disk path: ~/.memoree/mcp/.
  */
 
 let tmpRoot: string;
@@ -45,13 +45,13 @@ async function importMcpShared(): Promise<typeof import("../../src/cli/install-m
 }
 
 describe("ensureMcpServerInstalled", () => {
-  it("creates ~/.hivemind/mcp/server.js and stamps the version", async () => {
-    const { ensureMcpServerInstalled, MCP_SERVER_PATH, HIVEMIND_DIR } = await importMcpShared();
+  it("creates ~/.memoree/mcp/server.js and stamps the version", async () => {
+    const { ensureMcpServerInstalled, MCP_SERVER_PATH, MEMOREE_DIR } = await importMcpShared();
     ensureMcpServerInstalled();
 
-    expect(MCP_SERVER_PATH).toBe(join(tmpHome, ".hivemind", "mcp", "server.js"));
+    expect(MCP_SERVER_PATH).toBe(join(tmpHome, ".memoree", "mcp", "server.js"));
     expect(existsSync(MCP_SERVER_PATH)).toBe(true);
-    expect(readFileSync(join(HIVEMIND_DIR, ".hivemind_version"), "utf-8")).toBe("5.5.5");
+    expect(readFileSync(join(MEMOREE_DIR, ".memoree_version"), "utf-8")).toBe("5.5.5");
   });
 
   it("is idempotent — re-install over an existing copy leaves a working server.js", async () => {

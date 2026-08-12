@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * Tests for src/hooks/hermes/pre-tool-use.ts.
  *
  * Hermes' pre_tool_call hook intercepts terminal commands aimed at
- * ~/.deeplake/memory and replies with `{action:"block", message:<sql result>}`.
+ * ~/.memoree/memory and replies with `{action:"block", message:<sql result>}`.
  * Same boundary mocks as the cursor variant, with the action+message
  * shape asserted instead of the cursor `permission/updated_input` shape.
  */
@@ -21,8 +21,8 @@ const stdoutWriteMock = vi.fn();
 vi.mock("../../src/utils/stdin.js", () => ({ readStdin: (...a: unknown[]) => stdinMock(...a) }));
 vi.mock("../../src/config.js", () => ({ loadConfig: (...a: unknown[]) => loadConfigMock(...a) }));
 vi.mock("../../src/utils/debug.js", () => ({ log: (_tag: string, msg: string) => debugLogMock(msg) }));
-vi.mock("../../src/deeplake-api.js", () => ({
-  DeeplakeApi: class { constructor(..._: unknown[]) {} },
+vi.mock("../../src/memoree-api.js", () => ({
+  MemoreeApi: class { constructor(..._: unknown[]) {} },
 }));
 vi.mock("../../src/hooks/grep-direct.js", () => ({
   parseBashGrep: (...a: unknown[]) => parseBashGrepMock(...a),
@@ -89,7 +89,7 @@ describe("hermes pre-tool-use hook — guards", () => {
   });
 
   it("loadConfig null → silent fall through", async () => {
-    stdinMock.mockResolvedValue({ tool_name: "terminal", tool_input: { command: "grep x ~/.deeplake/memory/" } });
+    stdinMock.mockResolvedValue({ tool_name: "terminal", tool_input: { command: "grep x ~/.memoree/memory/" } });
     loadConfigMock.mockReturnValue(null);
     await runHook();
     expect(handleGrepDirectMock).not.toHaveBeenCalled();
@@ -101,7 +101,7 @@ describe("hermes pre-tool-use hook — happy path", () => {
   it("emits {action:'block', message} containing the SQL result + MCP-tool nudge", async () => {
     stdinMock.mockResolvedValue({
       tool_name: "terminal",
-      tool_input: { command: "grep needle ~/.deeplake/memory/" },
+      tool_input: { command: "grep needle ~/.memoree/memory/" },
     });
     handleGrepDirectMock.mockResolvedValue("hit-1\nhit-2");
     await runHook();
@@ -110,13 +110,13 @@ describe("hermes pre-tool-use hook — happy path", () => {
     expect(payload.action).toBe("block");
     expect(payload.message).toContain("hit-1");
     expect(payload.message).toContain("hit-2");
-    expect(payload.message).toContain("hivemind_search MCP tool");
+    expect(payload.message).toContain("memoree_search MCP tool");
   });
 
   it("handleGrepDirect returns null → no JSON output (silent fall-through)", async () => {
     stdinMock.mockResolvedValue({
       tool_name: "terminal",
-      tool_input: { command: "grep zzz ~/.deeplake/memory/" },
+      tool_input: { command: "grep zzz ~/.memoree/memory/" },
     });
     handleGrepDirectMock.mockResolvedValue(null);
     await runHook();
@@ -126,7 +126,7 @@ describe("hermes pre-tool-use hook — happy path", () => {
   it("handleGrepDirect throws → silent fall-through (debug log present)", async () => {
     stdinMock.mockResolvedValue({
       tool_name: "terminal",
-      tool_input: { command: "grep x ~/.deeplake/memory/" },
+      tool_input: { command: "grep x ~/.memoree/memory/" },
     });
     handleGrepDirectMock.mockRejectedValue(new Error("net down"));
     await runHook();

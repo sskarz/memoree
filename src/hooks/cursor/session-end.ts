@@ -29,7 +29,7 @@ interface CursorSessionEndInput {
 }
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
   const input = await readStdin<CursorSessionEndInput>();
   const sessionId = input.conversation_id ?? input.session_id ?? "";
   log(`session=${sessionId || "?"} reason=${input.reason ?? "?"} status=${input.final_status ?? "?"}`);

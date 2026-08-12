@@ -56,7 +56,7 @@ describe("splitOrgSkill", () => {
     expect(splitOrgSkill("some-skill--first-last")).toEqual({ name: "some-skill", author: "first-last" });
   });
   it("rejects plugin-namespaced, bare, and malformed refs", () => {
-    expect(splitOrgSkill("hivemind:hivemind-memory")).toBeNull(); // plugin
+    expect(splitOrgSkill("memoree:memoree-memory")).toBeNull(); // plugin
     expect(splitOrgSkill("update-config")).toBeNull();            // bare
     expect(splitOrgSkill("baz--")).toBeNull();                    // empty author
   });
@@ -72,7 +72,7 @@ describe("listSkillInvocations", () => {
   it("coarse-prefilters on \"Skill\" then keeps only org-skill tool_calls", async () => {
     const { fn, calls } = mockQuery([
       toolCall("posthog-smoke--kamo"),                 // org → kept
-      toolCall("hivemind:hivemind-memory"),            // plugin → dropped
+      toolCall("memoree:memoree-memory"),            // plugin → dropped
       toolCall("update-config"),                       // bare → dropped
       { message: { type: "assistant_message", content: "mentions Skill" }, last_update_date: "t" }, // prose → dropped
       toolCall("pg-debug--sasun", "S2", "t2", true),   // org, stringified message → kept

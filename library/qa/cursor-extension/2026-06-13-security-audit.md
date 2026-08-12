@@ -17,7 +17,7 @@ No **Medium or higher** findings remain in scope after remediation review.
 | Webview XSS | User/session/rule/skill text routed through `esc()` before `innerHTML`; markdown summary lines escaped. |
 | CLI promote `--scope team` | Uses parameterized `insertSkillRow`; requires credentials via existing skillify config load. |
 | Org stats cache | Read-only HTTP with bearer token; stale/offline flags surfaced without exposing token values. |
-| Command execution | Dashboard invokes fixed `hivemind` argv arrays; no user-controlled shell interpolation. |
+| Command execution | Dashboard invokes fixed `memoree` argv arrays; no user-controlled shell interpolation. |
 | Symlink fan-out | Conflict paths reported; does not overwrite real files (lstat + skip). |
 
 ## Low / informational

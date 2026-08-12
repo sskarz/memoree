@@ -2,7 +2,7 @@
  * Docs auto-sync trigger — spawn a detached refresh when the user opted in.
  *
  * Two call sites feed it:
- *  - `hivemind graph build` (post-commit hook): the instant the build
+ *  - `memoree graph build` (post-commit hook): the instant the build
  *    finishes, the snapshot on disk is fresh, so this is the race-free place
  *    to detect drift and regenerate docs. We do NOT touch the hook body
  *    itself (shipped + tested) — we hang the trigger off the end of the
@@ -11,7 +11,7 @@
  *    commits and long-idle repos that post-commit alone misses.
  *
  * The ONLY gate is the per-(org, project) consent registry the user wrote
- * via `graph init` / `hivemind docs auto on` — no env var, OFF by default:
+ * via `graph init` / `memoree docs auto on` — no env var, OFF by default:
  * auto-refresh shells out to the host LLM, which costs tokens and time, so
  * consent is explicit per repo AND per org. The refresh runs in a detached
  * child so the caller never blocks on it.
@@ -30,8 +30,8 @@ export interface AutoRefreshDeps {
 }
 
 /**
- * Spawn `hivemind docs refresh --cwd <cwd>` (per-file docs) and
- * `hivemind docs wiki-refresh --cwd <cwd>` (subsystem pages) detached when
+ * Spawn `memoree docs refresh --cwd <cwd>` (per-file docs) and
+ * `memoree docs wiki-refresh --cwd <cwd>` (subsystem pages) detached when
  * auto-refresh is enabled. `ctx.full` adds `--full` to the per-file refresh
  * (hash-scan of ALL docs instead of the HEAD~1..HEAD git window) — the
  * SessionStart catch-up needs it because pulled or long-idle multi-commit

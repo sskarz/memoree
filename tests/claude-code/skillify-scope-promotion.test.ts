@@ -53,7 +53,7 @@ describe("isCrossAuthorMergeVerdict", () => {
     ).toBe(false);
   });
 
-  it("returns false for SKIP (defensive — worker never calls recordToDeeplake on SKIP, but the contract is the same)", () => {
+  it("returns false for SKIP (defensive — worker never calls recordToMemoree on SKIP, but the contract is the same)", () => {
     expect(
       isCrossAuthorMergeVerdict({
         verdict: "SKIP",

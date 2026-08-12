@@ -45,7 +45,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-/** Each test re-imports the module so its const HOME / HIVEMIND_DIR etc. capture
+/** Each test re-imports the module so its const HOME / MEMOREE_DIR etc. capture
  *  the current homedir at module-evaluation time, and so mocks are fresh. */
 async function loadModule() {
   vi.resetModules();
@@ -121,7 +121,7 @@ describe("maybeAutoMineLocal — guard branches", () => {
     });
     statSyncMock.mockReturnValue({ mtimeMs: Date.now() - 16 * 60 * 1000 } as any);
     readdirSyncMock.mockReturnValueOnce(["sub1"]).mockReturnValueOnce(["a.jsonl"]);
-    execFileSyncMock.mockReturnValue("/usr/local/bin/hivemind\n");
+    execFileSyncMock.mockReturnValue("/usr/local/bin/memoree\n");
     openSyncMock.mockReturnValue(42);
     const { maybeAutoMineLocal } = await loadModule();
     const r = maybeAutoMineLocal();
@@ -202,13 +202,13 @@ describe("maybeAutoMineLocal — guard branches", () => {
       if (call === 2) throw new Error("EACCES on broken");
       return ["session.jsonl"];
     });
-    execFileSyncMock.mockReturnValue("/usr/local/bin/hivemind\n");
+    execFileSyncMock.mockReturnValue("/usr/local/bin/memoree\n");
     openSyncMock.mockReturnValue(42);
     const { maybeAutoMineLocal } = await loadModule();
     expect(maybeAutoMineLocal().triggered).toBe(true);
   });
 
-  it("skips with reason=no-hivemind-bin when both bundled cli.js and PATH lookup fail", async () => {
+  it("skips with reason=no-memoree-bin when both bundled cli.js and PATH lookup fail", async () => {
     stageExists({
       "local-mined.json": false,
       "local-mined.lock": false,
@@ -218,10 +218,10 @@ describe("maybeAutoMineLocal — guard branches", () => {
     readdirSyncMock.mockReturnValueOnce(["sub"]).mockReturnValueOnce(["a.jsonl"]);
     execFileSyncMock.mockImplementation(() => { throw new Error("which: not found"); });
     const { maybeAutoMineLocal } = await loadModule();
-    expect(maybeAutoMineLocal()).toEqual({ triggered: false, reason: "no-hivemind-bin" });
+    expect(maybeAutoMineLocal()).toEqual({ triggered: false, reason: "no-memoree-bin" });
   });
 
-  it("skips with reason=no-hivemind-bin when `which hivemind` returns whitespace-only output", async () => {
+  it("skips with reason=no-memoree-bin when `which memoree` returns whitespace-only output", async () => {
     stageExists({
       "local-mined.json": false,
       "local-mined.lock": false,
@@ -231,7 +231,7 @@ describe("maybeAutoMineLocal — guard branches", () => {
     readdirSyncMock.mockReturnValueOnce(["sub"]).mockReturnValueOnce(["a.jsonl"]);
     execFileSyncMock.mockReturnValue("   \n");
     const { maybeAutoMineLocal } = await loadModule();
-    expect(maybeAutoMineLocal()).toEqual({ triggered: false, reason: "no-hivemind-bin" });
+    expect(maybeAutoMineLocal()).toEqual({ triggered: false, reason: "no-memoree-bin" });
   });
 
   it("prefers the bundled cli.js launcher when it exists (no `which` fallback)", async () => {
@@ -300,12 +300,12 @@ describe("maybeAutoMineLocal — guard branches", () => {
       "bundle/cli.js": false,
     });
     readdirSyncMock.mockReturnValueOnce(["sub"]).mockReturnValueOnce(["a.jsonl"]);
-    execFileSyncMock.mockReturnValue("/opt/homebrew/bin/hivemind\n");
+    execFileSyncMock.mockReturnValue("/opt/homebrew/bin/memoree\n");
     openSyncMock.mockReturnValue(42);
     const { maybeAutoMineLocal } = await loadModule();
     expect(maybeAutoMineLocal().triggered).toBe(true);
     const [cmd, args] = spawnMock.mock.calls[0];
-    expect(cmd).toBe("/opt/homebrew/bin/hivemind");
+    expect(cmd).toBe("/opt/homebrew/bin/memoree");
     expect(args).toEqual(["skillify", "mine-local"]);
   });
 

@@ -1,14 +1,14 @@
 /**
- * Read helpers for `hivemind_docs`.
+ * Read helpers for `memoree_docs`.
  *
  * The table is append-only with a per-doc version monotone (see ./write.ts).
  * Reads always pick the latest row per `doc_id`. Same shape as `src/rules/` —
  * v1 fetches the candidate rows and deduplicates in JS, portable across
- * whatever subset of Postgres window functions Deeplake exposes and fast
+ * whatever subset of Postgres window functions Memoree exposes and fast
  * enough at the expected per-repo scale (file counts in the hundreds).
  *
  * `doc_id` is the stable key = the documented source file path (e.g.
- * `src/shell/deeplake-fs.ts`). `anchors` is persisted as a JSON string and
+ * `src/shell/memoree-fs.ts`). `anchors` is persisted as a JSON string and
  * re-parsed here into `DocAnchor[]`; a malformed value degrades to `[]`
  * rather than throwing, so a single bad row never poisons a list read.
  */
@@ -16,7 +16,7 @@
 import { sqlIdent, sqlLike, sqlStr } from "../utils/sql.js";
 import { stableUnionRows } from "./stable-read.js";
 import { pickByScopePrecedence } from "./branch-scope.js";
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "../storage/schema.js";
 import type { StorageBackend } from "../storage/backend.js";
 
 export type QueryFn = ((sql: string) => Promise<Array<Record<string, unknown>>>) & {
@@ -31,7 +31,7 @@ export function storageQuery(backend: StorageBackend): QueryFn {
 }
 
 export function queryDialect(query: QueryFn): StorageDialect {
-  return query.dialect ?? "deeplake";
+  return query.dialect ?? "postgres";
 }
 
 /** Doc tier — `fast` per-file docs vs `slow` protected project knowledge. */
@@ -45,7 +45,7 @@ export interface DocAnchor {
   content_hash: string;
 }
 
-/** Shape of one row in `hivemind_docs` — mirrors DOCS_COLUMNS exactly. */
+/** Shape of one row in `memoree_docs` — mirrors DOCS_COLUMNS exactly. */
 export interface DocRow {
   id: string;
   doc_id: string;
@@ -163,7 +163,7 @@ export async function listDocs(
   opts: ListDocsOpts = {},
 ): Promise<DocRow[]> {
   const safe = sqlIdent(tableName);
-  // Read through the stability gate: the Deeplake backend can return a partial
+  // Read through the stability gate: the Memoree backend can return a partial
   // row set right after writes, which would make a refresh silently skip stale
   // docs. stableUnionRows re-reads until the union converges so we see EVERY
   // row. (ORDER BY is moot through the union — we re-sort after dedup below.)
@@ -445,7 +445,7 @@ export function parseAnchors(raw: unknown): DocAnchor[] {
 }
 
 /**
- * Coerce a row from the Deeplake API client into a typed DocRow. The client
+ * Coerce a row from the Memoree API client into a typed DocRow. The client
  * returns `Record<string, unknown>` because it has no schema awareness —
  * this is where we re-attach the static type and parse `anchors`.
  */

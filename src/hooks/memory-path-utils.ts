@@ -1,9 +1,9 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const MEMORY_PATH = join(homedir(), ".deeplake", "memory");
-export const TILDE_PATH = "~/.deeplake/memory";
-export const HOME_VAR_PATH = "$HOME/.deeplake/memory";
+export const MEMORY_PATH = join(homedir(), ".memoree", "memory");
+export const TILDE_PATH = "~/.memoree/memory";
+export const HOME_VAR_PATH = "$HOME/.memoree/memory";
 
 export const SAFE_BUILTINS = new Set([
   "cat", "ls", "cp", "mv", "rm", "rmdir", "mkdir", "touch", "ln", "chmod",
@@ -90,8 +90,8 @@ function escapeRe(s: string): string {
 
 // A mount prefix only counts when it is the mount root or a descendant — i.e.
 // followed by `/`, end-of-string, or a non-path character. Matching it as a
-// bare substring false-positives on siblings like `~/.deeplake/memory-backup/x`
-// and on literals like `grep "~/.deeplake/memory" README.md`.
+// bare substring false-positives on siblings like `~/.memoree/memory-backup/x`
+// and on literals like `grep "~/.memoree/memory" README.md`.
 const MEMORY_BOUNDARY = "(?![A-Za-z0-9._-])";
 const MEMORY_PREFIX_RE = new RegExp(
   "(?:" + [MEMORY_PATH, TILDE_PATH, HOME_VAR_PATH].map(escapeRe).join("|") + ")" + MEMORY_BOUNDARY,

@@ -7,7 +7,7 @@ import { SqliteBackend } from "../../src/storage/sqlite.js";
 import { embeddingSqlLiteral } from "../../src/embeddings/sql.js";
 import { buildDirectSessionInsertSql } from "../../src/hooks/shared/session-insert-sql.js";
 import { readVirtualPathContent } from "../../src/hooks/virtual-table-query.js";
-import { searchDeeplakeTables, searchDocs } from "../../src/shell/grep-core.js";
+import { searchMemoreeTables, searchDocs } from "../../src/shell/grep-core.js";
 import { storageQuery } from "../../src/docs/read.js";
 import { upsertDoc } from "../../src/docs/write.js";
 import { insertRule } from "../../src/rules/write.js";
@@ -20,10 +20,10 @@ const names = {
   memory: "memory",
   sessions: "sessions",
   skills: "skills",
-  rules: "hivemind_rules",
-  goals: "hivemind_goals",
-  kpis: "hivemind_kpis",
-  docs: "hivemind_docs",
+  rules: "memoree_rules",
+  goals: "memoree_goals",
+  kpis: "memoree_kpis",
+  docs: "memoree_docs",
   codebase: "codebase",
 };
 
@@ -31,7 +31,7 @@ let root: string;
 let backend: SqliteBackend;
 
 beforeEach(async () => {
-  root = mkdtempSync(join(tmpdir(), "hivemind-sqlite-feature-"));
+  root = mkdtempSync(join(tmpdir(), "memoree-sqlite-feature-"));
   backend = new SqliteBackend(join(root, "memory.sqlite3"), "memory", names);
   await backend.initializeSchema();
 });
@@ -77,7 +77,7 @@ describe("SQLite feature parity smoke", () => {
     expect(await readVirtualPathContent(backend, "memory", "sessions", sessionPath))
       .toContain("Find the blue widget");
 
-    const lexical = await searchDeeplakeTables(backend, "memory", "sessions", {
+    const lexical = await searchMemoreeTables(backend, "memory", "sessions", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -87,7 +87,7 @@ describe("SQLite feature parity smoke", () => {
     });
     expect(lexical.map(row => row.path)).toContain("/summaries/alice/one.md");
 
-    const semantic = await searchDeeplakeTables(backend, "memory", "sessions", {
+    const semantic = await searchMemoreeTables(backend, "memory", "sessions", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -100,7 +100,7 @@ describe("SQLite feature parity smoke", () => {
 
   it("searches docs lexically and with application-side cosine scoring", async () => {
     const query = storageQuery(backend);
-    await upsertDoc(query, "hivemind_docs", {
+    await upsertDoc(query, "memoree_docs", {
       doc_id: "src/auth.ts",
       path: "/docs/src/auth.ts.md",
       content: "Token minting happens here",
@@ -108,7 +108,7 @@ describe("SQLite feature parity smoke", () => {
       content_embedding: [1, 0],
     });
 
-    const lexical = await searchDocs(query, "hivemind_docs", {
+    const lexical = await searchDocs(query, "memoree_docs", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -118,7 +118,7 @@ describe("SQLite feature parity smoke", () => {
     }, "sqlite");
     expect(lexical.map(row => row.path)).toEqual(["src/auth.ts"]);
 
-    const semantic = await searchDocs(query, "hivemind_docs", {
+    const semantic = await searchDocs(query, "memoree_docs", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -146,26 +146,20 @@ describe("SQLite feature parity smoke", () => {
       .toEqual([{ description: "in progress" }]);
 
     const query = storageQuery(backend);
-    const rule = await insertRule(query, "hivemind_rules", {
+    const rule = await insertRule(query, "memoree_rules", {
       text: "Use the local backend",
       assigned_by: "alice",
     }, "sqlite");
-    expect(await backend.query(`SELECT text FROM "hivemind_rules" WHERE rule_id = $1`, [rule.rule_id]))
+    expect(await backend.query(`SELECT text FROM "memoree_rules" WHERE rule_id = $1`, [rule.rule_id]))
       .toEqual([{ text: "Use the local backend" }]);
   });
 });
 
 registerSqlStorageFeatureParity("SQLite", true, async () => {
-  const parityRoot = mkdtempSync(join(tmpdir(), "hivemind-sqlite-parity-"));
+  const parityRoot = mkdtempSync(join(tmpdir(), "memoree-sqlite-parity-"));
   const databasePath = join(parityRoot, "memory.sqlite3");
   const configPath = join(parityRoot, "config.json");
-  mkdirSync(join(parityRoot, ".deeplake"), { recursive: true });
-  writeFileSync(join(parityRoot, ".deeplake", "credentials.json"), JSON.stringify({
-    token: "unused-local-token",
-    orgId: "local",
-    userName: "alice",
-    workspaceId: "default",
-  }));
+  mkdirSync(join(parityRoot, ".memoree"), { recursive: true });
   const storage: SqliteStorageConfig = {
     kind: "sqlite",
     path: databasePath,
@@ -176,10 +170,10 @@ registerSqlStorageFeatureParity("SQLite", true, async () => {
     tableName: "memory",
     sessionsTableName: "sessions",
     skillsTableName: "skills",
-    rulesTableName: "hivemind_rules",
-    goalsTableName: "hivemind_goals",
-    kpisTableName: "hivemind_kpis",
-    docsTableName: "hivemind_docs",
+    rulesTableName: "memoree_rules",
+    goalsTableName: "memoree_goals",
+    kpisTableName: "memoree_kpis",
+    docsTableName: "memoree_docs",
     codebaseTableName: "codebase",
     memoryPath: join(parityRoot, "memory"),
     vectorScanLimit: 100,
@@ -193,11 +187,12 @@ registerSqlStorageFeatureParity("SQLite", true, async () => {
       ...process.env,
       HOME: parityRoot,
       USERPROFILE: parityRoot,
-      HIVEMIND_BACKEND: "sqlite",
-      HIVEMIND_SQLITE_PATH: databasePath,
-      HIVEMIND_CONFIG_PATH: configPath,
-      HIVEMIND_EMBEDDINGS: "false",
-      HIVEMIND_MEMORY_PATH: storage.memoryPath,
+      MEMOREE_BACKEND: "sqlite",
+      MEMOREE_SQLITE_PATH: databasePath,
+      MEMOREE_USER_NAME: "alice",
+      MEMOREE_CONFIG_PATH: configPath,
+      MEMOREE_EMBEDDINGS: "false",
+      MEMOREE_MEMORY_PATH: storage.memoryPath,
     },
     malformedVector: "not-json",
     cleanup: async () => {

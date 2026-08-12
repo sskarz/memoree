@@ -60,7 +60,7 @@ Format: **entity** (type) — what was done with it, its current state>
 Examples:
 "- The memory table uses DELETE+INSERT, not UPDATE (WASM doesn't support upsert)"
 "- The staging verification token is QX7341-ZULU-STAGING (set in config key auth.staging_token)"
-"- DEEPLAKE_SNAPSHOT_RESTORE_ON_CLAIM was flipped from 1 to 0 to stop the eviction race">
+"- MEMOREE_SNAPSHOT_RESTORE_ON_CLAIM was flipped from 1 to 0 to stop the eviction race">
 
 ## Files Modified
 <bullet list: path (new/modified/deleted) — what changed>
@@ -97,7 +97,7 @@ export function spawnWikiWorker(opts: SpawnOptions): void {
   const { config, sessionId, cwd, bundleDir, reason } = opts;
   const projectName = projectNameFromCwd(cwd);
 
-  const tmpDir = join(tmpdir(), `deeplake-wiki-${sessionId}-${Date.now()}`);
+  const tmpDir = join(tmpdir(), `memoree-wiki-${sessionId}-${Date.now()}`);
   mkdirSync(tmpDir, { recursive: true });
 
   const pluginVersion = getInstalledVersion(bundleDir, ".claude-plugin") ?? "";
@@ -105,9 +105,7 @@ export function spawnWikiWorker(opts: SpawnOptions): void {
   const configFile = join(tmpDir, "config.json");
   writeFileSync(configFile, JSON.stringify({
     storage: {
-      kind: config.storage?.kind ?? "deeplake",
-      orgId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.orgId : undefined,
-      workspaceId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.workspaceId : undefined,
+      kind: config.storage.kind,
     },
     memoryTable: config.tableName,
     sessionsTable: config.sessionsTableName,

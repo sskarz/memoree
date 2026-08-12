@@ -30,7 +30,7 @@ describe("markSkillPending (shape gate + manifest gate + K-window + tool_use_id)
   it("ignores bare local and plugin skills (wrong shape → not org)", () => {
     const s = memStore();
     expect(markSkillPending("s1", "bareskill", "tu", { store: s.store, isOrgSkill: ORG })).toBe(false);
-    expect(markSkillPending("s1", "hivemind:memory", "tu", { store: s.store, isOrgSkill: ORG })).toBe(false);
+    expect(markSkillPending("s1", "memoree:memory", "tu", { store: s.store, isOrgSkill: ORG })).toBe(false);
     expect(s.get("s1")).toBeNull();
   });
 
@@ -97,8 +97,8 @@ describe("runEventTrigger", () => {
   });
 
   it("respects the kill switch, recursion guard, and logged-out state", () => {
-    expect(harness({ env: { HIVEMIND_SKILLOPT_DISABLED: "1" } as never }).run("s1", "x").reason).toBe("disabled");
-    expect(harness({ env: { HIVEMIND_SKILLOPT_WORKER: "1" } as never }).run("s1", "x").reason).toBe("in-worker");
+    expect(harness({ env: { MEMOREE_SKILLOPT_DISABLED: "1" } as never }).run("s1", "x").reason).toBe("disabled");
+    expect(harness({ env: { MEMOREE_SKILLOPT_WORKER: "1" } as never }).run("s1", "x").reason).toBe("in-worker");
     const lo = harness({ canFire: () => false });
     expect(lo.run("s1", "x")).toEqual({ fired: false, reason: "no-creds" });
     expect(lo.spawnWorker).not.toHaveBeenCalled();
@@ -108,9 +108,9 @@ describe("runEventTrigger", () => {
 describe("judgeWindow", () => {
   it("defaults to 3, env-overridable, rejects garbage/non-positive", () => {
     expect(judgeWindow({} as NodeJS.ProcessEnv)).toBe(3);
-    expect(judgeWindow({ HIVEMIND_SKILLOPT_JUDGE_WINDOW: "5" } as never)).toBe(5);
-    expect(judgeWindow({ HIVEMIND_SKILLOPT_JUDGE_WINDOW: "0" } as never)).toBe(3);
-    expect(judgeWindow({ HIVEMIND_SKILLOPT_JUDGE_WINDOW: "x" } as never)).toBe(3);
+    expect(judgeWindow({ MEMOREE_SKILLOPT_JUDGE_WINDOW: "5" } as never)).toBe(5);
+    expect(judgeWindow({ MEMOREE_SKILLOPT_JUDGE_WINDOW: "0" } as never)).toBe(3);
+    expect(judgeWindow({ MEMOREE_SKILLOPT_JUDGE_WINDOW: "x" } as never)).toBe(3);
   });
 });
 
@@ -118,8 +118,8 @@ describe("judgeWindow", () => {
 // dependency-injected tests above never touch — these are the trigger's actual side effects.
 describe("default fileStore + spawnWorker (real implementations)", () => {
   let tmp: string;
-  beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), "skillopt-trig-")); process.env.HIVEMIND_STATE_DIR = tmp; spawnMock.mockClear(); });
-  afterEach(() => { delete process.env.HIVEMIND_STATE_DIR; });
+  beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), "skillopt-trig-")); process.env.MEMOREE_STATE_DIR = tmp; spawnMock.mockClear(); });
+  afterEach(() => { delete process.env.MEMOREE_STATE_DIR; });
 
   it("persists the pending window to a per-session file and reads it back across mark→react", () => {
     // arm via the REAL fileStore (no injected store), org-gate injected
@@ -136,16 +136,16 @@ describe("default fileStore + spawnWorker (real implementations)", () => {
     runEventTrigger("fs-b", "you broke it", { agent: "codex", deps: { canFire: () => true, env: {} as never } });
     const [bin, args, opts] = spawnMock.mock.calls[0] as unknown as [string, string[], { env: Record<string, string> }];
     expect(args[0]).toContain("skillopt-worker.js");
-    expect(opts.env.HIVEMIND_SKILLOPT_WORKER).toBe("1");
-    expect(opts.env.HIVEMIND_SKILLOPT_SESSION).toBe("fs-b");
-    expect(opts.env.HIVEMIND_SKILLOPT_SKILL).toBe("x--a");
-    expect(opts.env.HIVEMIND_SKILLOPT_REACTION).toBe("you broke it");
-    expect(opts.env.HIVEMIND_SKILLOPT_TOOL_USE_ID).toBe("tuZ");
-    expect(opts.env.HIVEMIND_SKILLOPT_AGENT).toBe("codex");
+    expect(opts.env.MEMOREE_SKILLOPT_WORKER).toBe("1");
+    expect(opts.env.MEMOREE_SKILLOPT_SESSION).toBe("fs-b");
+    expect(opts.env.MEMOREE_SKILLOPT_SKILL).toBe("x--a");
+    expect(opts.env.MEMOREE_SKILLOPT_REACTION).toBe("you broke it");
+    expect(opts.env.MEMOREE_SKILLOPT_TOOL_USE_ID).toBe("tuZ");
+    expect(opts.env.MEMOREE_SKILLOPT_AGENT).toBe("codex");
   });
 
   it("react closes the window (deletes the file) when the last budget is spent", () => {
-    markSkillPending("fs-c", "y--b", undefined, { isOrgSkill: () => true, env: { HIVEMIND_SKILLOPT_JUDGE_WINDOW: "1" } as never });
+    markSkillPending("fs-c", "y--b", undefined, { isOrgSkill: () => true, env: { MEMOREE_SKILLOPT_JUDGE_WINDOW: "1" } as never });
     runEventTrigger("fs-c", "still wrong", { deps: { canFire: () => true, env: {} as never } });
     expect(existsSync(join(tmp, "skillopt", "pending", "fs-c.json"))).toBe(false); // budget 1 → cleared
   });

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 /**
  * SINGLE-SOURCE-OF-TRUTH GUARD for per-directory workspace routing.
  *
- * `.hivemind` routing broke repeatedly because it was wired writer-by-writer:
+ * `.memoree` routing broke repeatedly because it was wired writer-by-writer:
  * each new code path that built a storage backend from a raw `loadConfig()` silently
  * wrote/read the GLOBAL workspace instead of the directory's routed one (the
  * skillify/goals/rules/other-agent bugs). This test makes that class of
@@ -27,9 +27,13 @@ const SRC = join(__dir, "..", "..", "src");
 
 /**
  * Files that build a storage backend but intentionally do NOT route through
- * `.hivemind`. Each MUST carry a reason — this list is the audit trail.
+ * `.memoree`. Each MUST carry a reason — this list is the audit trail.
  */
 const ALLOWLIST: Record<string, string> = {
+  "cli/index.ts":
+    "Installation initializes the selected global backend before any repository overlay exists.",
+  "commands/doctor.ts":
+    "Doctor validates the globally selected database and installation state, independent of the current repository.",
   "commands/backend.ts":
     "Global provider selection and connectivity checks are user-level configuration, not directory workspace operations.",
   "hooks/worker-storage.ts":
@@ -37,13 +41,9 @@ const ALLOWLIST: Record<string, string> = {
   "commands/session-prune.ts":
     "Account-level cleanup of the user's own sessions; not scoped to a directory's workspace.",
   "commands/docs.ts":
-    "Docs use a separate per-(org,repo) consent + project-key model, not .hivemind workspace routing.",
+    "Docs use a separate per-(org,repo) consent + project-key model, not per-repository routing.",
   "mcp/cowork-ingest.ts":
     "Claude Cowork (desktop) has no directory context — a fixed COWORK_PROJECT, nothing to route on.",
-  "notifications/sources/resume-brief.ts":
-    "Display-only read built from creds.workspaceId; routing it means threading a resolved workspace in — tracked follow-up, not a silent writer.",
-  "notifications/sources/open-goals.ts":
-    "Display-only read (banner open-goals) built from the passed-in creds, not loadConfig — same follow-up as resume-brief.",
 };
 
 const ROUTER_TOKENS = ["loadRoutedConfig", "resolveDirConfig", "resolveCaptureConfig"];
@@ -65,16 +65,16 @@ function rel(abs: string): string {
 
 describe("dir-config single source of truth", () => {
   const files = walk(SRC);
-  const isBackendSite = (src: string) => src.includes("createStorageBackend(") || src.includes("new DeeplakeApi(");
-  const providerInfrastructure = new Set(["storage/factory.ts", "deeplake-api.ts"]);
+  const isBackendSite = (src: string) => src.includes("createStorageBackend(") || src.includes("new MemoreeApi(");
+  const providerInfrastructure = new Set(["storage/factory.ts", "memoree-api.ts"]);
   const apiSites = files.filter((f) => !providerInfrastructure.has(rel(f)) && isBackendSite(readFileSync(f, "utf-8")));
 
-  it("finds DeeplakeApi construction sites to guard (sanity)", () => {
+  it("finds MemoreeApi construction sites to guard (sanity)", () => {
     // If this ever hits 0 the glob/walk broke and the guard is silently vacuous.
     expect(apiSites.length).toBeGreaterThan(20);
   });
 
-  it("every DeeplakeApi site routes through .hivemind or is allow-listed with a reason", () => {
+  it("every MemoreeApi site routes through .memoree or is allow-listed with a reason", () => {
     const offenders: string[] = [];
     for (const abs of apiSites) {
       const key = rel(abs);

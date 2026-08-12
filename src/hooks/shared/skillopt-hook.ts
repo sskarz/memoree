@@ -50,7 +50,7 @@ export function reactSkillOpt(sessionId: string, prompt: string | undefined, age
   try {
     // Empty/whitespace prompt isn't a reaction — firing on it would spend the judgment
     // budget and spawn a worker with no signal.
-    if (prompt === undefined || prompt.trim() === "" || process.env.HIVEMIND_WIKI_WORKER === "1") return;
+    if (prompt === undefined || prompt.trim() === "" || process.env.MEMOREE_WIKI_WORKER === "1") return;
     runEventTrigger(sessionId, prompt, { agent });
   } catch { /* never break capture */ }
 }

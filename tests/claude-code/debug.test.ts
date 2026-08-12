@@ -6,10 +6,10 @@ import { join } from "node:path";
 /**
  * Tests for src/utils/debug.ts — two tiny helpers:
  *   - utcTimestamp(d?) formats a Date as `YYYY-MM-DD HH:MM:SS UTC`.
- *   - log(tag, msg) appends a line to ~/.deeplake/hook-debug.log only when
- *     HIVEMIND_DEBUG === "1"; it's a no-op otherwise.
+ *   - log(tag, msg) appends a line to ~/.memoree/hook-debug.log only when
+ *     MEMOREE_DEBUG === "1"; it's a no-op otherwise.
  *
- * The module reads HIVEMIND_DEBUG at import time (top-level const DEBUG),
+ * The module reads MEMOREE_DEBUG at import time (top-level const DEBUG),
  * so each test sets the env var before doing a fresh dynamic import via
  * vi.resetModules() + await import().
  */
@@ -32,11 +32,11 @@ beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "debug-test-"));
   homedirMock.mockReset().mockReturnValue(tmp);
   appendFileSyncMock.mockReset();
-  delete process.env.HIVEMIND_DEBUG;
+  delete process.env.MEMOREE_DEBUG;
 });
 
 afterEach(() => {
-  delete process.env.HIVEMIND_DEBUG;
+  delete process.env.MEMOREE_DEBUG;
   try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
@@ -60,27 +60,27 @@ describe("utcTimestamp", () => {
 });
 
 describe("log", () => {
-  it("is a no-op when HIVEMIND_DEBUG is unset", async () => {
+  it("is a no-op when MEMOREE_DEBUG is unset", async () => {
     const { log } = await importDebug();
     log("tag", "msg");
     expect(appendFileSyncMock).not.toHaveBeenCalled();
   });
 
-  it("is a no-op when HIVEMIND_DEBUG is '0' (only '1' enables it)", async () => {
-    process.env.HIVEMIND_DEBUG = "0";
+  it("is a no-op when MEMOREE_DEBUG is '0' (only '1' enables it)", async () => {
+    process.env.MEMOREE_DEBUG = "0";
     const { log } = await importDebug();
     log("tag", "msg");
     expect(appendFileSyncMock).not.toHaveBeenCalled();
   });
 
-  it("appends to ~/.deeplake/hook-debug.log when HIVEMIND_DEBUG === '1'", async () => {
-    process.env.HIVEMIND_DEBUG = "1";
+  it("appends to ~/.memoree/hook-debug.log when MEMOREE_DEBUG === '1'", async () => {
+    process.env.MEMOREE_DEBUG = "1";
     const { log } = await importDebug();
     log("pre-tool-use", "reading /sessions/alice.jsonl");
 
     expect(appendFileSyncMock).toHaveBeenCalledTimes(1);
     const [path, line] = appendFileSyncMock.mock.calls[0];
-    expect(path).toBe(join(tmp, ".deeplake", "hook-debug.log"));
+    expect(path).toBe(join(tmp, ".memoree", "hook-debug.log"));
     expect(line).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[pre-tool-use\] reading \/sessions\/alice\.jsonl\n$/,
     );

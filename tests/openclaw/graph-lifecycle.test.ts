@@ -10,15 +10,15 @@ import {
 describe("openclaw graph-lifecycle", () => {
   beforeEach(() => {
     resetGraphPullSpawnedForTests();
-    delete (globalThis as Record<string, unknown>).__hivemind_tuning__;
-    delete process.env.HIVEMIND_GRAPH_CWD;
-    delete process.env.HIVEMIND_GRAPH_ON_STOP;
-    delete process.env.HIVEMIND_GRAPH_PULL;
+    delete (globalThis as Record<string, unknown>).__memoree_tuning__;
+    delete process.env.MEMOREE_GRAPH_CWD;
+    delete process.env.MEMOREE_GRAPH_ON_STOP;
+    delete process.env.MEMOREE_GRAPH_PULL;
   });
 
   it("resolveGraphCwd prefers tuning dispatch over process.cwd()", () => {
-    (globalThis as Record<string, unknown>).__hivemind_tuning__ = {
-      HIVEMIND_GRAPH_CWD: "/repo/from/tuning",
+    (globalThis as Record<string, unknown>).__memoree_tuning__ = {
+      MEMOREE_GRAPH_CWD: "/repo/from/tuning",
     };
     expect(resolveGraphCwd()).toBe("/repo/from/tuning");
   });
@@ -39,8 +39,8 @@ describe("openclaw graph-lifecycle", () => {
     );
   });
 
-  it("spawnOpenclawGraphOnStop is a no-op when HIVEMIND_GRAPH_ON_STOP=0", () => {
-    process.env.HIVEMIND_GRAPH_ON_STOP = "0";
+  it("spawnOpenclawGraphOnStop is a no-op when MEMOREE_GRAPH_ON_STOP=0", () => {
+    process.env.MEMOREE_GRAPH_ON_STOP = "0";
     const spawn = vi.fn();
     spawnOpenclawGraphOnStop("/dist/graph-on-stop.js", "/my/repo", {
       spawn,
@@ -65,8 +65,8 @@ describe("openclaw graph-lifecycle", () => {
     );
   });
 
-  it("spawnOpenclawGraphPullWorker is a no-op when HIVEMIND_GRAPH_PULL=0", () => {
-    process.env.HIVEMIND_GRAPH_PULL = "0";
+  it("spawnOpenclawGraphPullWorker is a no-op when MEMOREE_GRAPH_PULL=0", () => {
+    process.env.MEMOREE_GRAPH_PULL = "0";
     const spawn = vi.fn();
     spawnOpenclawGraphPullWorker("/dist/graph-pull-worker.js", "/my/repo", {
       spawn,

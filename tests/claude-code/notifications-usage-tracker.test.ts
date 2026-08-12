@@ -26,7 +26,7 @@ function rec(over: Partial<UsageRecord> = {}): UsageRecord {
 }
 
 beforeEach(() => {
-  TEMP_HOME = mkdtempSync(join(tmpdir(), "hivemind-usage-test-"));
+  TEMP_HOME = mkdtempSync(join(tmpdir(), "memoree-usage-test-"));
   ORIGINAL_HOME = process.env.HOME;
   setFakeHome(TEMP_HOME);
 });
@@ -37,9 +37,9 @@ afterEach(() => {
 });
 
 describe("usage-tracker — append/read", () => {
-  it("appendUsageRecord creates ~/.deeplake/usage-stats.jsonl with one JSONL line", () => {
+  it("appendUsageRecord creates ~/.memoree/usage-stats.jsonl with one JSONL line", () => {
     appendUsageRecord(rec({ sessionId: "s-1", memorySearchBytes: 6000 }));
-    const file = join(TEMP_HOME, ".deeplake", "usage-stats.jsonl");
+    const file = join(TEMP_HOME, ".memoree", "usage-stats.jsonl");
     expect(existsSync(file)).toBe(true);
     const content = readFileSync(file, "utf-8");
     expect(content).toMatch(/"sessionId":"s-1"/);
@@ -56,9 +56,9 @@ describe("usage-tracker — append/read", () => {
   });
 
   it("appendUsageRecord creates the parent directory if missing", () => {
-    expect(existsSync(join(TEMP_HOME, ".deeplake"))).toBe(false);
+    expect(existsSync(join(TEMP_HOME, ".memoree"))).toBe(false);
     appendUsageRecord(rec());
-    expect(existsSync(join(TEMP_HOME, ".deeplake"))).toBe(true);
+    expect(existsSync(join(TEMP_HOME, ".memoree"))).toBe(true);
   });
 
   it("appendUsageRecord swallows errors when HOME points at a non-directory", () => {
@@ -73,8 +73,8 @@ describe("usage-tracker — append/read", () => {
   });
 
   it("readUsageRecords skips malformed lines individually", () => {
-    const file = join(TEMP_HOME, ".deeplake", "usage-stats.jsonl");
-    mkdirSync(join(TEMP_HOME, ".deeplake"));
+    const file = join(TEMP_HOME, ".memoree", "usage-stats.jsonl");
+    mkdirSync(join(TEMP_HOME, ".memoree"));
     const goodLine = JSON.stringify(rec({ sessionId: "good" }));
     writeFileSync(
       file,
@@ -86,8 +86,8 @@ describe("usage-tracker — append/read", () => {
   });
 
   it("readUsageRecords backward-compat: accepts records missing memorySearchCount (defaults to 0)", () => {
-    const file = join(TEMP_HOME, ".deeplake", "usage-stats.jsonl");
-    mkdirSync(join(TEMP_HOME, ".deeplake"));
+    const file = join(TEMP_HOME, ".memoree", "usage-stats.jsonl");
+    mkdirSync(join(TEMP_HOME, ".memoree"));
     // Simulate a record written by a prior parser version: no memorySearchCount.
     const legacy = JSON.stringify({
       endedAt: "2026-05-12T18:09:18Z",
@@ -103,8 +103,8 @@ describe("usage-tracker — append/read", () => {
   });
 
   it("readUsageRecords backward-compat: accepts records missing memorySearchBytes (defaults to 0)", () => {
-    const file = join(TEMP_HOME, ".deeplake", "usage-stats.jsonl");
-    mkdirSync(join(TEMP_HOME, ".deeplake"));
+    const file = join(TEMP_HOME, ".memoree", "usage-stats.jsonl");
+    mkdirSync(join(TEMP_HOME, ".memoree"));
     const legacy = JSON.stringify({
       endedAt: "2026-05-12T18:09:18Z",
       sessionId: "legacy-record",
@@ -118,8 +118,8 @@ describe("usage-tracker — append/read", () => {
   });
 
   it("readUsageRecords still drops records missing the strict minimum (endedAt or sessionId)", () => {
-    const file = join(TEMP_HOME, ".deeplake", "usage-stats.jsonl");
-    mkdirSync(join(TEMP_HOME, ".deeplake"));
+    const file = join(TEMP_HOME, ".memoree", "usage-stats.jsonl");
+    mkdirSync(join(TEMP_HOME, ".memoree"));
     const noEnded = JSON.stringify({ sessionId: "x", memorySearchBytes: 0, memorySearchCount: 0 });
     const noSession = JSON.stringify({ endedAt: "2026-05-12T00:00:00Z", memorySearchBytes: 0, memorySearchCount: 0 });
     const good = JSON.stringify(rec({ sessionId: "valid" }));
@@ -128,8 +128,8 @@ describe("usage-tracker — append/read", () => {
   });
 
   it("readUsageRecords ignores blank lines without warning", () => {
-    const file = join(TEMP_HOME, ".deeplake", "usage-stats.jsonl");
-    mkdirSync(join(TEMP_HOME, ".deeplake"));
+    const file = join(TEMP_HOME, ".memoree", "usage-stats.jsonl");
+    mkdirSync(join(TEMP_HOME, ".memoree"));
     writeFileSync(
       file,
       `\n\n${JSON.stringify(rec({ sessionId: "only-real" }))}\n\n`,
@@ -168,7 +168,7 @@ describe("usage-tracker — statsFilePath", () => {
 
   it("re-resolves when HOME changes between calls", () => {
     const first = statsFilePath();
-    const otherHome = mkdtempSync(join(tmpdir(), "hivemind-usage-test-other-"));
+    const otherHome = mkdtempSync(join(tmpdir(), "memoree-usage-test-other-"));
     try {
       setFakeHome(otherHome);
       const second = statsFilePath();
@@ -199,7 +199,7 @@ describe("countUserGeneratedSkills", () => {
     mkdirSync(join(dir, "skill-two--kamo.aghbalyan"));
     mkdirSync(join(dir, "skill-three--kamo.aghbalyan"));
     mkdirSync(join(dir, "other-skill--levon"));         // different author
-    mkdirSync(join(dir, "hivemind-openclaw-capture"));  // no author suffix
+    mkdirSync(join(dir, "memoree-openclaw-capture"));  // no author suffix
     const { countUserGeneratedSkills } = await import("../../src/notifications/usage-tracker.js");
     expect(countUserGeneratedSkills("kamo.aghbalyan")).toBe(3);
   });

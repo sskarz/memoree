@@ -1,15 +1,15 @@
 {
-  "name": "hivemind",
+  "name": "memoree",
   "version": "0.7.145",
   "type": "module",
-  "description": "Hivemind — persistent shared memory for AI agents with pluggable storage",
+  "description": "Memoree — persistent shared memory for AI agents with pluggable storage",
   "license": "Apache-2.0",
   "openclaw": {
     "extensions": [
       "./dist/index.js"
     ],
     "install": {
-      "npmSpec": "@deeplake/hivemind",
+      "npmSpec": "memoree",
       "minHostVersion": ">=2026.3.22"
     },
     "compat": {

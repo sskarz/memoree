@@ -1,7 +1,7 @@
 /**
- * Manual local -> Deeplake skill upload — the inverse of `pull`.
+ * Manual local -> Memoree skill upload — the inverse of `pull`.
  *
- * `hivemind skillify push <name>` reads an existing
+ * `memoree skillify push <name>` reads an existing
  * <skillsRoot>/<name>/SKILL.md and writes it to the org `skills` table as a
  * fresh append-only version. This is the escape hatch for skills the
  * background mining worker never produced: a skill Claude wrote during a
@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { parseFrontmatter, resolveSkillsRoot, assertValidSkillName } from "./skill-writer.js";
 import { insertSkillRow } from "./skills-table.js";
 import { readCurrentSkillRow, type CurrentSkillRow } from "./skill-org-publish.js";
-import { isMissingTableError } from "../deeplake-schema.js";
+import { isMissingTableError } from "../storage/schema.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import type { Scope } from "./scope-config.js";
 

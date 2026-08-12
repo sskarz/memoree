@@ -25,7 +25,7 @@ describe("extractText", () => {
     const content = [
       { type: "thinking", thinking: "hmm", signature: "x" },
       { type: "text", text: "first" },
-      { type: "tool_use", name: "hivemind_search", input: {} },
+      { type: "tool_use", name: "memoree_search", input: {} },
       { type: "text", text: "second" },
     ];
     expect(extractText(content)).toBe("first\nsecond");
@@ -69,7 +69,7 @@ describe("entriesForLine", () => {
       message: {
         content: [
           { type: "text", text: "let me search" },
-          { type: "tool_use", id: "toolu_1", name: "hivemind_search", input: { query: "x" } },
+          { type: "tool_use", id: "toolu_1", name: "memoree_search", input: { query: "x" } },
         ],
       },
     });
@@ -77,7 +77,7 @@ describe("entriesForLine", () => {
     expect(entries[0]).toMatchObject({ type: "assistant_message", content: "let me search" });
     expect(entries[1]).toMatchObject({
       type: "tool_call",
-      tool_name: "hivemind_search",
+      tool_name: "memoree_search",
       tool_use_id: "toolu_1",
       tool_input: JSON.stringify({ query: "x" }),
       agent: COWORK_AGENT,
@@ -159,13 +159,13 @@ describe("summarizeIdleSessions", () => {
 
 describe("coworkDataNoticeOnce", () => {
   it("returns empty string when capture is disabled (no fs side effects)", () => {
-    const prev = process.env.HIVEMIND_CAPTURE;
-    process.env.HIVEMIND_CAPTURE = "false";
+    const prev = process.env.MEMOREE_CAPTURE;
+    process.env.MEMOREE_CAPTURE = "false";
     try {
       expect(coworkDataNoticeOnce()).toBe("");
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_CAPTURE;
-      else process.env.HIVEMIND_CAPTURE = prev;
+      if (prev === undefined) delete process.env.MEMOREE_CAPTURE;
+      else process.env.MEMOREE_CAPTURE = prev;
     }
   });
 });

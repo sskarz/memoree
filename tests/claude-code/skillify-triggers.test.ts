@@ -27,7 +27,7 @@ import {
   TRIGGER_THRESHOLD,
 } from "../../src/skillify/state.js";
 
-const STATE_DIR = join(homedir(), ".deeplake", "state", "skillify");
+const STATE_DIR = join(homedir(), ".memoree", "state", "skillify");
 let tracked: string[] = [];
 
 beforeEach(() => {
@@ -42,7 +42,7 @@ afterEach(() => {
       try { rmSync(join(STATE_DIR, `${key}${ext}`)); } catch { /* nothing */ }
     }
   }
-  delete process.env.HIVEMIND_SKILLIFY_WORKER;
+  delete process.env.MEMOREE_SKILLIFY_WORKER;
 });
 
 function freshCwd(): string { return `/tmp/skillify-trig-${randomUUID()}`; }
@@ -59,8 +59,8 @@ const fakeOpts = (cwd: string, agent = "claude_code") => ({
 // ── tryStopCounterTrigger ──────────────────────────────────────────────────
 
 describe("tryStopCounterTrigger", () => {
-  it("returns immediately when HIVEMIND_SKILLIFY_WORKER=1 (recursion guard)", () => {
-    process.env.HIVEMIND_SKILLIFY_WORKER = "1";
+  it("returns immediately when MEMOREE_SKILLIFY_WORKER=1 (recursion guard)", () => {
+    process.env.MEMOREE_SKILLIFY_WORKER = "1";
     tryStopCounterTrigger(fakeOpts(freshCwd()));
     expect(spawnCalls).toHaveLength(0);
   });
@@ -121,8 +121,8 @@ describe("tryStopCounterTrigger", () => {
 // ── forceSessionEndTrigger ─────────────────────────────────────────────────
 
 describe("forceSessionEndTrigger", () => {
-  it("returns immediately when HIVEMIND_SKILLIFY_WORKER=1", () => {
-    process.env.HIVEMIND_SKILLIFY_WORKER = "1";
+  it("returns immediately when MEMOREE_SKILLIFY_WORKER=1", () => {
+    process.env.MEMOREE_SKILLIFY_WORKER = "1";
     forceSessionEndTrigger(fakeOpts(freshCwd()));
     expect(spawnCalls).toHaveLength(0);
   });

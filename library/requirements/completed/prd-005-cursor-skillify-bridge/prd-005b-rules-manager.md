@@ -10,7 +10,7 @@
 
 ## Overview
 
-This sub-feature surfaces the team-wide rules ledger inside the dashboard and turns it into a graphical surface a developer can read and edit. Hivemind already keeps a `hivemind_rules` table: an append-only, version-bumped ledger where each edit appends a fresh row and reads take the latest version per `rule_id` (`src/rules/read.ts:1-13`). The active rules are injected into every session's context, capped at ten and newest-first, so they actively steer how each agent behaves (`src/rules/read.ts:36-38,80-83`). The engine is complete: `listRules` reads, and `insertRule`, `editRule`, and `markRuleDone` write (`src/rules/write.ts:84-151`). The only surface today is the CLI: `hivemind rules list`, `add`, `edit <uuid>`, `done <uuid>` (`src/commands/rules.ts:37-45`).
+This sub-feature surfaces the team-wide rules ledger inside the dashboard and turns it into a graphical surface a developer can read and edit. Memoree already keeps a `memoree_rules` table: an append-only, version-bumped ledger where each edit appends a fresh row and reads take the latest version per `rule_id` (`src/rules/read.ts:1-13`). The active rules are injected into every session's context, capped at ten and newest-first, so they actively steer how each agent behaves (`src/rules/read.ts:36-38,80-83`). The engine is complete: `listRules` reads, and `insertRule`, `editRule`, and `markRuleDone` write (`src/rules/write.ts:84-151`). The only surface today is the CLI: `memoree rules list`, `add`, `edit <uuid>`, `done <uuid>` (`src/commands/rules.ts:37-45`).
 
 The result is that the rules governing a developer's every session are invisible to them inside Cursor, and changing one means dropping to a terminal and copy-pasting a 36-character UUID into an `edit` or `done` command (`src/commands/rules.ts:133-143`). This sub-feature renders the active ledger as a list in the PRD-003 dashboard Webview and exposes add, edit, and complete as graphical actions over the unchanged engine, so a developer can see exactly what conventions are shaping their agents and curate them without leaving the editor.
 
@@ -52,7 +52,7 @@ export async function listRules(
 }
 ```
 
-Writes are append-only by design, because the Deeplake backend coalesces rapid UPDATEs on the same row; every edit inserts a new version instead (`src/rules/write.ts:1-11,121-137`). The CLI is the only way to drive any of this today, and it requires the full UUID because edit and done do an exact-match select on `rule_id` (`src/commands/rules.ts:133-143`). This sub-feature gives the same engine a face: the list a developer can see, and the buttons that call the same writers without a UUID ever touching their clipboard.
+Writes are append-only by design, because the Memoree backend coalesces rapid UPDATEs on the same row; every edit inserts a new version instead (`src/rules/write.ts:1-11,121-137`). The CLI is the only way to drive any of this today, and it requires the full UUID because edit and done do an exact-match select on `rule_id` (`src/commands/rules.ts:133-143`). This sub-feature gives the same engine a face: the list a developer can see, and the buttons that call the same writers without a UUID ever touching their clipboard.
 
 ---
 
@@ -122,7 +122,7 @@ sequenceDiagram
   participant Pane as "Team Rules pane"
   participant Read as "listRules (src/rules/read.ts)"
   participant Write as "insertRule / editRule / markRuleDone"
-  participant Tbl as "hivemind_rules table"
+  participant Tbl as "memoree_rules table"
 
   Dev->>Pane: Open Team Rules pane
   Pane->>Read: list (status=active, limit)
@@ -148,7 +148,7 @@ sequenceDiagram
 
 - **Native-feeling and readable.** The pane respects Cursor's theme and editor tokens and reads as a first-party surface, consistent with PRD-003a's presentation requirements.
 - **No UUID handling.** The developer acts on a rule by its row, never by copy-pasting a UUID; the `rule_id` is internal plumbing (contrast the CLI, which prints the full UUID precisely because edit/done need it, `src/commands/rules.ts:133-143`).
-- **Honest empty and not-logged-in states.** No rules renders a coherent empty state; not being logged in surfaces the same guidance the CLI gives ("Not logged in. Run `hivemind login`," `src/commands/rules.ts:56-62`) rather than a blank or broken pane. A legacy install whose rules table does not exist yet renders as an empty list, matching the CLI's missing-table tolerance (`src/commands/rules.ts:194-198`).
+- **Honest empty and not-logged-in states.** No rules renders a coherent empty state; not being logged in surfaces the same guidance the CLI gives ("Not logged in. Run the removed cloud sign-in command," `src/commands/rules.ts:56-62`) rather than a blank or broken pane. A legacy install whose rules table does not exist yet renders as an empty list, matching the CLI's missing-table tolerance (`src/commands/rules.ts:194-198`).
 - **Optimistic but truthful.** A write shows an in-flight state and reconciles against a fresh `listRules` on completion; a failed write surfaces the engine's error message and leaves the list unchanged.
 - **No secret leakage.** The serialized pane payload and any logs show rule text and author name only, never tokens or API keys (defers to PRD-002b).
 - **Accessible.** The list is keyboard-navigable and each action is reachable without a pointer; status is conveyed by label, not color alone.

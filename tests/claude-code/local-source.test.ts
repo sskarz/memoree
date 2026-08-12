@@ -1,6 +1,6 @@
 /**
  * Unit tests for src/skillify/local-source.ts — pure helpers used by
- * `hivemind skillify mine-local`. We test the in-memory functions
+ * `memoree skillify mine-local`. We test the in-memory functions
  * (pickSessions, nativeJsonlToRows) with synthetic data; filesystem-touching
  * helpers (listLocalSessions, detectInstalledAgents) are exercised via the
  * mine-local e2e flow instead of mocked here.

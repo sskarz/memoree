@@ -119,37 +119,37 @@ describe("runGate dispatch", () => {
 
   it("pi falls back to env var defaults for provider + model when explicit override absent", () => {
     const original = {
-      provider: process.env.HIVEMIND_PI_PROVIDER,
-      model: process.env.HIVEMIND_PI_MODEL,
+      provider: process.env.MEMOREE_PI_PROVIDER,
+      model: process.env.MEMOREE_PI_MODEL,
     };
     try {
-      process.env.HIVEMIND_PI_PROVIDER = "test-pi-provider";
-      process.env.HIVEMIND_PI_MODEL = "test-pi-model";
+      process.env.MEMOREE_PI_PROVIDER = "test-pi-provider";
+      process.env.MEMOREE_PI_MODEL = "test-pi-model";
       const args = buildArgs("pi", "p", { agent: "pi", prompt: "p" });
       expect(args).toContain("test-pi-provider");
       expect(args).toContain("test-pi-model");
     } finally {
-      if (original.provider === undefined) delete process.env.HIVEMIND_PI_PROVIDER;
-      else process.env.HIVEMIND_PI_PROVIDER = original.provider;
-      if (original.model === undefined) delete process.env.HIVEMIND_PI_MODEL;
-      else process.env.HIVEMIND_PI_MODEL = original.model;
+      if (original.provider === undefined) delete process.env.MEMOREE_PI_PROVIDER;
+      else process.env.MEMOREE_PI_PROVIDER = original.provider;
+      if (original.model === undefined) delete process.env.MEMOREE_PI_MODEL;
+      else process.env.MEMOREE_PI_MODEL = original.model;
     }
   });
 
   it("pi uses google + gemini-2.5-flash defaults when neither opts nor env are set", () => {
     const original = {
-      provider: process.env.HIVEMIND_PI_PROVIDER,
-      model: process.env.HIVEMIND_PI_MODEL,
+      provider: process.env.MEMOREE_PI_PROVIDER,
+      model: process.env.MEMOREE_PI_MODEL,
     };
     try {
-      delete process.env.HIVEMIND_PI_PROVIDER;
-      delete process.env.HIVEMIND_PI_MODEL;
+      delete process.env.MEMOREE_PI_PROVIDER;
+      delete process.env.MEMOREE_PI_MODEL;
       const args = buildArgs("pi", "p", { agent: "pi", prompt: "p" });
       expect(args).toContain("google");
       expect(args).toContain("gemini-2.5-flash");
     } finally {
-      if (original.provider !== undefined) process.env.HIVEMIND_PI_PROVIDER = original.provider;
-      if (original.model !== undefined) process.env.HIVEMIND_PI_MODEL = original.model;
+      if (original.provider !== undefined) process.env.MEMOREE_PI_PROVIDER = original.provider;
+      if (original.model !== undefined) process.env.MEMOREE_PI_MODEL = original.model;
     }
   });
 
@@ -172,14 +172,14 @@ describe("runGate dispatch", () => {
 
   it("falls back to env var defaults for cursor/hermes model when explicit override absent", () => {
     const original = {
-      cursor: process.env.HIVEMIND_CURSOR_MODEL,
-      hermesProv: process.env.HIVEMIND_HERMES_PROVIDER,
-      hermesModel: process.env.HIVEMIND_HERMES_MODEL,
+      cursor: process.env.MEMOREE_CURSOR_MODEL,
+      hermesProv: process.env.MEMOREE_HERMES_PROVIDER,
+      hermesModel: process.env.MEMOREE_HERMES_MODEL,
     };
     try {
-      process.env.HIVEMIND_CURSOR_MODEL = "test-cursor-model";
-      process.env.HIVEMIND_HERMES_PROVIDER = "test-provider";
-      process.env.HIVEMIND_HERMES_MODEL = "test-hermes-model";
+      process.env.MEMOREE_CURSOR_MODEL = "test-cursor-model";
+      process.env.MEMOREE_HERMES_PROVIDER = "test-provider";
+      process.env.MEMOREE_HERMES_MODEL = "test-hermes-model";
       const c = buildArgs("cursor", "p", { agent: "cursor", prompt: "p" });
       expect(c).toContain("test-cursor-model");
       const h = buildArgs("hermes", "p", { agent: "hermes", prompt: "p" });
@@ -187,12 +187,12 @@ describe("runGate dispatch", () => {
       expect(h).toContain("test-hermes-model");
     } finally {
       // Restore (delete if originally undefined to avoid pollution)
-      if (original.cursor === undefined) delete process.env.HIVEMIND_CURSOR_MODEL;
-      else process.env.HIVEMIND_CURSOR_MODEL = original.cursor;
-      if (original.hermesProv === undefined) delete process.env.HIVEMIND_HERMES_PROVIDER;
-      else process.env.HIVEMIND_HERMES_PROVIDER = original.hermesProv;
-      if (original.hermesModel === undefined) delete process.env.HIVEMIND_HERMES_MODEL;
-      else process.env.HIVEMIND_HERMES_MODEL = original.hermesModel;
+      if (original.cursor === undefined) delete process.env.MEMOREE_CURSOR_MODEL;
+      else process.env.MEMOREE_CURSOR_MODEL = original.cursor;
+      if (original.hermesProv === undefined) delete process.env.MEMOREE_HERMES_PROVIDER;
+      else process.env.MEMOREE_HERMES_PROVIDER = original.hermesProv;
+      if (original.hermesModel === undefined) delete process.env.MEMOREE_HERMES_MODEL;
+      else process.env.MEMOREE_HERMES_MODEL = original.hermesModel;
     }
   });
 });

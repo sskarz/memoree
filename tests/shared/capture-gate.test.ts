@@ -12,15 +12,15 @@ describe("entrypointPassesOnlyCliGate", () => {
 
   it("passes when the gate env var is anything other than 'true'", () => {
     // Defensive: only the exact literal "true" should activate the gate.
-    expect(entrypointPassesOnlyCliGate({ HIVEMIND_CAPTURE_ONLY_CLI: "false" })).toBe(true);
-    expect(entrypointPassesOnlyCliGate({ HIVEMIND_CAPTURE_ONLY_CLI: "1" })).toBe(true);
-    expect(entrypointPassesOnlyCliGate({ HIVEMIND_CAPTURE_ONLY_CLI: "yes" })).toBe(true);
-    expect(entrypointPassesOnlyCliGate({ HIVEMIND_CAPTURE_ONLY_CLI: "" })).toBe(true);
+    expect(entrypointPassesOnlyCliGate({ MEMOREE_CAPTURE_ONLY_CLI: "false" })).toBe(true);
+    expect(entrypointPassesOnlyCliGate({ MEMOREE_CAPTURE_ONLY_CLI: "1" })).toBe(true);
+    expect(entrypointPassesOnlyCliGate({ MEMOREE_CAPTURE_ONLY_CLI: "yes" })).toBe(true);
+    expect(entrypointPassesOnlyCliGate({ MEMOREE_CAPTURE_ONLY_CLI: "" })).toBe(true);
   });
 
   it("passes with gate active and entrypoint='cli'", () => {
     expect(entrypointPassesOnlyCliGate({
-      HIVEMIND_CAPTURE_ONLY_CLI: "true",
+      MEMOREE_CAPTURE_ONLY_CLI: "true",
       CLAUDE_CODE_ENTRYPOINT: "cli",
     })).toBe(true);
   });
@@ -31,7 +31,7 @@ describe("entrypointPassesOnlyCliGate", () => {
     // created stray capture rows despite the gate being on. Exact equality
     // must exclude it.
     expect(entrypointPassesOnlyCliGate({
-      HIVEMIND_CAPTURE_ONLY_CLI: "true",
+      MEMOREE_CAPTURE_ONLY_CLI: "true",
       CLAUDE_CODE_ENTRYPOINT: "sdk-cli",
     })).toBe(false);
   });
@@ -40,7 +40,7 @@ describe("entrypointPassesOnlyCliGate", () => {
     // Exact-match semantics: only a bare "cli" (interactive terminal) passes.
     for (const ep of ["sdk-cli", "cli-interactive", "claude-cli", "clip"]) {
       expect(entrypointPassesOnlyCliGate({
-        HIVEMIND_CAPTURE_ONLY_CLI: "true",
+        MEMOREE_CAPTURE_ONLY_CLI: "true",
         CLAUDE_CODE_ENTRYPOINT: ep,
       })).toBe(false);
     }
@@ -48,14 +48,14 @@ describe("entrypointPassesOnlyCliGate", () => {
 
   it("blocks with gate active and entrypoint='sdk-py'", () => {
     expect(entrypointPassesOnlyCliGate({
-      HIVEMIND_CAPTURE_ONLY_CLI: "true",
+      MEMOREE_CAPTURE_ONLY_CLI: "true",
       CLAUDE_CODE_ENTRYPOINT: "sdk-py",
     })).toBe(false);
   });
 
   it("blocks with gate active and entrypoint='sdk-ts'", () => {
     expect(entrypointPassesOnlyCliGate({
-      HIVEMIND_CAPTURE_ONLY_CLI: "true",
+      MEMOREE_CAPTURE_ONLY_CLI: "true",
       CLAUDE_CODE_ENTRYPOINT: "sdk-ts",
     })).toBe(false);
   });
@@ -64,13 +64,13 @@ describe("entrypointPassesOnlyCliGate", () => {
     // Strict: missing entrypoint is treated as non-cli. It isn't exactly
     // "cli" so the gate filters it out.
     expect(entrypointPassesOnlyCliGate({
-      HIVEMIND_CAPTURE_ONLY_CLI: "true",
+      MEMOREE_CAPTURE_ONLY_CLI: "true",
     })).toBe(false);
   });
 
   it("blocks with gate active and entrypoint=''", () => {
     expect(entrypointPassesOnlyCliGate({
-      HIVEMIND_CAPTURE_ONLY_CLI: "true",
+      MEMOREE_CAPTURE_ONLY_CLI: "true",
       CLAUDE_CODE_ENTRYPOINT: "",
     })).toBe(false);
   });
@@ -79,7 +79,7 @@ describe("entrypointPassesOnlyCliGate", () => {
     // Forward compat: hypothetical sdk-go, sdk-rust, mcp-host, etc.
     for (const ep of ["sdk-go", "sdk-rust", "mcp-host", "vscode", "web"]) {
       expect(entrypointPassesOnlyCliGate({
-        HIVEMIND_CAPTURE_ONLY_CLI: "true",
+        MEMOREE_CAPTURE_ONLY_CLI: "true",
         CLAUDE_CODE_ENTRYPOINT: ep,
       })).toBe(false);
     }
@@ -88,23 +88,23 @@ describe("entrypointPassesOnlyCliGate", () => {
   it("defaults to process.env when no argument is passed", () => {
     // Snapshot + restore to keep the suite hermetic.
     const prev = {
-      ONLY_CLI: process.env.HIVEMIND_CAPTURE_ONLY_CLI,
+      ONLY_CLI: process.env.MEMOREE_CAPTURE_ONLY_CLI,
       EP: process.env.CLAUDE_CODE_ENTRYPOINT,
     };
     try {
-      process.env.HIVEMIND_CAPTURE_ONLY_CLI = "true";
+      process.env.MEMOREE_CAPTURE_ONLY_CLI = "true";
       process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-py";
       expect(entrypointPassesOnlyCliGate()).toBe(false);
 
       process.env.CLAUDE_CODE_ENTRYPOINT = "cli";
       expect(entrypointPassesOnlyCliGate()).toBe(true);
 
-      delete process.env.HIVEMIND_CAPTURE_ONLY_CLI;
+      delete process.env.MEMOREE_CAPTURE_ONLY_CLI;
       process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-py";
       expect(entrypointPassesOnlyCliGate()).toBe(true);
     } finally {
-      if (prev.ONLY_CLI === undefined) delete process.env.HIVEMIND_CAPTURE_ONLY_CLI;
-      else process.env.HIVEMIND_CAPTURE_ONLY_CLI = prev.ONLY_CLI;
+      if (prev.ONLY_CLI === undefined) delete process.env.MEMOREE_CAPTURE_ONLY_CLI;
+      else process.env.MEMOREE_CAPTURE_ONLY_CLI = prev.ONLY_CLI;
       if (prev.EP === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT;
       else process.env.CLAUDE_CODE_ENTRYPOINT = prev.EP;
     }

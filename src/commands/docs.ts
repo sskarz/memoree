@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * CLI surface for `hivemind docs` — per-file documentation kept fresh on
+ * CLI surface for `memoree docs` — per-file documentation kept fresh on
  * code deltas (Phase 1: manual set/show/list/archive; the delta worker
  * drives `setDoc` programmatically later).
  *
  * Usage:
- *   hivemind docs set <doc-id> ["<markdown>"] [--file <path>] [--project P] [--tier fast|slow] [--path <vfs-path>]
+ *   memoree docs set <doc-id> ["<markdown>"] [--file <path>] [--project P] [--tier fast|slow] [--path <vfs-path>]
  *       Idempotent upsert by doc-id (the source file path). First write =
  *       v1; subsequent writes append v+1, preserving the immutable
  *       created_at. Content comes from the positional arg, or --file, or
  *       stdin when the positional is "-".
- *   hivemind docs show <doc-id>
+ *   memoree docs show <doc-id>
  *       Print the latest version's metadata + markdown body.
- *   hivemind docs list [--project P] [--status active|archived|all] [--limit N]
+ *   memoree docs list [--project P] [--status active|archived|all] [--limit N]
  *       List the latest version per doc-id.
- *   hivemind docs archive <doc-id>
+ *   memoree docs archive <doc-id>
  *       Soft-delete (status='archived'), preserving content + audit trail.
  *
  * The handler is deliberately thin — it parses argv, loads config,
@@ -71,51 +71,51 @@ import { makeDocEmbedder } from "../docs/embed.js";
 import { storageQuery } from "../docs/read.js";
 import { backfillDocEmbeddings } from "../docs/backfill.js";
 import { loadCurrentSnapshot } from "../graph/load-current.js";
-import { isMissingTableError } from "../deeplake-schema.js";
+import { isMissingTableError } from "../storage/schema.js";
 
 const USAGE = `
-hivemind docs — documentation that stays in sync with the code
+memoree docs — documentation that stays in sync with the code
 
 Everyday:
-  hivemind docs list [--repos] [--all] [--project P]
+  memoree docs list [--repos] [--all] [--project P]
       Status header for this repo (root, org, auto ON/off, sync freshness,
       graph) + THIS repo's pages. --project P shows another repo's pages
       (accepts a repo name, path, or key prefix). --all shows every repo,
       grouped one section per repo. --repos lists every repo registered
       for auto sync.
-  hivemind docs sync [--cwd <dir>] [--force] [--local]
+  memoree docs sync [--cwd <dir>] [--force] [--local]
       Bring the docs up to date with the code (wiki pages + per-file docs).
       Builds the code graph under the hood if missing. First interactive run
       on an empty corpus walks the same consent flow as graph init. --local
       previews WIKI-page patches on the working tree only (never writes the
       table; per-file docs have no local preview).
-  hivemind docs pull [--cwd <dir>] [--project P] [--scope S] [--force]
-      Materialize the docs locally as gitignored *.hivemind.md files next to
+  memoree docs pull [--cwd <dir>] [--project P] [--scope S] [--force]
+      Materialize the docs locally as gitignored *.memoree.md files next to
       the code. Incremental (local cursor); --force re-pulls everything.
-  hivemind docs auto on|off [--cwd <dir>]
+  memoree docs auto on|off [--cwd <dir>]
       Turn automatic per-commit sync on/off for THIS repo on THIS org.
       Enabling with no corpus asks for explicit confirmation (LLM cost).
-  hivemind docs agent [claude|codex|pi|cursor]
+  memoree docs agent [claude|codex|pi|cursor]
       Show or set which host CLI authors the docs (persisted globally).
       No arg → show current + installed. Overridable per-run with
-      HIVEMIND_DOCS_LLM_AGENT.
-  hivemind docs show <doc-id>
+      MEMOREE_DOCS_LLM_AGENT.
+  memoree docs show <doc-id>
 
 Advanced / plumbing:
-  hivemind docs wiki [--cwd] [--include] [--exclude] [--limit] [--concurrency] [--force] [--dry-run]
+  memoree docs wiki [--cwd] [--include] [--exclude] [--limit] [--concurrency] [--force] [--dry-run]
       Generate the narrative wiki pages (one per subsystem) explicitly.
-  hivemind docs wiki-refresh [--cwd] [--force] [--local]
+  memoree docs wiki-refresh [--cwd] [--force] [--local]
       One lease-guarded wiki refresh cycle (what sync/auto run for you).
-  hivemind docs refresh [--cwd <dir>] [--dry-run]
+  memoree docs refresh [--cwd <dir>] [--dry-run]
       Per-file docs drift refresh (what sync runs for you).
-  hivemind docs generate [--cwd] [--scope file|symbol] [--include] [--exclude]
+  memoree docs generate [--cwd] [--scope file|symbol] [--include] [--exclude]
                          [--limit] [--concurrency] [--batch] [--project P]
                          [--force] [--dry-run]
       Auto-author per-file docs from the AST graph. Batches 5 files/call.
-  hivemind docs set <doc-id> ["<markdown>"] [--file <path>] [--project P] [--tier fast|slow] [--path <vfs-path>]
-  hivemind docs index [<dir>]
-  hivemind docs archive <doc-id>
-  hivemind docs reindex
+  memoree docs set <doc-id> ["<markdown>"] [--file <path>] [--project P] [--tier fast|slow] [--path <vfs-path>]
+  memoree docs index [<dir>]
+  memoree docs archive <doc-id>
+  memoree docs reindex
       Backfill semantic-search vectors for docs that lack them (no LLM).
 `.trim();
 
@@ -129,7 +129,7 @@ function gitHeadOf(cwd: string): string | null {
 }
 
 /**
- * True iff a hivemind-managed post-commit hook is installed for `cwd`. The hook
+ * True iff a memoree-managed post-commit hook is installed for `cwd`. The hook
  * is one of the two refresh triggers; its presence is what upgrades the wiki
  * from "refreshes on session start" to "refreshes on every commit".
  */
@@ -158,11 +158,11 @@ export function wikiFreshnessHint(state: { autoEnabled: boolean; hookInstalled: 
   if (state.autoEnabled && state.hookInstalled) return null; // fully wired
   if (state.autoEnabled) {
     // Refreshes on session start already; only the per-commit hook is missing.
-    return "Auto refresh is ON (updates on session start). For instant per-commit refresh: hivemind graph init";
+    return "Auto refresh is ON (updates on session start). For instant per-commit refresh: memoree graph init";
   }
   // Flag OFF → the corpus will NOT refresh until enabled.
-  const base = `${state.subject} will NOT stay fresh — nothing refreshes it yet. Enable per-session refresh: hivemind docs auto on`;
-  return state.hookInstalled ? base : `${base} (and per-commit refresh: hivemind graph init)`;
+  const base = `${state.subject} will NOT stay fresh — nothing refreshes it yet. Enable per-session refresh: memoree docs auto on`;
+  return state.hookInstalled ? base : `${base} (and per-commit refresh: memoree graph init)`;
 }
 
 /**
@@ -186,7 +186,7 @@ async function offerAutoRefresh(
     const a = await io.ask(`\nKeep ${subject} fresh automatically on every commit? [y/N] `);
     if (/^y(es)?$/i.test(a.trim())) {
       setAuto({ orgId: cfg.orgId, orgName: cfg.orgName, project, path: cwd, auto: true });
-      console.log("Auto refresh ON. For instant per-commit refresh also run: hivemind graph init");
+      console.log("Auto refresh ON. For instant per-commit refresh also run: memoree graph init");
       return;
     }
   }
@@ -199,7 +199,7 @@ async function offerAutoRefresh(
 function requireConfig(): NonNullable<ReturnType<typeof loadConfig>> {
   const cfg = loadConfig();
   if (!cfg) {
-    console.error("Not logged in. Run `hivemind login` first.");
+    console.error("Memoree storage is unavailable. Run `memoree doctor`.");
     process.exit(2);
     throw new Error("unreachable");
   }
@@ -347,7 +347,7 @@ function printGroupedByRepo(rows: DocRow[]): void {
     if (group.length > ALL_VIEW_PER_REPO_CAP) {
       const more = group.length - ALL_VIEW_PER_REPO_CAP;
       const ref = proj ? (nameOf.get(proj)?.split("/").pop() ?? proj.slice(0, 8)) : "";
-      console.log(`  (+${more} more — hivemind docs list --project ${ref})`);
+      console.log(`  (+${more} more — memoree docs list --project ${ref})`);
     }
   }
 }
@@ -368,12 +368,12 @@ export async function runDocsCommand(args: string[]): Promise<void> {
       const cur = getDocsLlmAgent();
       console.log(`Docs LLM agent: ${cur ?? `auto (${installed[0] ?? "none installed"})`}`);
       console.log(`Installed on PATH: ${installed.join(", ") || "none"}`);
-      console.log(`Set with: hivemind docs agent <${knownDocsAgents().join("|")}>  (or HIVEMIND_DOCS_LLM_BIN for any other CLI)`);
+      console.log(`Set with: memoree docs agent <${knownDocsAgents().join("|")}>  (or MEMOREE_DOCS_LLM_BIN for any other CLI)`);
       return;
     }
     const lname = name.toLowerCase();
     if (!knownDocsAgents().includes(lname)) {
-      console.error(`Unknown agent "${name}". Known: ${knownDocsAgents().join(", ")}. For any other CLI use HIVEMIND_DOCS_LLM_BIN.`);
+      console.error(`Unknown agent "${name}". Known: ${knownDocsAgents().join(", ")}. For any other CLI use MEMOREE_DOCS_LLM_BIN.`);
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -381,7 +381,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
       console.error(`Warning: "${lname}" is not installed on PATH — doc generation will fail until it is.`);
     }
     setDocsLlmAgent(lname);
-    console.log(`Docs LLM agent set to: ${lname}. Change with: hivemind docs agent <name>.`);
+    console.log(`Docs LLM agent set to: ${lname}. Change with: memoree docs agent <name>.`);
     return;
   }
 
@@ -404,7 +404,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     const positional = stripKnownFlags(args.slice(1));
     const docId = positional[0];
     if (!docId) {
-      console.error('Missing doc-id. Usage: hivemind docs set <doc-id> "<markdown>" [--file <path>]');
+      console.error('Missing doc-id. Usage: memoree docs set <doc-id> "<markdown>" [--file <path>]');
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -418,7 +418,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     if (anchorIds.length > 0) {
       const snap = loadCurrentSnapshot(flagValue(args, "--cwd") ?? process.cwd());
       if (!snap) {
-        console.error("--anchor needs a built graph. Run `hivemind graph build` first.");
+        console.error("--anchor needs a built graph. Run `memoree graph build` first.");
         process.exit(1);
         throw new Error("unreachable");
       }
@@ -500,7 +500,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
   if (sub === "show") {
     const docId = stripKnownFlags(args.slice(1))[0];
     if (!docId) {
-      console.error("Usage: hivemind docs show <doc-id>");
+      console.error("Usage: memoree docs show <doc-id>");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -530,7 +530,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     if (args.includes("--repos")) {
       const entries = listEntries();
       if (entries.length === 0) {
-        console.log("(no repos registered — enable one with `hivemind docs auto on` or via `hivemind graph init`)");
+        console.log("(no repos registered — enable one with `memoree docs auto on` or via `memoree graph init`)");
         return;
       }
       for (const e of entries) {
@@ -556,7 +556,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     const notARepo = !snapOk && entry === undefined && explicitProject === undefined;
     const allView = args.includes("--all") || notARepo;
     if (notARepo) {
-      console.log(`${root} is not a docs-enabled repo — showing every repo in org ${cfg.orgName ?? cfg.orgId}. Register one with \`hivemind graph init\` (or \`hivemind docs auto on\` inside a repo).`);
+      console.log(`${root} is not a docs-enabled repo — showing every repo in org ${cfg.orgName ?? cfg.orgId}. Register one with \`memoree graph init\` (or \`memoree docs auto on\` inside a repo).`);
     } else {
       let freshness = "never synced";
       try {
@@ -608,7 +608,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
           console.log(`\nwiki: ${planned.length}/${planned.length} pages generated`);
         } else {
           console.log(`\nwiki: ${planned.length - pending.length}/${planned.length} pages generated — pending: ${pending.map((g) => wikiDocId(g.key)).join(", ")}`);
-          console.log("  (a background generation may still be running; kick one explicitly with `hivemind docs wiki`)");
+          console.log("  (a background generation may still be running; kick one explicitly with `memoree docs wiki`)");
         }
       }
     }
@@ -618,7 +618,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
   if (sub === "archive") {
     const docId = stripKnownFlags(args.slice(1))[0];
     if (!docId) {
-      console.error("Usage: hivemind docs archive <doc-id>");
+      console.error("Usage: memoree docs archive <doc-id>");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -641,7 +641,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     const dryRun = args.includes("--dry-run");
     const snap = loadCurrentSnapshot(cwd);
     if (!snap) {
-      console.error("No local graph for this directory. Run `hivemind graph build` first.");
+      console.error("No local graph for this directory. Run `memoree graph build` first.");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -743,7 +743,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     const project = flagValue(args, "--project") ?? deriveProjectKey(cwd).key;
     const snap = loadCurrentSnapshot(cwd);
     if (!snap) {
-      console.error("No local graph for this directory. Run `hivemind graph build` first.");
+      console.error("No local graph for this directory. Run `memoree graph build` first.");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -755,7 +755,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
       }
     };
     if (local) {
-      // Working-tree preview: patches ONLY the local *.hivemind.md files,
+      // Working-tree preview: patches ONLY the local *.memoree.md files,
       // never the table — no lease, no meta, no network write.
       const report = await runLocalWikiRefresh({ snap, repoRoot: cwd, run: makeHostRunPrompt(), git });
       if (report.outcomes.length === 0) {
@@ -769,7 +769,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
       return;
     }
     await api.ensureDocsTable(tableName);
-    if (!process.env.HIVEMIND_QUERY_TIMEOUT_MS) process.env.HIVEMIND_QUERY_TIMEOUT_MS = "30000";
+    if (!process.env.MEMOREE_QUERY_TIMEOUT_MS) process.env.MEMOREE_QUERY_TIMEOUT_MS = "30000";
     const report = await runWikiRefreshCycle({
       query, tableName, snap, repoRoot: cwd, project,
       // Branch identity: on the trunk this is `main` (canonical corpus); on a
@@ -781,7 +781,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
       force,
       // Tuning knob (NOT a consent switch — that is the registry): shortens
       // the 6h quiet period for e2e tests and impatient operators.
-      minPeriodMs: Number(process.env.HIVEMIND_DOCS_MIN_PERIOD_MS ?? "") || undefined,
+      minPeriodMs: Number(process.env.MEMOREE_DOCS_MIN_PERIOD_MS ?? "") || undefined,
       // Snapshots live under the repo-derived key even when --project overrides
       // the table stamp.
       loadSnapshotAt: (sha) => loadSnapshotByCommit(repoDir(deriveProjectKey(cwd).key), sha),
@@ -808,7 +808,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     // exits at zero LLM calls unless this exact (org, project) opted in.
     // An interactive sync IS the consent for this one run.
     if (!io.interactive && !isAutoEnabled(cfg.orgId, project)) {
-      console.log("docs sync: auto not enabled for this repo on this org — nothing to do (enable with `hivemind docs auto on`).");
+      console.log("docs sync: auto not enabled for this repo on this org — nothing to do (enable with `memoree docs auto on`).");
       return;
     }
 
@@ -861,7 +861,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
   if (sub === "auto") {
     const mode = args[1];
     if (mode !== "on" && mode !== "off") {
-      console.error("Usage: hivemind docs auto on|off [--cwd <dir>]");
+      console.error("Usage: memoree docs auto on|off [--cwd <dir>]");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -886,18 +886,18 @@ export async function runDocsCommand(args: string[]): Promise<void> {
       const est = snap ? `~${selectWikiGroups(snap).length} pages` : "the full corpus";
       const io = defaultIo();
       if (!io.interactive) {
-        console.error(`No wiki corpus yet for this repo — enabling auto would generate ${est} on the first cycle. Run interactively (or generate first with \`hivemind docs wiki\`).`);
+        console.error(`No wiki corpus yet for this repo — enabling auto would generate ${est} on the first cycle. Run interactively (or generate first with \`memoree docs wiki\`).`);
         process.exit(1);
         throw new Error("unreachable");
       }
       const a = await io.ask(`No wiki corpus yet: ${est} will be generated on the first cycle (LLM cost). Proceed? [y/N] `);
       if (!/^y(es)?$/i.test(a.trim())) {
-        console.log("Left OFF. Generate first with: hivemind docs wiki");
+        console.log("Left OFF. Generate first with: memoree docs wiki");
         return;
       }
     }
     setAuto({ orgId: cfg.orgId, orgName: cfg.orgName, project, path: cwd, auto: true });
-    console.log(`Auto sync ON for this repo on org ${cfg.orgName ?? cfg.orgId}. Docs stay fresh on every commit (consumes LLM tokens). Turn off with: hivemind docs auto off`);
+    console.log(`Auto sync ON for this repo on org ${cfg.orgName ?? cfg.orgId}. Docs stay fresh on every commit (consumes LLM tokens). Turn off with: memoree docs auto off`);
     return;
   }
 
@@ -936,7 +936,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
 
     const snap = loadCurrentSnapshot(cwd);
     if (!snap) {
-      console.error("No local graph for this directory. Run `hivemind graph build` first.");
+      console.error("No local graph for this directory. Run `memoree graph build` first.");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -963,7 +963,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     }
 
     await api.ensureDocsTable(tableName);
-    if (!process.env.HIVEMIND_QUERY_TIMEOUT_MS) process.env.HIVEMIND_QUERY_TIMEOUT_MS = "30000";
+    if (!process.env.MEMOREE_QUERY_TIMEOUT_MS) process.env.MEMOREE_QUERY_TIMEOUT_MS = "30000";
     const report = await generateWikiPages({
       query, tableName, snap, repoRoot: cwd, project,
       // Branch identity for the written rows: `main` on the trunk, `b:<branch>`
@@ -989,7 +989,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
 
   if (sub === "reindex") {
     // Backfill content_embedding for docs missing it (no LLM — embed daemon only).
-    if (!process.env.HIVEMIND_QUERY_TIMEOUT_MS) process.env.HIVEMIND_QUERY_TIMEOUT_MS = "30000";
+    if (!process.env.MEMOREE_QUERY_TIMEOUT_MS) process.env.MEMOREE_QUERY_TIMEOUT_MS = "30000";
     try {
       await api.ensureDocsTable(tableName);
       const report = await backfillDocEmbeddings(query, tableName, makeDocEmbedder());
@@ -1022,7 +1022,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
 
     const snap = loadCurrentSnapshot(cwd);
     if (!snap) {
-      console.error("No local graph for this directory. Run `hivemind graph build` first.");
+      console.error("No local graph for this directory. Run `memoree graph build` first.");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -1051,7 +1051,7 @@ export async function runDocsCommand(args: string[]): Promise<void> {
     // Bulk generate writes under load need a longer client timeout than the 10s
     // default, or writes abort mid-commit and drop files. Scope it to this
     // command (not global reads); the user can still override via env.
-    if (!process.env.HIVEMIND_QUERY_TIMEOUT_MS) process.env.HIVEMIND_QUERY_TIMEOUT_MS = "30000";
+    if (!process.env.MEMOREE_QUERY_TIMEOUT_MS) process.env.MEMOREE_QUERY_TIMEOUT_MS = "30000";
     // Batch by default (5 files/call) — amortizes the per-call LLM boot ~2.5x.
     // `--batch 1` opts out; larger batches trade a little quality for speed.
     // The batch protocol keys responses by FILE, so symbol scope (N targets

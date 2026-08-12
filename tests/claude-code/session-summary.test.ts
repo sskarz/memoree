@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { DeeplakeFs, guessMime } from "../../src/shell/deeplake-fs.js";
+import { MemoreeFs, guessMime } from "../../src/shell/memoree-fs.js";
 
-// ── Mock client (same pattern as deeplake-fs.test.ts) ────────────────────────
+// ── Mock client (same pattern as memoree-fs.test.ts) ────────────────────────
 type Row = {
   id: string; path: string; filename: string;
   summary: string; mime_type: string; size_bytes: number;
@@ -156,13 +156,13 @@ async function makeFs(seed: Record<string, string | Buffer> = {}, mount = "/") {
   const bufSeed: Record<string, Buffer> = {};
   for (const [k, v] of Object.entries(seed)) bufSeed[k] = typeof v === "string" ? Buffer.from(v, "utf-8") : v;
   const client = makeClient(bufSeed);
-  const fs = await DeeplakeFs.create(client as never, "test", mount);
+  const fs = await MemoreeFs.create(client as never, "test", mount);
   return { fs, client };
 }
 
 // ── Simulate createPlaceholder (mirrors session-start.ts logic) ──────────────
 async function createPlaceholder(
-  fs: DeeplakeFs, sessionId: string, cwd: string,
+  fs: MemoreeFs, sessionId: string, cwd: string,
   userName: string, orgName: string, workspaceId: string,
 ) {
   try { await fs.mkdir("/summaries"); } catch { /* exists */ }
@@ -195,7 +195,7 @@ async function createPlaceholder(
 
 // ── Simulate session-end summary upload (mirrors upload.mjs logic) ───────────
 async function uploadSummary(
-  fs: DeeplakeFs, client: ReturnType<typeof makeClient>,
+  fs: MemoreeFs, client: ReturnType<typeof makeClient>,
   sessionId: string, userName: string, summaryContent: string, projectName: string,
 ) {
   const summaryPath = `/summaries/${userName}/${sessionId}.md`;
@@ -218,8 +218,8 @@ function buildWikiProjectField(cwd: string): string {
 
 describe("session summary — no global paths", () => {
   const globalPaths = [
-    "/home/testuser/projects/deeplake-claude-code-plugins",
-    "/Users/testuser/Git/deeplake-claude-code-plugins",
+    "/home/testuser/projects/memoree-claude-code-plugins",
+    "/Users/testuser/Git/memoree-claude-code-plugins",
     "/home/ci/workspace/my-project",
     "/var/data/repos/my-project",
     "/tmp/workspace/my-project",
@@ -270,7 +270,7 @@ describe("session summary — Source field structure", () => {
 
 describe("session summary — wiki prompt uses project name not global path", () => {
   it("buildWikiProjectField returns last path segment", () => {
-    expect(buildWikiProjectField("/home/testuser/projects/deeplake-claude-code-plugins")).toBe("deeplake-claude-code-plugins");
+    expect(buildWikiProjectField("/home/testuser/projects/memoree-claude-code-plugins")).toBe("memoree-claude-code-plugins");
     expect(buildWikiProjectField("/Users/testuser/Git/my-project")).toBe("my-project");
     expect(buildWikiProjectField("")).toBe("unknown");
     expect(buildWikiProjectField("/single")).toBe("single");

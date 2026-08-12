@@ -91,13 +91,13 @@ describe("detectAgentSkillsRoots", () => {
 
   it("detects pi even when ~/.pi/agent/skills/ does not exist (the bug this refactor fixes)", () => {
     // The previous detector did existsSync(~/.pi/agent/skills/), which
-    // pi's installer never creates. So a pi+hivemind install would
+    // pi's installer never creates. So a pi+memoree install would
     // leave pi out of the fan-out until the user mkdir-ed the skills
     // dir themselves. Marker-based detection (~/.pi/agent/) catches
     // pi at install time.
     installPi(tmpHome);
     // Explicitly NOT creating .pi/agent/skills/ — pi's primary root
-    // doesn't exist yet on a fresh hivemind-pi install.
+    // doesn't exist yet on a fresh memoree-pi install.
     const result = detectAgentSkillsRoots(canonical(tmpHome), tmpHome);
     expect(result).toContain(join(tmpHome, ".pi", "agent", "skills"));
   });

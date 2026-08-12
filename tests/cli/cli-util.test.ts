@@ -43,7 +43,7 @@ describe("pkgRoot", () => {
     const root = pkgRoot();
     expect(isAbsolute(root)).toBe(true);
     // The package.json at pkgRoot's parent or pkgRoot itself describes the
-    // hivemind package — installers read it via getVersion().
+    // memoree package — installers read it via getVersion().
     expect(existsSync(join(root, "package.json")) || existsSync(join(root, "..", "package.json"))).toBe(true);
   });
 });
@@ -185,7 +185,7 @@ describe("readVersionStamp / writeVersionStamp", () => {
     writeVersionStamp(dir, "1.2.3");
     expect(readVersionStamp(dir)).toBe("1.2.3");
     // Plain text, no JSON quoting.
-    expect(readFileSync(join(dir, ".hivemind_version"), "utf-8")).toBe("1.2.3");
+    expect(readFileSync(join(dir, ".memoree_version"), "utf-8")).toBe("1.2.3");
   });
 
   it("readVersionStamp returns null when the file is missing", () => {
@@ -195,7 +195,7 @@ describe("readVersionStamp / writeVersionStamp", () => {
 
   it("readVersionStamp trims trailing whitespace and newlines", () => {
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, ".hivemind_version"), "  9.9.9\n\n");
+    writeFileSync(join(dir, ".memoree_version"), "  9.9.9\n\n");
     expect(readVersionStamp(dir)).toBe("9.9.9");
   });
 

@@ -12,7 +12,7 @@ function calls(source: string, target: string): GraphEdge {
 function snap(nodes: GraphNode[], links: GraphEdge[]): GraphSnapshot {
   return {
     directed: true, multigraph: true,
-    graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: "c", repo_key: "k" },
+    graph: { schema_version: 1, generator: "memoree-graph", commit_sha: "c", repo_key: "k" },
     observation: { ts: "2026-06-03T00:00:00Z", branch: "m", worktree_path: "/t", repo_project: "t", generator_version: "0", source_files_extracted: 0, source_files_skipped: 0 },
     nodes, links,
   };

@@ -10,12 +10,12 @@ const state = vi.hoisted(() => ({
 function fakeBackend(kind: StorageKind, tableName: string): StorageBackend {
   const backend = {
     kind,
-    dialect: kind === "sqlite" ? "sqlite" : kind === "postgres" ? "postgres" : "deeplake",
+    dialect: kind === "sqlite" ? "sqlite" : "postgres",
     capabilities: {
-      serverVectorSearch: kind === "deeplake",
-      transactions: kind !== "deeplake",
+      serverVectorSearch: false,
+      transactions: true,
       json: kind === "sqlite" ? "text" : "native",
-      vectors: kind === "sqlite" ? "json-text" : kind === "postgres" ? "array" : "server",
+      vectors: kind === "sqlite" ? "json-text" : "array",
     },
     tableName,
     query: vi.fn().mockResolvedValue([{ ok: 1 }]),
@@ -57,15 +57,6 @@ vi.mock("../../src/storage/postgres.js", () => ({
     constructor(...args: unknown[]) {
       state.constructorCalls.push({ kind: "postgres", args });
       return fakeBackend("postgres", String(args[2]));
-    }
-  },
-}));
-
-vi.mock("../../src/deeplake-api.js", () => ({
-  DeeplakeApi: class {
-    constructor(...args: unknown[]) {
-      state.constructorCalls.push({ kind: "deeplake", args });
-      return fakeBackend("deeplake", String(args[4]));
     }
   },
 }));
@@ -143,33 +134,7 @@ describe.each(["sqlite", "postgres"] as const)("lazy %s storage factory", kind =
   });
 });
 
-describe("Deeplake compatibility factory", () => {
-  it("constructs Deeplake directly from a legacy Config shape", () => {
-    const legacy = {
-      token: "token",
-      apiUrl: "https://api.example",
-      orgId: "org",
-      orgName: "Org",
-      userName: "alice",
-      workspaceId: "ws",
-      tableName: "memory",
-      sessionsTableName: "sessions",
-      skillsTableName: "skills",
-      rulesTableName: "rules",
-      goalsTableName: "goals",
-      kpisTableName: "kpis",
-      docsTableName: "docs",
-      codebaseTableName: "codebase",
-      memoryPath: "/tmp/memory",
-    };
-    const backend = createStorageBackend(legacy, "sessions");
-    expect(backend.kind).toBe("deeplake");
-    expect(state.constructorCalls[0]?.kind).toBe("deeplake");
-    expect(state.constructorCalls[0]?.args.slice(0, 5)).toEqual([
-      "token", "https://api.example", "org", "ws", "sessions",
-    ]);
-  });
-
+describe("nested storage config", () => {
   it("uses the nested storage config when one is present", () => {
     const storage = config("sqlite");
     const backend = createStorageBackend({ storage } as never);

@@ -90,7 +90,7 @@ export function spawnHermesWikiWorker(opts: SpawnOptions): void {
   const { config, sessionId, cwd, bundleDir, reason } = opts;
   const projectName = projectNameFromCwd(cwd);
 
-  const tmpDir = join(tmpdir(), `deeplake-wiki-${sessionId}-${Date.now()}`);
+  const tmpDir = join(tmpdir(), `memoree-wiki-${sessionId}-${Date.now()}`);
   mkdirSync(tmpDir, { recursive: true });
 
   const pluginVersion = getInstalledVersion(bundleDir, ".claude-plugin") ?? "";
@@ -98,9 +98,7 @@ export function spawnHermesWikiWorker(opts: SpawnOptions): void {
   const configFile = join(tmpDir, "config.json");
   writeFileSync(configFile, JSON.stringify({
     storage: {
-      kind: config.storage?.kind ?? "deeplake",
-      orgId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.orgId : undefined,
-      workspaceId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.workspaceId : undefined,
+      kind: config.storage.kind,
     },
     memoryTable: config.tableName,
     sessionsTable: config.sessionsTableName,
@@ -111,8 +109,8 @@ export function spawnHermesWikiWorker(opts: SpawnOptions): void {
     pluginVersion,
     tmpDir,
     hermesBin: findHermesBin(),
-    hermesProvider: process.env.HIVEMIND_HERMES_PROVIDER ?? "openrouter",
-    hermesModel: process.env.HIVEMIND_HERMES_MODEL ?? "anthropic/claude-haiku-4-5",
+    hermesProvider: process.env.MEMOREE_HERMES_PROVIDER ?? "openrouter",
+    hermesModel: process.env.MEMOREE_HERMES_MODEL ?? "anthropic/claude-haiku-4-5",
     wikiLog: WIKI_LOG,
     hooksDir: join(HOME, ".hermes", "hooks"),
     promptTemplate: WIKI_PROMPT_TEMPLATE,

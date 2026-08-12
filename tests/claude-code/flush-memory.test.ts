@@ -23,10 +23,17 @@ let manifestPath: string;
 const NOW = "2026-06-16T00:00:00.000Z";
 
 const fakeConfig: Config = {
-  token: "t", orgId: "o", orgName: "OrgName", userName: "user", workspaceId: "w",
-  apiUrl: "http://x", tableName: "memtable", sessionsTableName: "s", skillsTableName: "sk",
+  kind: "sqlite", orgId: "o", orgName: "OrgName", userName: "user", workspaceId: "w",
+  tableName: "memtable", sessionsTableName: "s", skillsTableName: "sk",
   rulesTableName: "r", goalsTableName: "g", kpisTableName: "k", docsTableName: "d", codebaseTableName: "c",
-  memoryPath: "/m",
+  memoryPath: "/m", vectorScanLimit: 2000,
+  storage: {
+    kind: "sqlite", path: "/tmp/memoree-test.sqlite3",
+    orgId: "o", orgName: "OrgName", userName: "user", workspaceId: "w",
+    tableName: "memtable", sessionsTableName: "s", skillsTableName: "sk",
+    rulesTableName: "r", goalsTableName: "g", kpisTableName: "k", docsTableName: "d", codebaseTableName: "c",
+    memoryPath: "/m", vectorScanLimit: 2000,
+  },
 };
 
 beforeEach(() => {

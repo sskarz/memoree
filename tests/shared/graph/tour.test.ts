@@ -6,7 +6,7 @@ function makeSnap(overrides?: Partial<GraphSnapshot>): GraphSnapshot {
   return {
     directed: true,
     multigraph: true,
-    graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: "abc1234", repo_key: "test-key" },
+    graph: { schema_version: 1, generator: "memoree-graph", commit_sha: "abc1234", repo_key: "test-key" },
     observation: {
       ts: "2026-06-03T00:00:00Z",
       branch: "main",

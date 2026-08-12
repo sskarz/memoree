@@ -70,12 +70,12 @@ export interface ClaudePreToolDecision {
   deny?: string;
 }
 
-const READ_CACHE_ROOT = join(homedir(), ".deeplake", "query-cache");
+const READ_CACHE_ROOT = join(homedir(), ".memoree", "query-cache");
 
 /**
  * Materialize fetched content for a Read intercept into a real file on disk
  * so Claude Code's Read tool can read it via `updatedInput.file_path`. The
- * file lives under `~/.deeplake/query-cache/<session_id>/read/` and mirrors
+ * file lives under `~/.memoree/query-cache/<session_id>/read/` and mirrors
  * the virtual path structure (e.g. `/sessions/conv_0_session_1.json` →
  * `.../read/sessions/conv_0_session_1.json`). Per-session dirs are cleaned
  * alongside the index cache at session end.
@@ -111,7 +111,7 @@ export function buildDenyDecision(reason: string, description: string): ClaudePr
 }
 
 const MEMORY_RETRY_GUIDANCE =
-  "[RETRY REQUIRED] The command you tried is not available for ~/.deeplake/memory/. " +
+  "[RETRY REQUIRED] The command you tried is not available for ~/.memoree/memory/. " +
   "This virtual filesystem only supports bash builtins: cat, ls, grep, echo, jq, head, tail, wc, sort, find, etc. " +
   "python, python3, node, and curl are NOT available. " +
   "You MUST rewrite your command using only the bash tools listed above and try again. " +
@@ -120,7 +120,7 @@ const MEMORY_RETRY_GUIDANCE =
 // Send an unserviceable memory request back to the agent as retry guidance,
 // shaped per tool so the original never reaches the host shell.
 //   - Bash/Grep/Glob: an *allow* decision that REWRITES the command to a
-//     harmless `echo`, so e.g. `sort /etc/passwd ~/.deeplake/memory/x >
+//     harmless `echo`, so e.g. `sort /etc/passwd ~/.memoree/memory/x >
 //     /tmp/out` is replaced before it can run.
 //   - Read: a *deny*. Claude Code's Read tool reads `updatedInput.file_path`;
 //     handing it a `{command}` payload leaves file_path undefined and the
@@ -128,16 +128,16 @@ const MEMORY_RETRY_GUIDANCE =
 //     still tells the agent how to retry via Bash.
 function buildRetryGuidanceDecision(toolName: string): ClaudePreToolDecision {
   if (toolName === "Read") {
-    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[DeepLake] memory Read unavailable — use Bash builtins");
+    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use Bash builtins");
   }
   return buildAllowDecision(
     `echo ${JSON.stringify(MEMORY_RETRY_GUIDANCE)}`,
-    "[DeepLake] unsupported command — rewrite using bash builtins",
+    "[Memoree] unsupported command — rewrite using bash builtins",
   );
 }
 
 const WRITE_EDIT_DENY_REASON =
-  "Write and Edit tools cannot route through the Deeplake VFS at ~/.deeplake/memory/. " +
+  "Write and Edit tools cannot route through the Memoree VFS at ~/.memoree/memory/. " +
   "The pre-tool-use hook only intercepts Bash, Read, Grep, and Glob; tool-shape mismatches make a " +
   "Write/Edit rewrite unsafe. Use the Bash tool instead:\n" +
   "  - Single-line:  echo '<content>' > '<path>'\n" +
@@ -299,13 +299,13 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   // routes through the SQL backend.
   if ((input.tool_name === "Write" || input.tool_name === "Edit") && touchesMemory(toolPath)) {
     logFn(`deny Write/Edit on memory path: ${toolPath}`);
-    return buildDenyDecision(WRITE_EDIT_DENY_REASON, `[DeepLake] ${input.tool_name} denied on memory path`);
+    return buildDenyDecision(WRITE_EDIT_DENY_REASON, `[Memoree] ${input.tool_name} denied on memory path`);
   }
 
   if (!shellCmd && (bashTouchesMemory(cmd) || touchesMemory(toolPath))) {
     // Unsupported/unsafe command targeting memory (interpreter, $(), pipes,
     // chains, …). Do NOT rewrite it to a host `cat`: that decision runs on the
-    // real filesystem, not the VFS, so `python3 ~/.deeplake/memory/../../etc/passwd`
+    // real filesystem, not the VFS, so `python3 ~/.memoree/memory/../../etc/passwd`
     // would become `cat '/../../etc/passwd'` and read a real host file. Return
     // guidance; the agent reissues a supported builtin (e.g. `cat …`) which IS
     // routed through the VFS.
@@ -320,14 +320,14 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   // touches the real filesystem.
   if (!baseConfig) return buildRetryGuidanceDecision(input.tool_name);
 
-  // Reads are routed by the nearest `.hivemind` exactly like capture is: a
+  // Reads are routed by the nearest `.memoree` exactly like capture is: a
   // directory pinned to another org/workspace must SEE that workspace's memory,
   // not the global one. `collect` is a capture switch and deliberately does not
   // gate reads (see src/dir-config.ts).
   const config = resolveDirConfig(baseConfig, input.cwd ?? process.cwd()).config;
 
-  const table = process.env["HIVEMIND_TABLE"] ?? "memory";
-  const sessionsTable = process.env["HIVEMIND_SESSIONS_TABLE"] ?? "sessions";
+  const table = process.env["MEMOREE_TABLE"] ?? "memory";
+  const sessionsTable = process.env["MEMOREE_SESSIONS_TABLE"] ?? "sessions";
   const api = createApi(table, config);
 
   const readVirtualPathContentsWithCache = async (
@@ -366,7 +366,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         readVirtualPathContentsFn: async (_api, _memoryTable, _sessionsTable, cachePaths) => readVirtualPathContentsWithCache(cachePaths),
       });
       if (compiled !== null) {
-        return buildAllowDecision(safeEchoCommand(compiled), `[DeepLake compiled] ${shellCmd}`);
+        return buildAllowDecision(safeEchoCommand(compiled), `[Memoree compiled] ${shellCmd}`);
       }
     }
 
@@ -374,7 +374,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     if (grepParams) {
       logFn(`direct grep: pattern=${grepParams.pattern} path=${grepParams.targetPath}`);
       const result = await handleGrepDirectFn(api, table, sessionsTable, grepParams);
-      if (result !== null) return buildAllowDecision(safeEchoCommand(result), `[DeepLake direct] grep ${grepParams.pattern}`);
+      if (result !== null) return buildAllowDecision(safeEchoCommand(result), `[Memoree direct] grep ${grepParams.pattern}`);
     }
 
     let virtualPath: string | null = null;
@@ -442,9 +442,9 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
       // command-shaped decision (echo) like the rest of the intercepts.
       if (input.tool_name === "Read") {
         const file_path = writeReadCacheFileFn(input.session_id, virtualPath, body);
-        return buildReadDecision(file_path, `[hivemind graph] ${virtualPath}`);
+        return buildReadDecision(file_path, `[memoree graph] ${virtualPath}`);
       }
-      return buildAllowDecision(safeEchoCommand(body), `[hivemind graph] /graph/${subpath}`);
+      return buildAllowDecision(safeEchoCommand(body), `[memoree graph] /graph/${subpath}`);
     }
     if (lsDir === "/graph" || lsDir === "/graph/") {
       const body = "index.md\nfind/\nshow/\n";
@@ -452,9 +452,9 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         // Synthetic leaf (not "/graph" itself) so later reads of
         // /graph/index.md or /graph/show/... can still create children.
         const file_path = writeReadCacheFileFn(input.session_id, "/graph/_listing.txt", body);
-        return buildReadDecision(file_path, "[hivemind graph] ls /graph");
+        return buildReadDecision(file_path, "[memoree graph] ls /graph");
       }
-      return buildAllowDecision(safeEchoCommand(body), `[hivemind graph] ls /graph`);
+      return buildAllowDecision(safeEchoCommand(body), `[memoree graph] ls /graph`);
     }
 
     // Docs VFS dispatch — the browsable per-directory docs index under
@@ -470,18 +470,18 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
       const body = result.kind === "ok" ? result.body : `(${result.kind}) ${result.message}`;
       if (input.tool_name === "Read") {
         const file_path = writeReadCacheFileFn(input.session_id, virtualPath, body);
-        return buildReadDecision(file_path, `[hivemind docs] ${virtualPath}`);
+        return buildReadDecision(file_path, `[memoree docs] ${virtualPath}`);
       }
-      return buildAllowDecision(safeEchoCommand(capOutputForClaude(body, { kind: "docs" })), `[hivemind docs] /docs/${subpath}`);
+      return buildAllowDecision(safeEchoCommand(capOutputForClaude(body, { kind: "docs" })), `[memoree docs] /docs/${subpath}`);
     }
     if (lsDir === "/docs" || lsDir === "/docs/") {
       const result = await handleDocsVfsFn("", (sql) => api.query(sql), config.docsTableName, { project: deriveProjectKey(input.cwd ?? process.cwd()).key, dialect: api.dialect });
       const body = result.kind === "ok" ? result.body : `(${result.kind}) ${result.message}`;
       if (input.tool_name === "Read") {
         const file_path = writeReadCacheFileFn(input.session_id, "/docs/_listing.txt", body);
-        return buildReadDecision(file_path, "[hivemind docs] ls /docs");
+        return buildReadDecision(file_path, "[memoree docs] ls /docs");
       }
-      return buildAllowDecision(safeEchoCommand(capOutputForClaude(body, { kind: "docs" })), `[hivemind docs] ls /docs`);
+      return buildAllowDecision(safeEchoCommand(capOutputForClaude(body, { kind: "docs" })), `[memoree docs] ls /docs`);
     }
 
     if (virtualPath && !virtualPath.endsWith("/")) {
@@ -499,7 +499,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         // A genuine backend failure now THROWS out of readVirtualPathContent
         // (it no longer collapses to null → a misleading "No such file"). We
         // deliberately let that throw propagate to the outer catch, which
-        // falls through to the sandboxed VFS shell (deeplake-shell.js) whose
+        // falls through to the sandboxed VFS shell (memoree-shell.js) whose
         // readFileBuffer re-attempts and surfaces a real error — preserving
         // the retry instead of short-circuiting it here.
         content = await readVirtualPathContentFn(api, table, sessionsTable, virtualPath);
@@ -508,7 +508,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         if (virtualPath === "/index.md") {
           writeCachedIndexContentFn(input.session_id, content);
         }
-        if (lineLimit === -1) return buildAllowDecision(safeEchoCommand(`${content.split("\n").length} ${virtualPath}`), `[DeepLake direct] wc -l ${virtualPath}`);
+        if (lineLimit === -1) return buildAllowDecision(safeEchoCommand(`${content.split("\n").length} ${virtualPath}`), `[Memoree direct] wc -l ${virtualPath}`);
         if (lineLimit > 0) {
           const lines = content.split("\n");
           content = fromEnd ? lines.slice(-lineLimit).join("\n") : lines.slice(0, lineLimit).join("\n");
@@ -519,10 +519,10 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         // Claude Code's 16 KB tool_result threshold so we cap before reaching it.
         if (input.tool_name === "Read") {
           const file_path = writeReadCacheFileFn(input.session_id, virtualPath, content);
-          return buildReadDecision(file_path, `[DeepLake direct] ${label} ${virtualPath}`);
+          return buildReadDecision(file_path, `[Memoree direct] ${label} ${virtualPath}`);
         }
         const capped = capOutputForClaude(content, { kind: label });
-        return buildAllowDecision(safeEchoCommand(capped), `[DeepLake direct] ${label} ${virtualPath}`);
+        return buildAllowDecision(safeEchoCommand(capped), `[Memoree direct] ${label} ${virtualPath}`);
       }
       // The path was normalized to a concrete file but no VFS row exists — that
       // is "not found", NOT an unsupported command. Falling through to the
@@ -531,9 +531,9 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
       const notFound = `${virtualPath}: No such file or directory`;
       if (input.tool_name === "Read") {
         const file_path = writeReadCacheFileFn(input.session_id, virtualPath, notFound);
-        return buildReadDecision(file_path, `[DeepLake] not found: ${virtualPath}`);
+        return buildReadDecision(file_path, `[Memoree] not found: ${virtualPath}`);
       }
-      return buildAllowDecision(`echo ${JSON.stringify(notFound)}`, `[DeepLake] not found: ${virtualPath}`);
+      return buildAllowDecision(`echo ${JSON.stringify(notFound)}`, `[Memoree] not found: ${virtualPath}`);
     }
 
     if (!lsDir && input.tool_name === "Glob") {
@@ -586,10 +586,10 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         // can still create files alongside it in the cache.
         const leaf = (dir === "/" ? "" : dir) + "/_listing.txt";
         const file_path = writeReadCacheFileFn(input.session_id, leaf, lsOutput);
-        return buildReadDecision(file_path, `[DeepLake direct] ls ${dir}`);
+        return buildReadDecision(file_path, `[Memoree direct] ls ${dir}`);
       }
       // Branch hardening: safeEchoCommand over a raw `echo` for the ls payload.
-      return buildAllowDecision(safeEchoCommand(lsOutput), `[DeepLake direct] ls ${dir}`);
+      return buildAllowDecision(safeEchoCommand(lsOutput), `[Memoree direct] ls ${dir}`);
     }
 
     if (input.tool_name === "Bash") {
@@ -610,7 +610,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         let result = paths.join("\n") || "";
         if (/\|\s*wc\s+-l\s*$/.test(shellCmd)) result = String(paths.length);
         const capped = capOutputForClaude(result || "(no matches)", { kind: "find" });
-        return buildAllowDecision(safeEchoCommand(capped), `[DeepLake direct] find ${dir}`);
+        return buildAllowDecision(safeEchoCommand(capped), `[Memoree direct] find ${dir}`);
       }
     }
   } catch (e: any) {
@@ -622,18 +622,18 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   // entirely against the SQL backend, so no host filesystem access occurs.
   // Do NOT return null: that would hand the original command to Claude Code's
   // real host shell, which is unsafe.
-  const shellBundle = join(__bundleDir, "shell", "deeplake-shell.js");
+  const shellBundle = join(__bundleDir, "shell", "memoree-shell.js");
   logFn(`unroutable memory command, falling back to shell: ${shellCmd}`);
   // Read needs file_path, not a command-shaped decision.
   if (input.tool_name === "Read") {
-    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[DeepLake] memory Read unavailable — use Bash builtins");
+    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use Bash builtins");
   }
   // Single-quote both arguments so $(), backticks, and variable expansion
-  // cannot escape into the host shell before deeplake-shell.js receives them.
+  // cannot escape into the host shell before memoree-shell.js receives them.
   const sq = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`;
   return buildAllowDecision(
     `node ${sq(shellBundle)} -c ${sq(shellCmd)}`,
-    `[DeepLake shell] ${shellCmd}`,
+    `[Memoree shell] ${shellCmd}`,
   );
 }
 
@@ -645,7 +645,7 @@ async function main(): Promise<void> {
   // record via the async capture hook — which can be detached and unable to
   // walk to its `claude` ancestor. PreToolUse runs synchronously under claude,
   // so its /proc walk reliably finds the owner; no-op once recorded.
-  if (input.session_id && process.env.HIVEMIND_WIKI_WORKER !== "1") {
+  if (input.session_id && process.env.MEMOREE_WIKI_WORKER !== "1") {
     try { ensureSessionOwner(input.session_id); } catch { /* best-effort */ }
   }
   const decision = await processPreToolUse(input);

@@ -1,30 +1,28 @@
 /**
- * Hivemind MCP server — exposes shared org memory as MCP tools.
+ * Memoree MCP server — exposes the selected local memory backend as MCP tools.
  *
  * Tools:
- *   hivemind_search       — keyword/regex search across summaries + sessions
- *   hivemind_docs_search  — hybrid semantic/lexical search over per-file code docs
- *   hivemind_read         — read full content of a specific memory path
- *   hivemind_index        — list summaries with their dates and descriptions
+ *   memoree_search       — keyword/regex search across summaries + sessions
+ *   memoree_docs_search  — hybrid semantic/lexical search over per-file code docs
+ *   memoree_read         — read full content of a specific memory path
+ *   memoree_index        — list summaries with their dates and descriptions
  *
  * Transport: stdio. Spawned as a subprocess by the consuming MCP client
  * (Hermes today; reused by any future MCP-aware agent).
  *
- * Auth: loads ~/.deeplake/credentials.json. If credentials are missing,
- * tools return a clear "not authenticated" message rather than crashing.
+ * Configuration: loads ~/.memoree/config.json and the optional PostgreSQL
+ * URL from the environment.
  */
 
 import * as z from "zod/v3";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadRoutedConfig } from "../dir-config.js";
-import { loadCredentials } from "../commands/auth.js";
-import { readUserConfig } from "../user-config.js";
 import { createStorageBackend } from "../storage/factory.js";
 import type { StorageBackend } from "../storage/backend.js";
-import { isMissingTableError } from "../deeplake-schema.js";
+import { isMissingTableError } from "../storage/schema.js";
 import { sqlStr, sqlLike } from "../utils/sql.js";
-import { searchDeeplakeTables, searchDocs, buildGrepSearchOptions, normalizeContent, TRUNCATION_NOTICE, type GrepMatchParams } from "../shell/grep-core.js";
+import { searchMemoreeTables, searchDocs, buildGrepSearchOptions, normalizeContent, TRUNCATION_NOTICE, type GrepMatchParams } from "../shell/grep-core.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
 import { getVersion } from "../cli/version.js";
@@ -44,20 +42,7 @@ function getContext(): ServerContext | { error: string } {
   if (cachedContext) return cachedContext;
   const config = loadRoutedConfig();
   if (!config) {
-    const provider = process.env.HIVEMIND_BACKEND ?? readUserConfig().storage?.provider ?? "deeplake";
-    if (provider === "deeplake" && !loadCredentials()) {
-      return { error: "Not authenticated. Run `hivemind login` first." };
-    }
-    if (provider === "deeplake") {
-      return { error: "Hivemind config could not be loaded." };
-    }
-    return { error: "Hivemind storage is not configured. Run `hivemind backend status`." };
-  }
-  // Legacy callers supplied a Deeplake-shaped Config after a separate
-  // credentials check. Preserve that contract while provider-aware configs
-  // can authenticate from either credentials or environment variables.
-  if (!config.storage && !loadCredentials()) {
-    return { error: "Not authenticated. Run `hivemind login` first." };
+    return { error: "Memoree storage is not configured. Run `memoree install`." };
   }
   const api = createStorageBackend(config, config.tableName);
   cachedContext = { api, memoryTable: config.tableName, sessionsTable: config.sessionsTableName, docsTable: config.docsTableName };
@@ -84,17 +69,17 @@ function okResult(text: string): { content: Array<{ type: "text"; text: string }
  * is empty" instead of surfacing the raw error (issue #252).
  */
 const FRESH_ORG_HINT =
-  "Hivemind memory is empty — tables are created when the first agent session starts, and entries appear after it ends.";
+  "Memoree memory is empty — tables are created when the first agent session starts, and entries appear after it ends.";
 
 const server = new McpServer({
-  name: "hivemind",
+  name: "memoree",
   version: getVersion(),
 });
 
 server.registerTool(
-  "hivemind_search",
+  "memoree_search",
   {
-    description: "Search Hivemind shared memory (summaries + raw sessions) by keyword or multi-word phrase. Returns matching paths and snippets. Use this first when the user asks about prior work, conversations, or context that may exist in Hivemind. Different paths under /summaries/<username>/ are different users — do not merge them.",
+    description: "Search Memoree shared memory (summaries + raw sessions) by keyword or multi-word phrase. Returns matching paths and snippets. Use this first when the user asks about prior work, conversations, or context that may exist in Memoree. Different paths under /summaries/<username>/ are different users — do not merge them.",
     inputSchema: {
       query: z.string().describe("Keyword or multi-word phrase to search for (literal substring match)."),
       limit: z.number().int().min(1).max(50).optional().describe("Maximum hits to return (default 10)."),
@@ -119,7 +104,7 @@ server.registerTool(
 
     try {
       const meta = { truncated: false };
-      const rows = await searchDeeplakeTables(ctx.api, ctx.memoryTable, ctx.sessionsTable, opts, meta);
+      const rows = await searchMemoreeTables(ctx.api, ctx.memoryTable, ctx.sessionsTable, opts, meta);
       if (rows.length === 0) return errorResult(`No matches for "${query}".`);
       const lines = rows.map(r => {
         const body = normalizeContent(r.path, r.content);
@@ -138,9 +123,9 @@ server.registerTool(
 );
 
 server.registerTool(
-  "hivemind_docs_search",
+  "memoree_docs_search",
   {
-    description: "Search the per-file CODE documentation (kept fresh on commits) by meaning or keyword. Hybrid semantic + lexical. Use for 'where is X handled / how does Y work / which file does Z' about the current codebase — returns the most relevant source files with a one-line summary. Different from hivemind_search (that's past sessions/conversations; this is code docs).",
+    description: "Search the per-file CODE documentation (kept fresh on commits) by meaning or keyword. Hybrid semantic + lexical. Use for 'where is X handled / how does Y work / which file does Z' about the current codebase — returns the most relevant source files with a one-line summary. Different from memoree_search (that's past sessions/conversations; this is code docs).",
     inputSchema: {
       query: z.string().describe("Natural-language question or keywords about the codebase."),
       limit: z.number().int().min(1).max(50).optional().describe("Maximum docs to return (default 10)."),
@@ -176,11 +161,11 @@ server.registerTool(
 );
 
 server.registerTool(
-  "hivemind_read",
+  "memoree_read",
   {
-    description: "Read the full content of a specific Hivemind memory path. Use after hivemind_search to drill into a hit, or when you already know the path (e.g. /summaries/alice/abc.md or /sessions/alice/alice_org_ws_xyz.jsonl or /index.md).",
+    description: "Read the full content of a specific Memoree memory path. Use after memoree_search to drill into a hit, or when you already know the path (e.g. /summaries/alice/abc.md or /sessions/alice/alice_org_ws_xyz.jsonl or /index.md).",
     inputSchema: {
-      path: z.string().describe("Absolute Hivemind memory path, e.g. /summaries/alice/abc.md"),
+      path: z.string().describe("Absolute Memoree memory path, e.g. /summaries/alice/abc.md"),
     },
   },
   async ({ path }: { path: string }) => {
@@ -210,9 +195,9 @@ server.registerTool(
 );
 
 server.registerTool(
-  "hivemind_index",
+  "memoree_index",
   {
-    description: "List Hivemind summary entries (one row per session). Use to see what's in shared memory and find relevant sessions to drill into with hivemind_read.",
+    description: "List Memoree summary entries (one row per session). Use to see what's in shared memory and find relevant sessions to drill into with memoree_read.",
     inputSchema: {
       prefix: z.string().optional().describe("Path prefix to filter by, e.g. '/summaries/alice/' to scope to one user."),
       limit: z.number().int().min(1).max(200).optional().describe("Maximum rows (default 50)."),
@@ -260,6 +245,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  process.stderr.write(`hivemind-mcp fatal: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(`memoree-mcp fatal: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });

@@ -2,24 +2,24 @@
 
 > Category: Collaboration | Version: 1.0 | Date: June 2026 | Status: Active
 
-How Hivemind mines reusable skills from agent sessions, publishes them to the org's shared Deeplake table, and automatically distributes them to every teammate's agents on the next session start.
+How Memoree mines reusable skills from agent sessions, publishes them to the org's shared Memoree table, and automatically distributes them to every teammate's agents on the next session start.
 
 **Related:**
 - [`../ai/skillify-pipeline.md`](../ai/skillify-pipeline.md)
 - [`../architecture/system-overview.md`](../architecture/system-overview.md)
 - [`../multi-tenant/org-workspace-model.md`](../multi-tenant/org-workspace-model.md)
 - [`../frontend/cursor-extension-architecture.md`](../frontend/cursor-extension-architecture.md)
-- [`../data/deeplake-tables-schema.md`](../data/deeplake-tables-schema.md)
+- [`../data/memoree-tables-schema.md`](../data/memoree-tables-schema.md)
 - [`../../../../docs/SKILLIFY.md`](../../../../docs/SKILLIFY.md)
 
 ---
 
 ## The core loop
 
-Team skills sharing is a four-step cycle that runs automatically in the background whenever Hivemind is installed:
+Team skills sharing is a four-step cycle that runs automatically in the background whenever Memoree is installed:
 
-1. **Mine.** At session end (and periodically mid-session), a background worker reads recent session rows from Deeplake, asks a gate model whether the activity is worth codifying, and writes a `SKILL.md` to the local `.claude/skills/` directory.
-2. **Publish.** Mined skills are inserted into the org's shared `skills` Deeplake table as versioned rows. Every edit appends a new version (`v=N+1`); readers always take `ORDER BY version DESC`.
+1. **Mine.** At session end (and periodically mid-session), a background worker reads recent session rows from Memoree, asks a gate model whether the activity is worth codifying, and writes a `SKILL.md` to the local `.claude/skills/` directory.
+2. **Publish.** Mined skills are inserted into the org's shared `skills` Memoree table as versioned rows. Every edit appends a new version (`v=N+1`); readers always take `ORDER BY version DESC`.
 3. **Pull.** On every `SessionStart`, the auto-pull module queries the `skills` table for all users in the org and writes any newer remote skills to the local install root.
 4. **Propagate.** Fan-out symlinks point every non-Claude agent's skills root (`~/.codex/skills/`, `~/.hermes/skills/`, etc.) at the canonical `~/.claude/skills/<name>--<author>/` directory, so a pulled skill is immediately available to all agents without running a separate install command.
 
@@ -27,7 +27,7 @@ Team skills sharing is a four-step cycle that runs automatically in the backgrou
 
 ## Scope configuration
 
-The skillify worker respects a scope setting persisted in `~/.deeplake/state/skillify/config.json`:
+The skillify worker respects a scope setting persisted in `~/.memoree/state/skillify/config.json`:
 
 ```typescript
 type Scope = "me" | "team";
@@ -35,14 +35,14 @@ type InstallLocation = "project" | "global";
 
 interface ScopeConfig {
   scope: Scope;
-  team: string[];      // Deeplake usernames to mine from, when scope = "team"
+  team: string[];      // Memoree usernames to mine from, when scope = "team"
   install: InstallLocation;
 }
 ```
 
 The default scope is `"me"` with `install = "project"`, meaning the worker mines only from the current user's sessions and writes skills into `<cwd>/.claude/skills/`.
 
-Setting scope to `"team"` and populating `team` with colleagues' usernames tells the worker to mine from those users' sessions as well. The CLI command is `hivemind skillify scope team --users alice,bob`. A legacy third value `"org"` (mine from every workspace user) was removed from the CLI but is silently coerced to `"team"` on read for backward compatibility with existing config files.
+Setting scope to `"team"` and populating `team` with colleagues' usernames tells the worker to mine from those users' sessions as well. The CLI command is `memoree skillify scope team --users alice,bob`. A legacy third value `"org"` (mine from every workspace user) was removed from the CLI but is silently coerced to `"team"` on read for backward compatibility with existing config files.
 
 Setting `install = "global"` writes skills to `~/.claude/skills/`, making them visible across all projects on the machine. The auto-pull always uses `install = "global"` so pulled teammate skills are available everywhere.
 
@@ -50,15 +50,15 @@ Setting `install = "global"` writes skills to `~/.claude/skills/`, making them v
 
 ## Auto-pull at session start
 
-The auto-pull runs on every `SessionStart` hook for every agent that Hivemind supports. It is intentionally not throttled: because `runPull` is idempotent (skipping any skill whose local version is at-or-newer than the remote version), the only cost per call is one SQL round-trip plus `existsSync` syscalls. This makes teammate-mined skills visible within seconds of publication, rather than within the 30-minute polling window an older design used.
+The auto-pull runs on every `SessionStart` hook for every agent that Memoree supports. It is intentionally not throttled: because `runPull` is idempotent (skipping any skill whose local version is at-or-newer than the remote version), the only cost per call is one SQL round-trip plus `existsSync` syscalls. This makes teammate-mined skills visible within seconds of publication, rather than within the 30-minute polling window an older design used.
 
-The auto-pull is bounded by a 5-second timeout. A slow or unreachable Deeplake backend never blocks `SessionStart` past that limit. All errors are swallowed; the pull result is informational only.
+The auto-pull is bounded by a 5-second timeout. A slow or unreachable Memoree backend never blocks `SessionStart` past that limit. All errors are swallowed; the pull result is informational only.
 
-Hard opt-out is available via `HIVEMIND_AUTOPULL_DISABLED=1`. Unauthenticated sessions skip the pull silently without logging a warning.
+Hard opt-out is available via `MEMOREE_AUTOPULL_DISABLED=1`. Unauthenticated sessions skip the pull silently without logging a warning.
 
 ### Early exit when table is absent
 
-On a fresh workspace, the `skills` table does not exist yet (it is created lazily by the first `INSERT`). The auto-pull uses a "trusted table list" path to detect this: it calls `api.knownTablesOrNull()` to fetch the list of existing tables, and if `skills` is absent, skips the `SELECT` entirely. This prevents a `42P01 relation does not exist` error from appearing in the Deeplake server logs on every `SessionStart` for new users.
+On a fresh workspace, the `skills` table does not exist yet (it is created lazily by the first `INSERT`). The auto-pull uses a "trusted table list" path to detect this: it calls `api.knownTablesOrNull()` to fetch the list of existing tables, and if `skills` is absent, skips the `SELECT` entirely. This prevents a `42P01 relation does not exist` error from appearing in the Memoree server logs on every `SessionStart` for new users.
 
 ---
 
@@ -117,7 +117,7 @@ A user who installs a new agent (Codex, Hermes, pi) after having already pulled 
 | Remote version <= local version (no `--force`) | Skip |
 | `--force` flag set | Backup existing, then write regardless of version |
 
-The `--force` flag is available via `hivemind skillify pull --force`. Dry-run mode (`--dry-run`) reports what would have been written without touching the filesystem.
+The `--force` flag is available via `memoree skillify pull --force`. Dry-run mode (`--dry-run`) reports what would have been written without touching the filesystem.
 
 ---
 
@@ -131,7 +131,7 @@ The `SKILLOPT_CONTRIBUTOR = "skillopt"` marker is stamped on every skill that th
 
 ## Manifest tracking
 
-Every pull writes a record to the local pull manifest so `hivemind skillify unpull` can identify and reverse pull-managed entries without relying on the `--<author>` directory naming heuristic. The manifest records the `dirName`, `name`, `author`, `projectKey`, `remoteVersion`, `install`, `installRoot`, `pulledAt`, and the list of symlinks created by fan-out.
+Every pull writes a record to the local pull manifest so `memoree skillify unpull` can identify and reverse pull-managed entries without relying on the `--<author>` directory naming heuristic. The manifest records the `dirName`, `name`, `author`, `projectKey`, `remoteVersion`, `install`, `installRoot`, `pulledAt`, and the list of symlinks created by fan-out.
 
 When `recordPull` fails (for example due to a transient write error), the skill is still on disk but the manifest does not have an entry. The `manifestError` field in the pull result entry surfaces this condition so the CLI can warn the user. A subsequent successful re-pull will populate the manifest entry.
 
@@ -146,7 +146,7 @@ flowchart TD
     gate["Gate model: worth codifying?"]
     noSkill["No skill written"]
     writeLocal["Write SKILL.md to .claude/skills/<name>/"]
-    insertRow["INSERT into skills table (Deeplake)"]
+    insertRow["INSERT into skills table (Memoree)"]
     nextSession["Teammate's SessionStart"]
     autoPull["autoPullSkills (5s timeout)"]
     selectSkills["SELECT from skills table WHERE version > local"]

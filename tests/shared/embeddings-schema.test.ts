@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MEMORY_COLUMNS, SESSIONS_COLUMNS, renderColumnSql } from "../../src/deeplake-schema.js";
+import { MEMORY_COLUMNS, SESSIONS_COLUMNS, renderColumnSql } from "../../src/storage/schema.js";
 
 const BUNDLE_DIRS = [
   "harnesses/claude-code/bundle",
@@ -24,8 +24,8 @@ describe("shipped bundles include embedding columns", () => {
       expect(src).toMatch(/message_embedding/);
     });
 
-    it(`${dir}/shell/deeplake-shell.js writes summary_embedding`, () => {
-      const src = read(join(dir, "shell/deeplake-shell.js"));
+    it(`${dir}/shell/memoree-shell.js writes summary_embedding`, () => {
+      const src = read(join(dir, "shell/memoree-shell.js"));
       expect(src).toMatch(/summary_embedding/);
     });
 
@@ -38,23 +38,23 @@ describe("shipped bundles include embedding columns", () => {
 });
 
 describe("src-level schema includes new embedding columns", () => {
-  // Schemas moved from inline strings in deeplake-api.ts to structured
-  // arrays in deeplake-schema.ts. The bundles still need to inline these
+  // Schemas moved from inline strings in memoree-api.ts to structured
+  // arrays in storage/schema.ts. The bundles still need to inline these
   // columns, but the source of truth is now the new module.
-  it("MEMORY_COLUMNS includes summary_embedding FLOAT4[]", () => {
+  it("MEMORY_COLUMNS includes a PostgreSQL vector array", () => {
     const column = MEMORY_COLUMNS.find(item => item.name === "summary_embedding");
     expect(column?.type).toBe("vector");
-    expect(renderColumnSql(column!, "deeplake")).toBe("FLOAT4[]");
+    expect(renderColumnSql(column!, "postgres")).toBe("DOUBLE PRECISION[]");
   });
 
-  it("SESSIONS_COLUMNS includes message_embedding FLOAT4[]", () => {
+  it("SESSIONS_COLUMNS includes a PostgreSQL vector array", () => {
     const column = SESSIONS_COLUMNS.find(item => item.name === "message_embedding");
     expect(column?.type).toBe("vector");
-    expect(renderColumnSql(column!, "deeplake")).toBe("FLOAT4[]");
+    expect(renderColumnSql(column!, "postgres")).toBe("DOUBLE PRECISION[]");
   });
 
   it("embedding columns do NOT use TEXT (regression guard)", () => {
-    expect(renderColumnSql(MEMORY_COLUMNS.find(item => item.name === "summary_embedding")!, "deeplake")).not.toBe("TEXT");
-    expect(renderColumnSql(SESSIONS_COLUMNS.find(item => item.name === "message_embedding")!, "deeplake")).not.toBe("TEXT");
+    expect(renderColumnSql(MEMORY_COLUMNS.find(item => item.name === "summary_embedding")!, "postgres")).not.toBe("TEXT");
+    expect(renderColumnSql(SESSIONS_COLUMNS.find(item => item.name === "message_embedding")!, "sqlite")).toBe("TEXT");
   });
 });

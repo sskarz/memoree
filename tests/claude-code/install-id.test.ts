@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   getOrCreateInstallID,
-  hivemindInstallIDHeader,
+  memoreeInstallIDHeader,
 } from "../../src/commands/install-id.js";
 import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
@@ -22,11 +22,11 @@ let ORIGINAL_HOME: string | undefined;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function installIDFile(): string {
-  return join(TEMP_HOME, ".deeplake", "install-id");
+  return join(TEMP_HOME, ".memoree", "install-id");
 }
 
 beforeEach(() => {
-  TEMP_HOME = mkdtempSync(join(tmpdir(), "hivemind-install-id-test-"));
+  TEMP_HOME = mkdtempSync(join(tmpdir(), "memoree-install-id-test-"));
   ORIGINAL_HOME = process.env.HOME;
   setFakeHome(TEMP_HOME);
 });
@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe("install-id — generate + persist", () => {
-  it("creates a UUID on first call and persists it to ~/.deeplake/install-id", () => {
+  it("creates a UUID on first call and persists it to ~/.memoree/install-id", () => {
     expect(existsSync(installIDFile())).toBe(false);
 
     const id = getOrCreateInstallID();
@@ -58,14 +58,14 @@ describe("install-id — generate + persist", () => {
 
   it("reuses an existing valid ID on disk without regenerating", () => {
     const preexisting = "11111111-2222-3333-4444-555555555555";
-    mkdirSync(join(TEMP_HOME, ".deeplake"), { recursive: true });
+    mkdirSync(join(TEMP_HOME, ".memoree"), { recursive: true });
     writeFileSync(installIDFile(), preexisting);
 
     expect(getOrCreateInstallID()).toBe(preexisting);
   });
 
   it("rotates a corrupt on-disk value (not a UUID) to a fresh one", () => {
-    mkdirSync(join(TEMP_HOME, ".deeplake"), { recursive: true });
+    mkdirSync(join(TEMP_HOME, ".memoree"), { recursive: true });
     writeFileSync(installIDFile(), "not-a-uuid-just-garbage");
 
     const id = getOrCreateInstallID();
@@ -77,7 +77,7 @@ describe("install-id — generate + persist", () => {
 
   it("trims surrounding whitespace from existing valid IDs", () => {
     const preexisting = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-    mkdirSync(join(TEMP_HOME, ".deeplake"), { recursive: true });
+    mkdirSync(join(TEMP_HOME, ".memoree"), { recursive: true });
     writeFileSync(installIDFile(), `  ${preexisting}\n`);
 
     expect(getOrCreateInstallID()).toBe(preexisting);
@@ -93,31 +93,31 @@ describe("install-id — generate + persist", () => {
   });
 });
 
-describe("install-id — hivemindInstallIDHeader", () => {
-  it("returns { X-Hivemind-Install-Id: <uuid> } when an ID is available", () => {
-    const header = hivemindInstallIDHeader();
-    expect(Object.keys(header)).toEqual(["X-Hivemind-Install-Id"]);
-    expect(header["X-Hivemind-Install-Id"]).toMatch(UUID_RE);
+describe("install-id — memoreeInstallIDHeader", () => {
+  it("returns { X-Memoree-Install-Id: <uuid> } when an ID is available", () => {
+    const header = memoreeInstallIDHeader();
+    expect(Object.keys(header)).toEqual(["X-Memoree-Install-Id"]);
+    expect(header["X-Memoree-Install-Id"]).toMatch(UUID_RE);
   });
 
   it("returns the SAME header value as getOrCreateInstallID() — they share state", () => {
     const id = getOrCreateInstallID();
-    expect(hivemindInstallIDHeader()).toEqual({ "X-Hivemind-Install-Id": id });
+    expect(memoreeInstallIDHeader()).toEqual({ "X-Memoree-Install-Id": id });
   });
 });
 
 describe("install-id — graceful degradation", () => {
-  it("returns empty string + empty header when ~/.deeplake is unwritable", () => {
+  it("returns empty string + empty header when ~/.memoree is unwritable", () => {
     // Pre-create the config dir as read-only so writeFileSync(install-id) fails.
     if (process.platform === "win32") return; // POSIX-only test
     if (process.getuid && process.getuid() === 0) return; // root bypasses mode checks
-    mkdirSync(join(TEMP_HOME, ".deeplake"), { recursive: true, mode: 0o500 });
+    mkdirSync(join(TEMP_HOME, ".memoree"), { recursive: true, mode: 0o500 });
 
     const id = getOrCreateInstallID();
     expect(id).toBe("");
-    expect(hivemindInstallIDHeader()).toEqual({});
+    expect(memoreeInstallIDHeader()).toEqual({});
 
     // Restore so afterEach cleanup can rm the dir.
-    chmodSync(join(TEMP_HOME, ".deeplake"), 0o700);
+    chmodSync(join(TEMP_HOME, ".memoree"), 0o700);
   });
 });

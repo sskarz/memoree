@@ -7,7 +7,7 @@
  * team's summaries and, if the top hit clears a relevance bar, inject ONE
  * attributed snippet ("recalled from <teammate> · <date>") into the model
  * context. Every recall-worthy invocation is recorded to an always-on
- * `~/.deeplake/recall-events.jsonl` sink (independent of HIVEMIND_DEBUG) so
+ * `~/.memoree/recall-events.jsonl` sink (independent of MEMOREE_DEBUG) so
  * usage / hit-rate is directly measurable.
  *
  * Search mode: SEMANTIC (cosine) ONLY. When embeddings are unavailable (or the
@@ -23,7 +23,7 @@
  *
  * Opt-out: this auto-search-and-inject is ENABLED BY DEFAULT. A user turns it
  * off (without affecting session capture or the agent's own reactive recall)
- * via HIVEMIND_PROACTIVE_RECALL_DISABLED=1 (or HIVEMIND_PROACTIVE_RECALL=0).
+ * via MEMOREE_PROACTIVE_RECALL_DISABLED=1 (or MEMOREE_PROACTIVE_RECALL=0).
  * See proactiveRecallDisabled() in shared/recall-gate.ts.
  */
 
@@ -35,7 +35,7 @@ import { EmbedClient } from "../embeddings/client.js";
 import { embedSummaryWithWarmup } from "../embeddings/embed-summary.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
 import { ensurePluginNodeModulesLink } from "../embeddings/self-heal.js";
-import { isHivemindPluginEnabled } from "../utils/plugin-state.js";
+import { isMemoreePluginEnabled } from "../utils/plugin-state.js";
 import { log as _log } from "../utils/debug.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -54,17 +54,17 @@ import { recordRecallEvent } from "./shared/recall-events.js";
 
 const log = (msg: string) => _log("recall", msg);
 
-const SEMANTIC_ENABLED = process.env.HIVEMIND_SEMANTIC_SEARCH !== "false" && !embeddingsDisabled();
+const SEMANTIC_ENABLED = process.env.MEMOREE_SEMANTIC_SEARCH !== "false" && !embeddingsDisabled();
 // Hard ceiling on the recall critical path. recall runs SYNCHRONOUSLY on
 // UserPromptSubmit — it blocks the turn — so we cap the worst case to a
 // predictable budget and degrade to "skip" rather than stall on a slow backend.
 // Budget raised 1000->1500 so a one-time cold-daemon warmup (~300ms) + embed
 // (~500ms) + query comfortably fit; still well under the 2s recall hook timeout.
-const RECALL_BUDGET_MS = parsePositive(process.env.HIVEMIND_RECALL_TIMEOUT_MS, 1500);
+const RECALL_BUDGET_MS = parsePositive(process.env.MEMOREE_RECALL_TIMEOUT_MS, 1500);
 // The embed self-timeout is clamped to the budget so EmbedClient.embed() (which
 // has no abort hook) can never outlast the overall recall budget, even if a
-// user sets HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS higher than the budget.
-const EMBED_TIMEOUT_MS = Math.min(parsePositive(process.env.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS, 500), RECALL_BUDGET_MS);
+// user sets MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS higher than the budget.
+const EMBED_TIMEOUT_MS = Math.min(parsePositive(process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS, 500), RECALL_BUDGET_MS);
 // Bounded daemon warmup on the recall path. A COLD embed daemon's model loads
 // in ~300ms, but EmbedClient.embed() fire-and-forgets on a cold socket and
 // returns null immediately — so the FIRST recall-worthy prompt of a session
@@ -72,7 +72,7 @@ const EMBED_TIMEOUT_MS = Math.min(parsePositive(process.env.HIVEMIND_SEMANTIC_EM
 // budget easily covers a ~300ms spawn, so warm the daemon (bounded) BEFORE
 // embedding instead of racing it. Warm sessions pay ~0 (warmup returns as soon
 // as the socket already accepts).
-const WARMUP_BUDGET_MS = Math.min(parsePositive(process.env.HIVEMIND_RECALL_WARMUP_MS, 700), RECALL_BUDGET_MS);
+const WARMUP_BUDGET_MS = Math.min(parsePositive(process.env.MEMOREE_RECALL_WARMUP_MS, 700), RECALL_BUDGET_MS);
 
 type FindResult =
   | { kind: "hit"; hit: RecallHit }
@@ -141,7 +141,7 @@ async function findHit(
     if (SEMANTIC_ENABLED) {
       // Self-heal the shared-deps symlink BEFORE building the EmbedClient.
       // A marketplace auto-upgrade drops a new versioned cache dir without the
-      // `node_modules` symlink that `hivemind embeddings install` created.
+      // `node_modules` symlink that `memoree embeddings install` created.
       // capture.js repairs this too, but recall and capture are independent
       // async UserPromptSubmit hooks — recall can run first, so without this
       // the first prompt after an upgrade would silently skip recall entirely
@@ -183,10 +183,10 @@ function hitPasses(hit: RecallHit): boolean {
 }
 
 async function main(): Promise<void> {
-  if (proactiveRecallDisabled()) return; // on by default; opt out: HIVEMIND_PROACTIVE_RECALL_DISABLED=1
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
-  if (!isHivemindPluginEnabled()) return;
-  // Honor HIVEMIND_CAPTURE_ONLY_CLI: when set, SessionStart/Capture/SessionEnd
+  if (proactiveRecallDisabled()) return; // on by default; opt out: MEMOREE_PROACTIVE_RECALL_DISABLED=1
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
+  if (!isMemoreePluginEnabled()) return;
+  // Honor MEMOREE_CAPTURE_ONLY_CLI: when set, SessionStart/Capture/SessionEnd
   // all skip non-interactive entrypoints (sdk-py/sdk-ts/sdk-cli). Recall must
   // too — otherwise it would inject hidden context into Agent SDK / `claude -p`
   // runs the user explicitly scoped to CLI-only, perturbing scripted output.
@@ -205,7 +205,7 @@ async function main(): Promise<void> {
     recordRecallEvent({ event: "no-config", gate: reason, session });
     return;
   }
-  // Route recall by the nearest `.hivemind`, like capture and memory search:
+  // Route recall by the nearest `.memoree`, like capture and memory search:
   // a routed directory must recall from ITS workspace, not the global one.
   const config = resolveDirConfig(baseConfig, input.cwd ?? process.cwd()).config;
 

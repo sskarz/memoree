@@ -25,7 +25,7 @@ function e(source: string, target: string): GraphEdge {
 const SNAP: GraphSnapshot = {
   directed: true,
   multigraph: true,
-  graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: null, repo_key: "test" },
+  graph: { schema_version: 1, generator: "memoree-graph", commit_sha: null, repo_key: "test" },
   observation: {
     ts: "2024-01-01T00:00:00Z",
     branch: "main",

@@ -1,33 +1,33 @@
 /**
- * CLI surface for `hivemind goal` / `hivemind kpi`.
+ * CLI surface for `memoree goal` / `memoree kpi`.
  *
  * Why this exists: cursor and hermes intercept ONLY Shell-style
  * tool invocations in their pre-tool-use hook (see
  * src/hooks/cursor/pre-tool-use.ts:53 and
  * src/hooks/hermes/pre-tool-use.ts:43). The Write / Edit / Read
  * tools in those agents go straight to the host filesystem without
- * passing through deeplake-fs.ts, so the goal-path classifier
+ * passing through memoree-fs.ts, so the goal-path classifier
  * never fires. The VFS-routing approach works for claude-code and
  * codex but is structurally unavailable on cursor/hermes.
  *
  * This CLI is the fallback channel: any agent can invoke
- * `hivemind goal add "<text>"` via its Shell tool, the bash
+ * `memoree goal add "<text>"` via its Shell tool, the bash
  * command runs as a normal subprocess (cursor's hook lets
  * non-memory-touching commands pass through), and this code talks
- * directly to the Deeplake API. End result: a row in
- * hivemind_goals (or hivemind_kpis) regardless of which agent
+ * directly to the Memoree API. End result: a row in
+ * memoree_goals (or memoree_kpis) regardless of which agent
  * called it.
  *
  * Subcommands:
  *
- *   hivemind goal add "<text>"            create a new goal (status=opened)
- *   hivemind goal list [--all|--mine]     list goal_id + text + status
- *   hivemind goal done <goal_id>          flip status -> closed
- *   hivemind goal progress <goal_id> <status>  flip status to any value
- *   hivemind kpi add <goal_id> <kpi_id> <target> <unit> [name]
+ *   memoree goal add "<text>"            create a new goal (status=opened)
+ *   memoree goal list [--all|--mine]     list goal_id + text + status
+ *   memoree goal done <goal_id>          flip status -> closed
+ *   memoree goal progress <goal_id> <status>  flip status to any value
+ *   memoree kpi add <goal_id> <kpi_id> <target> <unit> [name]
  *                                          create a KPI on an existing goal
- *   hivemind kpi list <goal_id>            list KPIs for a goal
- *   hivemind kpi bump <goal_id> <kpi_id> <delta>
+ *   memoree kpi list <goal_id>            list KPIs for a goal
+ *   memoree kpi bump <goal_id> <kpi_id> <delta>
  *                                          add <delta> (int, +/-) to current
  *
  * Output is intentionally compact and machine-parsable on the
@@ -82,7 +82,7 @@ function parseAgentFlag(args: string[]): { agent: string; rest: string[] } {
 function loadApiOrDie(table: string): { api: StorageBackend; query: QueryFn; userName: string } {
   const cfg = loadRoutedConfig();
   if (!cfg) {
-    process.stderr.write("hivemind: not logged in. Run `hivemind login` first.\n");
+    process.stderr.write("memoree: storage unavailable. Run `memoree doctor`.\n");
     process.exit(1);
   }
   const api = createStorageBackend(cfg, table);
@@ -95,7 +95,7 @@ function loadApiOrDie(table: string): { api: StorageBackend; query: QueryFn; use
 async function goalAdd(text: string, agent: string = "manual"): Promise<void> {
   const cfg = loadRoutedConfig();
   if (!cfg) {
-    process.stderr.write("hivemind: not logged in.\n");
+    process.stderr.write("memoree: storage unavailable.\n");
     process.exit(1);
   }
   const table = cfg.goalsTableName;
@@ -123,7 +123,7 @@ async function goalAdd(text: string, agent: string = "manual"): Promise<void> {
 
 async function goalList(filter: "all" | "mine"): Promise<void> {
   const cfg = loadRoutedConfig();
-  if (!cfg) { process.stderr.write("not logged in\n"); process.exit(1); }
+  if (!cfg) { process.stderr.write("storage unavailable\n"); process.exit(1); }
   const { query } = loadApiOrDie(cfg.goalsTableName);
   const safe = sqlIdent(cfg.goalsTableName);
   let where = "";
@@ -141,15 +141,15 @@ async function goalList(filter: "all" | "mine"): Promise<void> {
       process.stdout.write(`${r.goal_id}\t${r.owner}\t${r.status}\t${text}\n`);
     }
   } catch (e: unknown) {
-    process.stderr.write(`hivemind goal list: ${(e as Error).message}\n`);
+    process.stderr.write(`memoree goal list: ${(e as Error).message}\n`);
     process.exit(1);
   }
 }
 
 async function goalGet(goalId: string): Promise<void> {
-  if (!goalId) { process.stderr.write("usage: hivemind goal get <goal_id>\n"); process.exit(1); }
+  if (!goalId) { process.stderr.write("usage: memoree goal get <goal_id>\n"); process.exit(1); }
   const cfg = loadRoutedConfig();
-  if (!cfg) { process.stderr.write("not logged in\n"); process.exit(1); }
+  if (!cfg) { process.stderr.write("storage unavailable\n"); process.exit(1); }
   const { query } = loadApiOrDie(cfg.goalsTableName);
   const safe = sqlIdent(cfg.goalsTableName);
   try {
@@ -165,7 +165,7 @@ async function goalGet(goalId: string): Promise<void> {
     }
     process.stdout.write(`${String(rows[0].content ?? "")}\n`);
   } catch (e: unknown) {
-    process.stderr.write(`hivemind goal get: ${(e as Error).message}\n`);
+    process.stderr.write(`memoree goal get: ${(e as Error).message}\n`);
     process.exit(1);
   }
 }
@@ -180,7 +180,7 @@ async function goalProgress(goalId: string, status: string): Promise<void> {
     process.exit(1);
   }
   const cfg = loadRoutedConfig();
-  if (!cfg) { process.stderr.write("not logged in\n"); process.exit(1); }
+  if (!cfg) { process.stderr.write("storage unavailable\n"); process.exit(1); }
   const { api, query } = loadApiOrDie(cfg.goalsTableName);
   // Heal the schema before the UPDATE: an upgraded workspace's preexisting
   // table may lack the `updated_at` column, and this path (unlike `goal add`)
@@ -199,7 +199,7 @@ async function goalProgress(goalId: string, status: string): Promise<void> {
 async function kpiAdd(args: string[]): Promise<void> {
   const [goalId, kpiId, targetStr, unit, ...nameParts] = args;
   if (!goalId || !kpiId || !targetStr || !unit) {
-    process.stderr.write("usage: hivemind kpi add <goal_id> <kpi_id> <target> <unit> [name]\n");
+    process.stderr.write("usage: memoree kpi add <goal_id> <kpi_id> <target> <unit> [name]\n");
     process.exit(1);
   }
   const target = Number.parseInt(targetStr, 10);
@@ -209,7 +209,7 @@ async function kpiAdd(args: string[]): Promise<void> {
   }
   const name = nameParts.length > 0 ? nameParts.join(" ") : kpiId;
   const cfg = loadRoutedConfig();
-  if (!cfg) { process.stderr.write("not logged in\n"); process.exit(1); }
+  if (!cfg) { process.stderr.write("storage unavailable\n"); process.exit(1); }
   const { api, query } = loadApiOrDie(cfg.kpisTableName);
   await api.ensureKpisTable(cfg.kpisTableName);
   const safe = sqlIdent(cfg.kpisTableName);
@@ -232,9 +232,9 @@ async function kpiAdd(args: string[]): Promise<void> {
 }
 
 async function kpiList(goalId: string): Promise<void> {
-  if (!goalId) { process.stderr.write("usage: hivemind kpi list <goal_id>\n"); process.exit(1); }
+  if (!goalId) { process.stderr.write("usage: memoree kpi list <goal_id>\n"); process.exit(1); }
   const cfg = loadRoutedConfig();
-  if (!cfg) { process.stderr.write("not logged in\n"); process.exit(1); }
+  if (!cfg) { process.stderr.write("storage unavailable\n"); process.exit(1); }
   const { query } = loadApiOrDie(cfg.kpisTableName);
   const safe = sqlIdent(cfg.kpisTableName);
   try {
@@ -247,14 +247,14 @@ async function kpiList(goalId: string): Promise<void> {
       process.stdout.write(`${r.kpi_id}\t${firstLine}\n`);
     }
   } catch (e: unknown) {
-    process.stderr.write(`hivemind kpi list: ${(e as Error).message}\n`);
+    process.stderr.write(`memoree kpi list: ${(e as Error).message}\n`);
     process.exit(1);
   }
 }
 
 async function kpiBump(goalId: string, kpiId: string, deltaStr: string): Promise<void> {
   if (!goalId || !kpiId || !deltaStr) {
-    process.stderr.write("usage: hivemind kpi bump <goal_id> <kpi_id> <delta>\n");
+    process.stderr.write("usage: memoree kpi bump <goal_id> <kpi_id> <delta>\n");
     process.exit(1);
   }
   const delta = Number.parseInt(deltaStr, 10);
@@ -263,7 +263,7 @@ async function kpiBump(goalId: string, kpiId: string, deltaStr: string): Promise
     process.exit(1);
   }
   const cfg = loadRoutedConfig();
-  if (!cfg) { process.stderr.write("not logged in\n"); process.exit(1); }
+  if (!cfg) { process.stderr.write("storage unavailable\n"); process.exit(1); }
   const { api, query } = loadApiOrDie(cfg.kpisTableName);
   // Heal the schema before the UPDATE — same reason as goalProgress: a
   // preexisting KPIs table may not yet have the `updated_at` column.
@@ -297,15 +297,15 @@ async function kpiBump(goalId: string, kpiId: string, deltaStr: string): Promise
 // ── dispatchers ─────────────────────────────────────────────────────────────
 
 const USAGE_GOAL = `
-hivemind goal — manage team goals
+memoree goal — manage team goals
 
 Usage:
-  hivemind goal add "<text>" [--agent manual|capture]
+  memoree goal add "<text>" [--agent manual|capture]
                                         create a goal (status=opened)
-  hivemind goal list [--all|--mine]     list goals (default: --mine)
-  hivemind goal get <goal_id>           print a goal's full body (resume context)
-  hivemind goal done <goal_id>          mark goal closed
-  hivemind goal progress <goal_id> <opened|in_progress|closed>
+  memoree goal list [--all|--mine]     list goals (default: --mine)
+  memoree goal get <goal_id>           print a goal's full body (resume context)
+  memoree goal done <goal_id>          mark goal closed
+  memoree goal progress <goal_id> <opened|in_progress|closed>
 `.trim();
 
 export async function runGoalCommand(args: string[]): Promise<void> {
@@ -314,7 +314,7 @@ export async function runGoalCommand(args: string[]): Promise<void> {
   if (sub === "add") {
     const { agent, rest } = parseAgentFlag(args.slice(1));
     const text = rest.join(" ").trim();
-    if (!text) { process.stderr.write("usage: hivemind goal add \"<text>\"\n"); process.exit(1); }
+    if (!text) { process.stderr.write("usage: memoree goal add \"<text>\"\n"); process.exit(1); }
     await goalAdd(text, agent);
     return;
   }
@@ -325,20 +325,20 @@ export async function runGoalCommand(args: string[]): Promise<void> {
   }
   if (sub === "get") {
     const id = args[1];
-    if (!id) { process.stderr.write("usage: hivemind goal get <goal_id>\n"); process.exit(1); }
+    if (!id) { process.stderr.write("usage: memoree goal get <goal_id>\n"); process.exit(1); }
     await goalGet(id);
     return;
   }
   if (sub === "done") {
     const id = args[1];
-    if (!id) { process.stderr.write("usage: hivemind goal done <goal_id>\n"); process.exit(1); }
+    if (!id) { process.stderr.write("usage: memoree goal done <goal_id>\n"); process.exit(1); }
     await goalDone(id);
     return;
   }
   if (sub === "progress") {
     const id = args[1];
     const status = args[2];
-    if (!id || !status) { process.stderr.write("usage: hivemind goal progress <goal_id> <status>\n"); process.exit(1); }
+    if (!id || !status) { process.stderr.write("usage: memoree goal progress <goal_id> <status>\n"); process.exit(1); }
     await goalProgress(id, status);
     return;
   }
@@ -347,12 +347,12 @@ export async function runGoalCommand(args: string[]): Promise<void> {
 }
 
 const USAGE_KPI = `
-hivemind kpi — manage goal KPIs
+memoree kpi — manage goal KPIs
 
 Usage:
-  hivemind kpi add <goal_id> <kpi_id> <target> <unit> [name]
-  hivemind kpi list <goal_id>
-  hivemind kpi bump <goal_id> <kpi_id> <delta>
+  memoree kpi add <goal_id> <kpi_id> <target> <unit> [name]
+  memoree kpi list <goal_id>
+  memoree kpi bump <goal_id> <kpi_id> <delta>
 `.trim();
 
 export async function runKpiCommand(args: string[]): Promise<void> {

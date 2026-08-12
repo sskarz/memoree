@@ -1,37 +1,37 @@
 /**
  * One-time migration of the pre-rename state directory.
  *
- * Old: ~/.deeplake/state/skilify/
- * New: ~/.deeplake/state/skillify/
+ * Old: ~/.memoree/state/skilify/
+ * New: ~/.memoree/state/skillify/
  *
  * If the legacy directory exists and the new one does not, rename in place
  * so installed-skill manifests, scope config, and per-project state survive
  * the rename.
  *
  * Env-awareness: the *new* directory is resolved through `getStateDir()`,
- * which honors `HIVEMIND_STATE_DIR`. The legacy sibling is computed as the
+ * which honors `MEMOREE_STATE_DIR`. The legacy sibling is computed as the
  * `skilify` sibling of whatever `getStateDir()` returns. When tests point
- * `HIVEMIND_STATE_DIR` at a `mkdtempSync()` dir, the `skilify` sibling
+ * `MEMOREE_STATE_DIR` at a `mkdtempSync()` dir, the `skilify` sibling
  * obviously does not exist — the migration short-circuits, which is the
  * whole point: tests must never touch the developer's real
- * `~/.deeplake/state/skilify` while exercising state code paths.
+ * `~/.memoree/state/skilify` while exercising state code paths.
  *
  * Before this routing was wired, every `readState` / `writeState` /
  * `withRmwLock` / `tryAcquireWorkerLock` call inside a test would
- * stat-and-potentially-rename the real `~/.deeplake/state/skilify` despite
+ * stat-and-potentially-rename the real `~/.memoree/state/skilify` despite
  * the env override on `state.ts`, because this helper hardcoded
  * `homedir()`. Test pollution leaked through that channel and is what
  * accumulated the orphan lock directories the env override is meant to
  * prevent.
  *
- * Re-entrancy: a single `attempted` boolean is enough. The `HIVEMIND_STATE_DIR`
+ * Re-entrancy: a single `attempted` boolean is enough. The `MEMOREE_STATE_DIR`
  * guard at the top of the function makes this an in-process one-shot —
  * `getStateDir()` always resolves to the same canonical path when the env is
  * unset, so there's no scenario where the same process would need to migrate
  * a *different* state dir later in its lifetime.
  *
  * Error policy: swallow the documented fallback codes — `EXDEV`
- * (cross-device link, e.g. `~/.deeplake` on a different mount than `/tmp`),
+ * (cross-device link, e.g. `~/.memoree` on a different mount than `/tmp`),
  * `EPERM` (sandboxed or read-only home), and the multi-process race codes
  * `ENOENT` / `EEXIST` / `ENOTEMPTY` (another worker / hook / install
  * raced past the existsSync checks and either migrated the dir or
@@ -51,17 +51,17 @@ const dlog = (msg: string) => _log("skillify-migrate", msg);
 let attempted = false;
 
 export function migrateLegacyStateDir(): void {
-  // Hard guard: when `HIVEMIND_STATE_DIR` is set we are explicitly NOT
+  // Hard guard: when `MEMOREE_STATE_DIR` is set we are explicitly NOT
   // in the canonical home-based layout. The `skilify`-vs-`skillify`
   // typo migration is a one-shot upgrade against the historical
-  // `~/.deeplake/state/` parent and has no meaning anywhere else.
-  // Without this guard, an override like `HIVEMIND_STATE_DIR=/tmp/foo`
+  // `~/.memoree/state/` parent and has no meaning anywhere else.
+  // Without this guard, an override like `MEMOREE_STATE_DIR=/tmp/foo`
   // would still cause us to `existsSync('/tmp/skilify')` and — if some
   // unrelated tool happened to have created that directory —
   // `renameSync('/tmp/skilify', '/tmp/foo')` and move someone else's
   // content into our state path. Tests (and any other caller that
   // overrides) get a hard no-op here and a clean tmp-dir start.
-  if (process.env.HIVEMIND_STATE_DIR?.trim()) return;
+  if (process.env.MEMOREE_STATE_DIR?.trim()) return;
 
   if (attempted) return;
   attempted = true;

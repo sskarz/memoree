@@ -14,15 +14,15 @@ const names = {
   memory: "memory",
   sessions: "sessions",
   skills: "skills",
-  rules: "hivemind_rules",
-  goals: "hivemind_goals",
-  kpis: "hivemind_kpis",
-  docs: "hivemind_docs",
+  rules: "memoree_rules",
+  goals: "memoree_goals",
+  kpis: "memoree_kpis",
+  docs: "memoree_docs",
   codebase: "codebase",
 };
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "hivemind-sqlite-test-"));
+  root = mkdtempSync(join(tmpdir(), "memoree-sqlite-test-"));
   path = join(root, "memory.sqlite3");
 });
 
@@ -35,8 +35,8 @@ describe("SQLite storage contract", () => {
     await backend.initializeSchema();
     await backend.initializeSchema();
     expect(await backend.listTables()).toEqual([
-      "codebase", "hivemind_docs", "hivemind_goals", "hivemind_kpis",
-      "hivemind_rules", "memory", "sessions", "skills",
+      "codebase", "memoree_docs", "memoree_goals", "memoree_kpis",
+      "memoree_rules", "memory", "sessions", "skills",
     ]);
     expect(await backend.getColumns("memory")).toContain("summary_embedding");
     await backend.close();
@@ -158,17 +158,17 @@ describe("application vector scoring", () => {
   });
 
   it("uses a positive vector scan limit and falls back for invalid values", () => {
-    const previous = process.env.HIVEMIND_VECTOR_SCAN_LIMIT;
+    const previous = process.env.MEMOREE_VECTOR_SCAN_LIMIT;
     try {
-      process.env.HIVEMIND_VECTOR_SCAN_LIMIT = "17";
+      process.env.MEMOREE_VECTOR_SCAN_LIMIT = "17";
       expect(vectorScanLimit()).toBe(17);
-      process.env.HIVEMIND_VECTOR_SCAN_LIMIT = "0";
+      process.env.MEMOREE_VECTOR_SCAN_LIMIT = "0";
       expect(vectorScanLimit()).toBe(2000);
-      process.env.HIVEMIND_VECTOR_SCAN_LIMIT = "invalid";
+      process.env.MEMOREE_VECTOR_SCAN_LIMIT = "invalid";
       expect(vectorScanLimit()).toBe(2000);
     } finally {
-      if (previous === undefined) delete process.env.HIVEMIND_VECTOR_SCAN_LIMIT;
-      else process.env.HIVEMIND_VECTOR_SCAN_LIMIT = previous;
+      if (previous === undefined) delete process.env.MEMOREE_VECTOR_SCAN_LIMIT;
+      else process.env.MEMOREE_VECTOR_SCAN_LIMIT = previous;
     }
   });
 });

@@ -25,7 +25,7 @@ import type {
 function makeMetadata(overrides: Partial<GraphMetadata> = {}): GraphMetadata {
   return {
     schema_version: 1,
-    generator: "hivemind-graph",
+    generator: "memoree-graph",
     commit_sha: "abc123",
     repo_key: "test-repo-key",
     ...overrides,
@@ -74,25 +74,25 @@ function makeNode(id: string, kind: GraphNode["kind"] = "function"): GraphNode {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("graphsRoot / repoDir", () => {
-  it("graphsRoot honors HIVEMIND_GRAPHS_HOME", () => {
-    const prev = process.env.HIVEMIND_GRAPHS_HOME;
-    process.env.HIVEMIND_GRAPHS_HOME = "/x/y/z";
+  it("graphsRoot honors MEMOREE_GRAPHS_HOME", () => {
+    const prev = process.env.MEMOREE_GRAPHS_HOME;
+    process.env.MEMOREE_GRAPHS_HOME = "/x/y/z";
     try {
       expect(graphsRoot()).toBe("/x/y/z");
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-      else process.env.HIVEMIND_GRAPHS_HOME = prev;
+      if (prev === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+      else process.env.MEMOREE_GRAPHS_HOME = prev;
     }
   });
 
   it("repoDir composes graphsRoot + repoKey", () => {
-    const prev = process.env.HIVEMIND_GRAPHS_HOME;
-    process.env.HIVEMIND_GRAPHS_HOME = "/tmp/x";
+    const prev = process.env.MEMOREE_GRAPHS_HOME;
+    process.env.MEMOREE_GRAPHS_HOME = "/tmp/x";
     try {
       expect(repoDir("abc")).toBe(join("/tmp/x", "abc"));
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-      else process.env.HIVEMIND_GRAPHS_HOME = prev;
+      if (prev === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+      else process.env.MEMOREE_GRAPHS_HOME = prev;
     }
   });
 });
@@ -163,14 +163,14 @@ describe("canonicalSnapshot — stable serialization", () => {
     // recursive key-sort in canonicalSnapshot these would serialize differently.
     const meta1: GraphMetadata = {
       schema_version: 1,
-      generator: "hivemind-graph",
+      generator: "memoree-graph",
       commit_sha: "x",
       repo_key: "k",
     };
     const meta2: GraphMetadata = {
       repo_key: "k",
       commit_sha: "x",
-      generator: "hivemind-graph",
+      generator: "memoree-graph",
       schema_version: 1,
     };
 

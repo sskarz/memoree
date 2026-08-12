@@ -2,7 +2,7 @@
 
 > Category: Security | Version: 1.0 | Date: June 2026 | Status: Active
 
-Documents where Hivemind stores credentials on disk, the file-system permissions enforced on every write, the shape of the credentials object, and the three file-IO helpers that own all access to the credentials file.
+Documents where Memoree stores credentials on disk, the file-system permissions enforced on every write, the shape of the credentials object, and the three file-IO helpers that own all access to the credentials file.
 
 **Related:**
 - [`trust-boundaries.md`](trust-boundaries.md)
@@ -28,8 +28,8 @@ Both path accessors are defined in `src/commands/auth-creds.ts` and are lazy (re
 
 | Name | Value | Notes |
 |---|---|---|
-| `configDir()` | `~/.deeplake` | Parent directory. Resolved via `homedir()` at call time. |
-| `credsPath()` | `~/.deeplake/credentials.json` | Full path to the credentials file. |
+| `configDir()` | `~/.memoree` | Parent directory. Resolved via `homedir()` at call time. |
+| `credsPath()` | `the removed cloud credentials file` | Full path to the credentials file. |
 
 The lazy evaluation is deliberate: tests can override `HOME` (via `process.env.HOME`) between test cases without needing to re-import the module. At module-load time `homedir()` would capture the value once, making `HOME` overrides invisible to subsequent calls.
 
@@ -41,8 +41,8 @@ The lazy evaluation is deliberate: tests can override `HOME` (via `process.env.H
 
 | Resource | Mode | Who can access |
 |---|---|---|
-| `~/.deeplake/` (directory) | `0700` (`rwx------`) | Owning user only |
-| `~/.deeplake/credentials.json` | `0600` (`rw-------`) | Owning user only |
+| `~/.memoree/` (directory) | `0700` (`rwx------`) | Owning user only |
+| `the removed cloud credentials file` | `0600` (`rw-------`) | Owning user only |
 
 The directory is created with `mkdirSync({ recursive: true, mode: 0o700 })`. The `recursive: true` flag is idempotent: if the directory already exists, the call is a no-op and does NOT change the existing mode. Mode `0o700` is applied only on initial creation.
 
@@ -61,7 +61,7 @@ The `Credentials` interface (TypeScript source of truth in `src/commands/auth-cr
 | `orgName` | `string` | no | Human-readable org name. Used for display only (e.g. session banner). |
 | `userName` | `string` | no | Display name fetched from `GET /me` at login time. |
 | `workspaceId` | `string` | no | Active workspace. Defaults to `"default"` (the backend resolves the sentinel). |
-| `apiUrl` | `string` | no | Base URL for the Deeplake API. Defaults to `https://api.deeplake.ai` when absent. |
+| `apiUrl` | `string` | no | Base URL for the Memoree API. Defaults to `the removed hosted endpoint` when absent. |
 | `autoupdate` | `boolean` | no | Whether the plugin self-updates on session start. Absent = `true`. |
 | `savedAt` | `string` | yes | ISO 8601 timestamp written by `saveCredentials`. Used for auditing; not validated at load time. |
 
@@ -74,7 +74,7 @@ Example file contents:
   "orgName": "Acme Inc",
   "userName": "alice",
   "workspaceId": "default",
-  "apiUrl": "https://api.deeplake.ai",
+  "apiUrl": "the removed hosted endpoint",
   "autoupdate": true,
   "savedAt": "2026-06-12T23:00:00.000Z"
 }
@@ -88,7 +88,7 @@ Three functions in `src/commands/auth-creds.ts` own all disk access. No other mo
 
 ### `loadCredentials(): Credentials | null`
 
-Reads and JSON-parses `~/.deeplake/credentials.json`. Returns `null` for any failure: missing file (`ENOENT`), permission denied, or malformed JSON. Callers treat `null` as "not logged in" and prompt the user to run `hivemind login`. The anti-pattern of `existsSync` followed by `readFileSync` is deliberately avoided; it introduces a TOCTOU race and extra branches with no safety benefit.
+Reads and JSON-parses `the removed cloud credentials file`. Returns `null` for any failure: missing file (`ENOENT`), permission denied, or malformed JSON. Callers treat `null` as "not logged in" and prompt the user to run the removed cloud sign-in command. The anti-pattern of `existsSync` followed by `readFileSync` is deliberately avoided; it introduces a TOCTOU race and extra branches with no safety benefit.
 
 ### `saveCredentials(creds: Credentials): void`
 
@@ -107,13 +107,13 @@ Calls `unlinkSync(credsPath())`. Returns `true` if the file was removed, `false`
 
 ## No Keychain Integration
 
-Hivemind does not use any OS keychain or secret manager (Keychain Access on macOS, libsecret/gnome-keyring on Linux, Windows Credential Manager). The decision prioritizes cross-platform consistency and zero-dependency credential access inside bundled Node scripts: keychains require native bindings that would complicate the esbuild bundle and break in some CI environments.
+Memoree does not use any OS keychain or secret manager (Keychain Access on macOS, libsecret/gnome-keyring on Linux, Windows Credential Manager). The decision prioritizes cross-platform consistency and zero-dependency credential access inside bundled Node scripts: keychains require native bindings that would complicate the esbuild bundle and break in some CI environments.
 
-The tradeoff is that `~/.deeplake/credentials.json` is readable by any process running as the same OS user. The mitigations are:
+The tradeoff is that `the removed cloud credentials file` is readable by any process running as the same OS user. The mitigations are:
 
 - File mode `0600` prevents other OS users from reading the file.
-- The token is org-bound and carries a 365-day expiry. Rotating it is a single `hivemind login` command.
-- `HIVEMIND_TOKEN` environment variable overrides the file entirely for short-lived CI contexts where no persistent credential is appropriate.
+- The token is org-bound and carries a 365-day expiry. Rotating it is a single the removed cloud sign-in command command.
+- `REMOVED_CLOUD_TOKEN_VARIABLE` environment variable overrides the file entirely for short-lived CI contexts where no persistent credential is appropriate.
 
 ---
 

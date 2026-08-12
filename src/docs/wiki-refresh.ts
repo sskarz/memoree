@@ -138,7 +138,7 @@ export interface LocalWikiRefreshArgs {
 }
 
 export interface LocalWikiRefreshOutcome {
-  /** Repo-relative materialized file, e.g. `pkg/core.hivemind.md`. */
+  /** Repo-relative materialized file, e.g. `pkg/core.memoree.md`. */
   file: string;
   action: "patched" | "no_change" | "not-materialized" | "escalate-skipped" | "failed";
   reasons?: string[];
@@ -147,7 +147,7 @@ export interface LocalWikiRefreshOutcome {
 /**
  * LOCAL preview refresh: same patch pipeline, but the diff is the WORKING
  * TREE (uncommitted edits) and the writes go ONLY to the local gitignored
- * `<key>.hivemind.md` files — never the table. No lease, no meta, no sha:
+ * `<key>.memoree.md` files — never the table. No lease, no meta, no sha:
  * this is a per-developer preview of what the canonical refresh will say
  * once the work is committed and merged. Pages not materialized locally
  * (no `docs pull` yet) are reported and skipped, and an over-budget patch
@@ -166,10 +166,10 @@ export async function runLocalWikiRefresh(args: LocalWikiRefreshArgs): Promise<{
   for (const group of selectWikiGroups(args.snap)) {
     const touched = group.files.filter((f) => changed.has(f));
     if (touched.length === 0) continue;
-    const localFile = `${group.key}.wiki.hivemind.md`; // matches localDocPath's wiki namespace
+    const localFile = `${group.key}.wiki.memoree.md`; // matches localDocPath's wiki namespace
     const abs = join(args.repoRoot, localFile);
     if (!existsSync(abs)) {
-      outcomes.push({ file: localFile, action: "not-materialized", reasons: ["run `hivemind docs pull` first"] });
+      outcomes.push({ file: localFile, action: "not-materialized", reasons: ["run `memoree docs pull` first"] });
       continue;
     }
     const diff = args.git(["diff", "HEAD", "--", ...touched]) ?? "";

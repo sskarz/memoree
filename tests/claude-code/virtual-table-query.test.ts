@@ -66,7 +66,7 @@ describe("virtual-table-query", () => {
   // fail, surface the error (throw) so the caller can distinguish it.
   it("throws (not null) when the backend query fails entirely", async () => {
     const api = {
-      query: vi.fn().mockRejectedValue(new Error("deeplake 500: internal error")),
+      query: vi.fn().mockRejectedValue(new Error("memoree 500: internal error")),
     } as any;
 
     await expect(

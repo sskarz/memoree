@@ -2,7 +2,7 @@
  * Shared per-directory capture gate for all agent capture hooks
  * (claude-code / codex / cursor / hermes).
  *
- * Loads the global config and overlays the nearest `.hivemind` for `cwd`
+ * Loads the global config and overlays the nearest `.memoree` for `cwd`
  * (see src/dir-config.ts). Returns the Config to capture with, or `null` when
  * capture should be skipped — either because there's no auth, or the directory
  * opted out via `collect: false`. The skip reason is logged.

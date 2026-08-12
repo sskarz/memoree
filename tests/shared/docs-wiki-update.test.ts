@@ -99,7 +99,7 @@ describe("updateWikiPage", () => {
   it("NO_CHANGE with fresh mechanics: no write at all", async () => {
     const { calls, query } = mockQuery([]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: freshPage("## Purpose\nTruth."), pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: freshPage("## Purpose\nTruth."), pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "(no relevant diff)",
       run: async () => NO_CHANGE, escalation: noEscalation,
     });
@@ -111,7 +111,7 @@ describe("updateWikiPage", () => {
     const p = page(appendFilesIndex("## Purpose\nTruth.", FILES), [{ symbol_id: "stale", content_hash: "old" }]);
     const { calls, query } = mockQuery([[rowFor(p)]]); // editDoc's getDocLatest read
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "d",
       run: async () => NO_CHANGE, escalation: noEscalation,
     });
@@ -127,7 +127,7 @@ describe("updateWikiPage", () => {
     const p = freshPage("## Purpose\nfoo returns 0.");
     const { calls, query } = mockQuery([[rowFor(p)]]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "- return 0\n+ return 1",
       run: async () => "## Purpose\nfoo returns 1.", escalation: noEscalation,
     });
@@ -145,7 +145,7 @@ describe("updateWikiPage", () => {
     const p = freshPage("## Purpose\nfoo returns 0.");
     const { calls, query } = mockQuery([]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, scope: "b:feat", pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, scope: "b:feat", pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "- return 0\n+ return 1",
       run: async () => "## Purpose\nfoo returns 1.", escalation: noEscalation,
     });
@@ -163,7 +163,7 @@ describe("updateWikiPage", () => {
     const p = freshPage("## Purpose\nfoo returns 0.");
     const { calls, query } = mockQuery([[rowFor(p)]]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "- return 0\n+ return 1",
       run: async () => "Looking at the diff, the page is contradicted.\n\nHere's the corrected page:\n\n## Purpose\nfoo returns 1.",
       escalation: noEscalation,
@@ -179,7 +179,7 @@ describe("updateWikiPage", () => {
     const p = freshPage("## Purpose\nfoo returns 0.");
     const { calls, query } = mockQuery([[rowFor(p)]]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "- return 0\n+ return 1",
       run: async () => "```markdown\n## Purpose\nfoo returns 1.\n```",
       escalation: noEscalation,
@@ -194,7 +194,7 @@ describe("updateWikiPage", () => {
     const p = freshPage("## Purpose\nfoo returns 0.");
     const { calls, query } = mockQuery([]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "d",
       run: async () => "I checked the diff and the page seems mostly fine to me.",
       escalation: noEscalation,
@@ -208,7 +208,7 @@ describe("updateWikiPage", () => {
     const { calls, query } = mockQuery([]);
     const huge = "## Purpose\n" + Array.from({ length: DEFAULT_WIKI_MAX_CHANGED_LINES + 20 }, (_, i) => `rewritten line ${i}`).join("\n");
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: p, pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: p, pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "d",
       run: async () => huge, escalation: noEscalation,
     });
@@ -221,7 +221,7 @@ describe("updateWikiPage", () => {
     const run = vi.fn(async () => NO_CHANGE);
     const { query } = mockQuery([]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: freshPage("x"), pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: freshPage("x"), pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "d",
       run, escalation: { ...noEscalation, membershipChanged: true },
     });
@@ -232,7 +232,7 @@ describe("updateWikiPage", () => {
   it("LLM failure is reported, nothing written (missing beats stale-green)", async () => {
     const { calls, query } = mockQuery([]);
     const out = await updateWikiPage({
-      query, tableName: "hivemind_docs", page: freshPage("x"), pageKey: "pkg/core",
+      query, tableName: "memoree_docs", page: freshPage("x"), pageKey: "pkg/core",
       files: FILES, snap: SNAP(), repoRoot: dir, diff: "d",
       run: async () => { throw new Error("LLM down"); }, escalation: noEscalation,
     });

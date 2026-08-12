@@ -5,7 +5,7 @@ import {
   buildCreateTableSql,
   isMissingTableError,
   isMissingColumnError,
-} from "../../src/deeplake-schema.js";
+} from "../../src/storage/schema.js";
 
 type Call = { sql: string };
 
@@ -269,7 +269,7 @@ describe("buildCreateTableSql(SKILLS_COLUMNS)", () => {
     ]) {
       expect(sql).toContain(`${col} `);
     }
-    expect(sql).toContain("USING deeplake");
+    expect(sql).not.toContain("USING");
     expect(sql).toMatch(/^CREATE TABLE IF NOT EXISTS "skills" \(/);
   });
 

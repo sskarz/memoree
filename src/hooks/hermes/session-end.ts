@@ -22,7 +22,7 @@ interface HermesSessionEndInput {
 }
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
   const input = await readStdin<HermesSessionEndInput>();
   const sessionId = input.session_id ?? "";
   log(`session=${sessionId || "?"} cwd=${input.cwd ?? "?"}`);

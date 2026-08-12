@@ -9,7 +9,7 @@
  * Mocking policy (per CLAUDE.md): import and run the REAL modules. The only
  * seam we mock is the network — the auto-pull ordering test injects a QueryFn
  * spy so no HTTP happens. Filesystem effects are scoped to a temp HOME so the
- * developer's real ~/.deeplake / ~/.claude are never touched.
+ * developer's real ~/.memoree / ~/.claude are never touched.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,14 +24,14 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
 // A real >64-char offender codex drops (68 chars), same one used in the
 // pull.ts migration tests.
-const LONG_NAME = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+const LONG_NAME = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
 
 let installRoot: string;
 let fakeHome: string;
 
 beforeEach(() => {
   // Isolate HOME so recordPull writes the manifest into the sandbox, not the
-  // developer's real ~/.deeplake state.
+  // developer's real ~/.memoree state.
   fakeHome = mkdtempSync(join(tmpdir(), "legacy-cap-home-"));
   setFakeHome(fakeHome);
   // Install root under the fake home — a plausible project skills root.
@@ -284,7 +284,7 @@ describe("migrateLegacyCappedInstalls — fs error", () => {
 
     // 66 chars — over the 64-char loader ceiling but within the 100-char
     // path-safety ceiling, so it's a valid slug that still needs capping.
-    const longB = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-variant-two";
+    const longB = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-variant-two";
     const staleB = `${longB}--sasun`;
     writeSkill(staleB, longB, 2, "B body");
     record({ dirName: staleB, name: longB, remoteVersion: 2 });
@@ -562,12 +562,12 @@ describe("autoPullSkills — invokes legacy-cap migration before the network", (
     });
 
     const loadConfigFn = () => ({
-      token: "tok", orgId: "org", orgName: "O", userName: "u",
-      workspaceId: "default", apiUrl: "https://api.deeplake.ai",
+      orgId: "local", orgName: "local", userName: "u",
+      workspaceId: "default",
       tableName: "memory", sessionsTableName: "sessions", skillsTableName: "skills",
       rulesTableName: "r", goalsTableName: "g", kpisTableName: "k",
       docsTableName: "d", codebaseTableName: "c",
-      memoryPath: join(fakeHome, ".deeplake", "memory"),
+      memoryPath: join(fakeHome, ".memoree", "memory"),
     }) as any;
 
     const res = await autoPullSkills({

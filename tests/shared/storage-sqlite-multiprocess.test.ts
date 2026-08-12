@@ -27,14 +27,14 @@ function runWriter(databasePath: string, id: string, count: number): Promise<voi
 
 describe("SQLite multi-process writes", () => {
   it("keeps every event while concurrent writers share a WAL database", async () => {
-    const root = mkdtempSync(join(tmpdir(), "hivemind-sqlite-writers-"));
+    const root = mkdtempSync(join(tmpdir(), "memoree-sqlite-writers-"));
     roots.push(root);
     const databasePath = join(root, "memory.sqlite3");
     await Promise.all(["a", "b", "c", "d"].map(id => runWriter(databasePath, id, 20)));
 
     const names = {
-      memory: "memory", sessions: "sessions", skills: "skills", rules: "hivemind_rules",
-      goals: "hivemind_goals", kpis: "hivemind_kpis", docs: "hivemind_docs", codebase: "codebase",
+      memory: "memory", sessions: "sessions", skills: "skills", rules: "memoree_rules",
+      goals: "memoree_goals", kpis: "memoree_kpis", docs: "memoree_docs", codebase: "codebase",
     };
     const backend = new SqliteBackend(databasePath, "sessions", names);
     try {

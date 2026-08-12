@@ -25,9 +25,9 @@ export function claudeModel(model: string, opts: { timeoutMs?: number } = {}): M
       // judge/proposer call before it returns JSON, silently stopping proposals.
       "--strict-mcp-config",
     ];
-    // HIVEMIND_CAPTURE=false so these calls aren't captured as real sessions, AND
-    // HIVEMIND_WIKI_WORKER=1 so the spawned claude -p skips this package's SessionStart
-    // hook entirely (no Deeplake-context injection into the prompt, no auto-pull/graph
+    // MEMOREE_CAPTURE=false so these calls aren't captured as real sessions, AND
+    // MEMOREE_WIKI_WORKER=1 so the spawned claude -p skips this package's SessionStart
+    // hook entirely (no Memoree-context injection into the prompt, no auto-pull/graph
     // work) — one child per anchored invocation would otherwise contaminate the judge
     // prompt and pile up background work. Same guard the other internal runners use.
     // Resolve the claude binary the same way the rest of skillify does — a detached
@@ -35,7 +35,7 @@ export function claudeModel(model: string, opts: { timeoutMs?: number } = {}): M
     // "claude" would ENOENT and the callers would swallow it as no-change.
     const child = spawn(findAgentBin("claude_code"), args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, HIVEMIND_CAPTURE: "false", HIVEMIND_WIKI_WORKER: "1" },
+      env: { ...process.env, MEMOREE_CAPTURE: "false", MEMOREE_WIKI_WORKER: "1" },
       // CREATE_NO_WINDOW: the skillopt engine's judge/proposer steps run inside
       // the detached, console-less skillopt/mine-local worker, so without it
       // Windows pops a visible console window for the claude child. No-op on POSIX.

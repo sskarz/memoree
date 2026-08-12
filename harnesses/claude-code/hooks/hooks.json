@@ -1,5 +1,5 @@
 {
-  "description": "Hivemind memory — captures all session activity and provides memory search via ~/.deeplake/memory",
+  "description": "Memoree memory — captures all session activity and provides memory search via ~/.memoree/memory",
   "hooks": {
     "SessionStart": [
       {
@@ -8,11 +8,6 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/bundle/session-start.js\"",
             "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bundle/session-notifications.js\"",
-            "timeout": 8
           },
           {
             "type": "command",

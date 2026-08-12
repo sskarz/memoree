@@ -6,11 +6,11 @@ import { readdirSync, statSync } from "node:fs";
 /**
  * Bundle-level anti-regression.
  *
- * Every per-agent esbuild block must replace the `__HIVEMIND_VERSION__`
+ * Every per-agent esbuild block must replace the `__MEMOREE_VERSION__`
  * placeholder via `define`. Without it, bundled code that interpolates the
- * constant (e.g. `deeplakeClientValue()` for the X-Deeplake-Client header)
- * crashes at runtime with "__HIVEMIND_VERSION__ is not defined" on the very
- * first Deeplake API call. The cursor and hermes blocks were missing the
+ * constant (e.g. `memoreeClientValue()` for the X-Memoree-Client header)
+ * crashes at runtime with "__MEMOREE_VERSION__ is not defined" on the very
+ * first Memoree API call. The cursor and hermes blocks were missing the
  * define on first ship; this guard prevents the same drop-out from happening
  * again, including for any new agent we wire up later.
  */
@@ -38,7 +38,7 @@ const BUNDLE_DIRS = [
 ];
 
 for (const [label, dir] of BUNDLE_DIRS) {
-  describe(`${label} bundle: __HIVEMIND_VERSION__ inlined`, () => {
+  describe(`${label} bundle: __MEMOREE_VERSION__ inlined`, () => {
     const files = listBundleFiles(dir);
 
     it("at least one .js file shipped", () => {
@@ -49,7 +49,7 @@ for (const [label, dir] of BUNDLE_DIRS) {
       const rel = file.slice(ROOT.length + 1);
       it(`${rel} has the version constant substituted`, () => {
         const src = readFileSync(file, "utf-8");
-        expect(src).not.toMatch(/__HIVEMIND_VERSION__/);
+        expect(src).not.toMatch(/__MEMOREE_VERSION__/);
       });
     }
   });

@@ -95,20 +95,20 @@ describe("last-build state I/O", () => {
 describe("decideGate — Stop hook auto-build gates", () => {
   let workDir: string;
   let graphsHome: string;
-  const prevHome = process.env.HIVEMIND_GRAPHS_HOME;
-  const prevDisable = process.env.HIVEMIND_GRAPH_ON_STOP;
+  const prevHome = process.env.MEMOREE_GRAPHS_HOME;
+  const prevDisable = process.env.MEMOREE_GRAPH_ON_STOP;
 
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "stop-gate-work-"));
     graphsHome = mkdtempSync(join(tmpdir(), "stop-gate-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
-    delete process.env.HIVEMIND_GRAPH_ON_STOP;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
+    delete process.env.MEMOREE_GRAPH_ON_STOP;
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
-    if (prevDisable === undefined) delete process.env.HIVEMIND_GRAPH_ON_STOP;
-    else process.env.HIVEMIND_GRAPH_ON_STOP = prevDisable;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
+    if (prevDisable === undefined) delete process.env.MEMOREE_GRAPH_ON_STOP;
+    else process.env.MEMOREE_GRAPH_ON_STOP = prevDisable;
     rmSync(workDir, { recursive: true, force: true });
     rmSync(graphsHome, { recursive: true, force: true });
   });

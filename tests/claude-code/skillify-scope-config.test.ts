@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadScopeConfig, saveScopeConfig } from "../../src/skillify/scope-config.js";
 
-const STATE_DIR = join(homedir(), ".deeplake", "state", "skillify");
+const STATE_DIR = join(homedir(), ".memoree", "state", "skillify");
 const CONFIG_PATH = join(STATE_DIR, "config.json");
 let backup: string | null = null;
 
@@ -50,7 +50,7 @@ describe("loadScopeConfig", () => {
   it("silently coerces legacy scope='org' to 'team' on read", () => {
     // The product surface used to expose `scope = "org"` (no author
     // filter, mine workspace-wide). We retired that value but a user
-    // who ran `hivemind skillify scope org` once will still have it
+    // who ran `memoree skillify scope org` once will still have it
     // sitting in their config.json — the parser narrows it to "team"
     // instead of falling back to the default "me", since `team` is the
     // closest non-self surface the worker still supports.

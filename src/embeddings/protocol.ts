@@ -1,6 +1,9 @@
 // Shared types for the embedding daemon <-> client IPC.
 // Newline-delimited JSON over Unix socket.
 
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 export type EmbedKind = "document" | "query";
 
 export interface EmbedRequest {
@@ -56,7 +59,7 @@ export type DaemonResponse = EmbedResponse | PingResponse | HelloResponse;
 // way. Used by the client's handshake mismatch check.
 export const PROTOCOL_VERSION = 1;
 
-export const DEFAULT_SOCKET_DIR = "/tmp";
+export const DEFAULT_SOCKET_DIR = join(homedir(), ".memoree", "run");
 export const DEFAULT_MODEL_REPO = "nomic-ai/nomic-embed-text-v1.5";
 export const DEFAULT_DTYPE = "q8";
 export const DEFAULT_DIMS = 768;
@@ -70,9 +73,9 @@ export const DOC_PREFIX = "search_document: ";
 export const QUERY_PREFIX = "search_query: ";
 
 export function socketPathFor(uid: number | string, dir = DEFAULT_SOCKET_DIR): string {
-  return `${dir}/hivemind-embed-${uid}.sock`;
+  return `${dir}/memoree-embed-${uid}.sock`;
 }
 
 export function pidPathFor(uid: number | string, dir = DEFAULT_SOCKET_DIR): string {
-  return `${dir}/hivemind-embed-${uid}.pid`;
+  return `${dir}/memoree-embed-${uid}.pid`;
 }

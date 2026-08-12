@@ -6,7 +6,7 @@
  * standalone loader so non-VFS callers (the docs refresh command) can get the
  * snapshot without going through the VFS rendering layer. Returns null when
  * no graph has been built for this worktree, or the snapshot is missing /
- * malformed — callers print a "run `hivemind graph build` first" message.
+ * malformed — callers print a "run `memoree graph build` first" message.
  */
 
 import { createHash } from "node:crypto";

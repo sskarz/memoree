@@ -9,7 +9,7 @@
  *   - The refresh "turn" is a LEASE, not a lock: `tryClaimTurn` stamps
  *     claimed_by/claimed_at; a claim older than the TTL is dead and can be
  *     taken over by anyone. A crashed worker leaves nothing to clean up.
- *   - Claims are verified by READ-BACK, not by UPDATE row counts: the Deeplake
+ *   - Claims are verified by READ-BACK, not by UPDATE row counts: the Memoree
  *     backend can silently drop one of two rapid UPDATEs on the same row, so
  *     the only trustworthy signal is re-reading the row and seeing our own
  *     stamp survive.

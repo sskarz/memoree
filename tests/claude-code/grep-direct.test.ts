@@ -71,10 +71,10 @@ describe("handleGrepDirect", () => {
 
 // ── Honest failure signaling: backend errors propagate (do NOT become empty) ─
 //
-// The core defect behind "hivemind search is silently broken": a backend
+// The core defect behind "memoree search is silently broken": a backend
 // failure must never read as a genuine zero-match. The fast path intentionally
 // lets the error throw — the pre-tool-use hook's outer catch then falls back to
-// the sandboxed VFS shell (deeplake-shell.js), whose grep-interceptor signals a
+// the sandboxed VFS shell (memoree-shell.js), whose grep-interceptor signals a
 // true backend failure as grep exit-code 2 + stderr (see grep-interceptor.test).
 // What must NOT happen here is the error being swallowed into "(no matches)".
 describe("handleGrepDirect: backend errors are not swallowed", () => {
@@ -85,7 +85,7 @@ describe("handleGrepDirect: backend errors are not swallowed", () => {
   };
 
   it("propagates the backend error instead of returning '(no matches)'", async () => {
-    const api = { query: vi.fn().mockRejectedValue(new Error("deeplake 500")) } as any;
+    const api = { query: vi.fn().mockRejectedValue(new Error("memoree 500")) } as any;
     await expect(
       handleGrepDirect(api, "memory", "sessions", baseParams),
     ).rejects.toThrow(/500/);

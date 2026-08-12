@@ -4,13 +4,13 @@ import { describe, it, expect } from "vitest";
  * Tests for the session-end upload script's query function.
  * The upload script runs as a standalone .mjs file spawned by session-end.
  * It has its own inline `query()` function that must correctly parse the
- * Deeplake API response format: { columns: [...], rows: [[...], ...] }
+ * Memoree API response format: { columns: [...], rows: [[...], ...] }
  *
  * Bug: the original code used `j.data || []` but the API returns `j.rows`,
  * so SELECT checks always returned empty, causing INSERT duplicates.
  */
 
-// Simulate the Deeplake API response format
+// Simulate the Memoree API response format
 function makeApiResponse(columns: string[], rows: unknown[][]) {
   return { columns, rows, row_count: rows.length };
 }

@@ -1,7 +1,7 @@
 /**
  * Per-project state for the skillify worker.
  *
- * File: ~/.deeplake/state/skillify/<projectKey>.json
+ * File: ~/.memoree/state/skillify/<projectKey>.json
  *   {
  *     project: string,           // human-readable project name
  *     projectKey: string,        // stable id derived from git remote or cwd hash
@@ -46,7 +46,7 @@ export interface SkillifyState {
 const YIELD_BUF = new Int32Array(new SharedArrayBuffer(4));
 
 export const TRIGGER_THRESHOLD = (() => {
-  const n = Number(process.env.HIVEMIND_SKILLIFY_EVERY_N_TURNS ?? "");
+  const n = Number(process.env.MEMOREE_SKILLIFY_EVERY_N_TURNS ?? "");
   return Number.isInteger(n) && n > 0 ? n : 20;
 })();
 

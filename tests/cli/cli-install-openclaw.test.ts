@@ -6,7 +6,7 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
 /**
  * Tests for src/cli/install-openclaw.ts. The installer mirrors the
- * package layout under ~/.openclaw/extensions/hivemind, copying dist/
+ * package layout under ~/.openclaw/extensions/memoree, copying dist/
  * + manifest + skills, then writing a version stamp.
  */
 
@@ -22,10 +22,10 @@ beforeEach(() => {
 
   mkdirSync(join(tmpPkg, "harnesses", "openclaw", "dist"), { recursive: true });
   writeFileSync(join(tmpPkg, "harnesses", "openclaw", "dist", "index.js"), "// fake dist");
-  writeFileSync(join(tmpPkg, "harnesses", "openclaw", "openclaw.plugin.json"), JSON.stringify({ name: "hivemind", version: "1.2.3" }));
-  writeFileSync(join(tmpPkg, "harnesses", "openclaw", "package.json"), JSON.stringify({ name: "hivemind", version: "1.2.3" }));
+  writeFileSync(join(tmpPkg, "harnesses", "openclaw", "openclaw.plugin.json"), JSON.stringify({ name: "memoree", version: "1.2.3" }));
+  writeFileSync(join(tmpPkg, "harnesses", "openclaw", "package.json"), JSON.stringify({ name: "memoree", version: "1.2.3" }));
   mkdirSync(join(tmpPkg, "harnesses", "openclaw", "skills"), { recursive: true });
-  writeFileSync(join(tmpPkg, "harnesses", "openclaw", "skills", "hivemind.md"), "skill body");
+  writeFileSync(join(tmpPkg, "harnesses", "openclaw", "skills", "memoree.md"), "skill body");
   writeFileSync(join(tmpPkg, "package.json"), JSON.stringify({ version: "1.2.3" }));
 
   setFakeHome(tmpHome);
@@ -54,12 +54,12 @@ describe("installOpenclaw", () => {
     const { installOpenclaw } = await importInstaller();
     installOpenclaw();
 
-    const root = join(tmpHome, ".openclaw", "extensions", "hivemind");
+    const root = join(tmpHome, ".openclaw", "extensions", "memoree");
     expect(existsSync(join(root, "dist", "index.js"))).toBe(true);
     expect(existsSync(join(root, "openclaw.plugin.json"))).toBe(true);
     expect(existsSync(join(root, "package.json"))).toBe(true);
-    expect(existsSync(join(root, "skills", "hivemind.md"))).toBe(true);
-    expect(readFileSync(join(root, ".hivemind_version"), "utf-8")).toBe("1.2.3");
+    expect(existsSync(join(root, "skills", "memoree.md"))).toBe(true);
+    expect(readFileSync(join(root, ".memoree_version"), "utf-8")).toBe("1.2.3");
   });
 
   it("copies the manifest as a file (not into a directory) — uses copyFileSync, not copyDir", async () => {
@@ -67,7 +67,7 @@ describe("installOpenclaw", () => {
     // land it INSIDE a pre-existing directory of the same name. Force
     // that condition and verify the manifest still ends up at the
     // expected file path.
-    const root = join(tmpHome, ".openclaw", "extensions", "hivemind");
+    const root = join(tmpHome, ".openclaw", "extensions", "memoree");
     mkdirSync(join(root, "openclaw.plugin.json"), { recursive: true });
     const { installOpenclaw } = await importInstaller();
     // copyFileSync over a directory will throw — that itself is the
@@ -88,7 +88,7 @@ describe("installOpenclaw", () => {
     rmSync(join(tmpPkg, "harnesses", "openclaw", "openclaw.plugin.json"));
     const { installOpenclaw } = await importInstaller();
     expect(() => installOpenclaw()).not.toThrow();
-    const root = join(tmpHome, ".openclaw", "extensions", "hivemind");
+    const root = join(tmpHome, ".openclaw", "extensions", "memoree");
     expect(existsSync(join(root, "skills"))).toBe(false);
     expect(existsSync(join(root, "openclaw.plugin.json"))).toBe(false);
     expect(existsSync(join(root, "dist", "index.js"))).toBe(true);
@@ -105,7 +105,7 @@ describe("uninstallOpenclaw", () => {
   it("removes the entire plugin directory", async () => {
     const { installOpenclaw, uninstallOpenclaw } = await importInstaller();
     installOpenclaw();
-    const root = join(tmpHome, ".openclaw", "extensions", "hivemind");
+    const root = join(tmpHome, ".openclaw", "extensions", "memoree");
     expect(existsSync(root)).toBe(true);
     uninstallOpenclaw();
     expect(existsSync(root)).toBe(false);

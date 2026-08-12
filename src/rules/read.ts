@@ -1,10 +1,10 @@
 /**
- * Read helpers for `hivemind_rules`.
+ * Read helpers for `memoree_rules`.
  *
  * The table is append-only with a per-rule version monotone (see ./write.ts).
  * Reads always pick the latest row per `rule_id`. v1 fetches all rows and
  * deduplicates in JS — simple, portable across whatever subset of Postgres
- * window functions Deeplake exposes, and fast enough at the expected v1
+ * window functions Memoree exposes, and fast enough at the expected v1
  * scale (org rule counts measured in tens, not thousands).
  *
  * The lookup index `(rule_id, version)` (created by `ensureRulesTable`)
@@ -16,7 +16,7 @@ import { sqlIdent, sqlStr } from "../utils/sql.js";
 
 export type QueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
 
-/** Shape of one row in `hivemind_rules` — mirrors RULES_COLUMNS exactly. */
+/** Shape of one row in `memoree_rules` — mirrors RULES_COLUMNS exactly. */
 export interface RuleRow {
   id: string;
   rule_id: string;
@@ -112,13 +112,13 @@ export async function getRuleLatest(
 }
 
 /**
- * Coerce a row from the Deeplake API client into a typed RuleRow. The
+ * Coerce a row from the Memoree API client into a typed RuleRow. The
  * client returns `Record<string, unknown>` because it has no schema
  * awareness — this is where we re-attach the static type.
  */
 function normalize(row: Record<string, unknown>): RuleRow | null {
   // version arrives as either number (parsed by the client) or string
-  // (raw cell value depending on Deeplake's JSON shape). Normalize to
+  // (raw cell value depending on Memoree's JSON shape). Normalize to
   // number; a NaN means the row was malformed and we drop it.
   const vRaw = row.version;
   const version =

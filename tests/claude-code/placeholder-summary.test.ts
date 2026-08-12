@@ -9,9 +9,9 @@ import {
 /**
  * Regression tests for the production summary-revert clobber.
  *
- * Mechanism (deeplake-schema.ts: the memory table has NO unique constraint on
+ * Mechanism (storage/schema.ts: the memory table has NO unique constraint on
  * `path`): a resumed/concurrent SessionStart whose existence SELECT reads
- * stale-empty (Deeplake reads are eventually-consistent) used to INSERT a SECOND
+ * stale-empty (Memoree reads are eventually-consistent) used to INSERT a SECOND
  * placeholder row at the same path as an already-finalized+embedded row. The
  * duplicate `description='in progress', summary_embedding=NULL` stub then
  * shadowed the finalized row under `... LIMIT 1` reads — recall silently
@@ -35,7 +35,7 @@ const BASE: PlaceholderParams = {
   sessionId: "sess-1",
   cwd: "/home/alice/my-project",
   userName: "alice",
-  orgName: "activeloop",
+  orgName: "sskarz",
   workspaceId: "default",
   agent: "claude_code",
   pluginVersion: "0.7.104",
@@ -60,7 +60,7 @@ function makeSpyQuery(responses: Array<Array<Record<string, unknown>>> = [[]]): 
 }
 
 /**
- * A tiny in-memory model of the memory table that mirrors the real Deeplake
+ * A tiny in-memory model of the memory table that mirrors the real Memoree
  * semantics that caused the bug:
  *   - `path` is NOT unique — a plain INSERT appends a duplicate row.
  *   - `INSERT ... WHERE NOT EXISTS (... path=$p)` is atomic and writes nothing

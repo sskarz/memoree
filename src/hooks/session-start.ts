@@ -2,8 +2,7 @@
 
 /**
  * SessionStart hook:
- * 1. If no credentials → run device flow login (opens browser)
- * 2. Inject Hivemind memory instructions into Claude's context
+ * Inject local Memoree memory instructions into Claude's context.
  */
 
 import { fileURLToPath } from "node:url";
@@ -12,7 +11,6 @@ import { docsWikiContextNote } from "../docs/docs-context.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { loadCredentials, saveCredentials, healDriftedOrgToken } from "../commands/auth.js";
 import { loadConfig } from "../config.js";
 import { resolveDirConfig } from "../dir-config.js";
 import { createStorageBackend } from "../storage/factory.js";
@@ -21,7 +19,6 @@ import { readStdin } from "../utils/stdin.js";
 import { log as _log } from "../utils/debug.js";
 import { getInstalledVersion } from "../utils/version-check.js";
 import { makeWikiLogger } from "../utils/wiki-log.js";
-import { autoUpdate } from "./shared/autoupdate.js";
 import { autoPullSkills } from "../skillify/auto-pull.js";
 import { renderSkillifyCommands } from "../cli/skillify-spec.js";
 import { renderContextBlock } from "./shared/context-renderer.js";
@@ -36,64 +33,57 @@ import { createPlaceholderSummary } from "./shared/placeholder-summary.js";
 const log = (msg: string) => _log("session-start", msg);
 
 const __bundleDir = dirname(fileURLToPath(import.meta.url));
-// Hivemind requires its npm bin (`hivemind` from @deeplake/hivemind, declared in
-// package.json `bin`) to be on PATH. Inject text uses the bare `hivemind <sub>` form
+// Memoree requires its npm bin (`memoree` from memoree, declared in
+// package.json `bin`) to be on PATH. Inject text uses the bare `memoree <sub>` form
 // — no per-agent path resolution needed. Marketplace-only installs without
-// `npm i -g @deeplake/hivemind` are unsupported (documented in README + RELEASE_CHECKLIST).
+// `npm i -g memoree` are unsupported (documented in README + RELEASE_CHECKLIST).
 
-const context = `HIVEMIND MEMORY: You have TWO memory sources. ALWAYS check BOTH when the user asks you to recall, remember, or look up ANY information:
+const context = `MEMOREE MEMORY: You have TWO memory sources. ALWAYS check BOTH when the user asks you to recall, remember, or look up ANY information:
 
 1. Your built-in memory (~/.claude/) — personal per-project notes
-2. Hivemind shared memory (~/.deeplake/memory/) — persistent memory for the selected backend workspace
+2. Memoree memory (~/.memoree/memory/) — persistent memory for the selected repository and backend
 
-Hivemind memory has THREE tiers — pick the right one for the question:
-1. ~/.deeplake/memory/index.md   — auto-generated index, top 50 most-recently-updated entries with \`Created\` + \`Last Updated\` + \`Project\` + \`Description\` columns. ~5 KB. **For "what's recent / who did X this week / since <date>" queries, START HERE** and trust the \`Last Updated\` column over any \`Started:\` line in summary bodies.
-2. ~/.deeplake/memory/summaries/ — condensed wiki summaries per session (~3 KB each). For keyword/topic recall, search these.
-3. ~/.deeplake/memory/sessions/  — raw full-dialogue JSONL (~5 KB each). FALLBACK only — use when summaries don't contain the exact quote/turn you need.
+Memoree memory has THREE tiers — pick the right one for the question:
+1. ~/.memoree/memory/index.md   — auto-generated index, top 50 most-recently-updated entries with \`Created\` + \`Last Updated\` + \`Project\` + \`Description\` columns. ~5 KB. **For "what's recent / who did X this week / since <date>" queries, START HERE** and trust the \`Last Updated\` column over any \`Started:\` line in summary bodies.
+2. ~/.memoree/memory/summaries/ — condensed wiki summaries per session (~3 KB each). For keyword/topic recall, search these.
+3. ~/.memoree/memory/sessions/  — raw full-dialogue JSONL (~5 KB each). FALLBACK only — use when summaries don't contain the exact quote/turn you need.
 
 Search workflow:
-  - Time-based ("last week", "today", "since X"): \`cat ~/.deeplake/memory/index.md\` and read the most-recent rows.
-  - Keyword/topic recall: use the **Bash tool** with \`grep -r "keyword" ~/.deeplake/memory/summaries/\`. The Bash hook routes this through hybrid lexical+semantic search — synonyms / paraphrases match too. Then \`cat\` the top-matching summary to pull the answer.
-  - Raw transcript fallback only: \`grep -r "keyword" ~/.deeplake/memory/sessions/\` (use sparingly — JSONL is verbose).
+  - Time-based ("last week", "today", "since X"): \`cat ~/.memoree/memory/index.md\` and read the most-recent rows.
+  - Keyword/topic recall: use the **Bash tool** with \`grep -r "keyword" ~/.memoree/memory/summaries/\`. The Bash hook routes this through hybrid lexical+semantic search — synonyms / paraphrases match too. Then \`cat\` the top-matching summary to pull the answer.
+  - Raw transcript fallback only: \`grep -r "keyword" ~/.memoree/memory/sessions/\` (use sparingly — JSONL is verbose).
 
 Tool choice on this mount:
   ✅ Bash tool with \`grep -r\` / \`cat\` / \`ls\` / \`head\` / \`tail\` — supported, fast.
   ❌ Built-in Grep tool — not supported on this path; use Bash grep instead.
   ❌ \`grep\` without a \`summaries/\` or \`sessions/\` suffix — too noisy, drowns the answer.
 
-Resuming work (user says "pick up where I left off" / "load that from hivemind" / "continue where we stopped"):
+Resuming work (user says "pick up where I left off" / "load that from memoree" / "continue where we stopped"):
   The resume target is the most recent session summary for the CURRENT project. Find and load it from the VFS — do not wait for or expect it to be pre-loaded:
-  1. \`cat ~/.deeplake/memory/index.md\` and take the newest rows whose \`Project\` matches this repo (or \`ls -t ~/.deeplake/memory/summaries/<your-username>/\` for the latest files).
+  1. \`cat ~/.memoree/memory/index.md\` and take the newest rows whose \`Project\` matches this repo (or \`ls -t ~/.memoree/memory/summaries/<your-username>/\` for the latest files).
   2. \`cat\` the newest matching summary. If its \`## Next Steps\` (or older \`## Open Questions / TODO\`) is empty or says "none", move to the next-newest until you find one with real open work.
   3. Load THAT summary as context, then RECONCILE with the current git state (branch, uncommitted changes) before acting — the summary can be stale. Tell the user where they left off and confirm before continuing; don't silently execute the next step.
   4. Don't bulk-read \`sessions/\` — drill into the raw jsonl only for a specific detail the summary is missing.
 
-Organization management — each argument is SEPARATE (do NOT quote subcommands together):
-- hivemind login                              — SSO login
-- hivemind whoami                             — show current user/org
-- hivemind org list                           — list organizations
-- hivemind org switch <name-or-id>            — switch organization
-- hivemind workspaces                         — list workspaces
-- hivemind workspace <id>                     — switch workspace
-- hivemind invite <email> <ADMIN|WRITE|READ>  — invite member (ALWAYS ask user which role before inviting)
-- hivemind members                            — list members
-- hivemind remove <user-id>                   — remove member
+Diagnostics:
+- memoree doctor                             — verify local storage, embeddings, plugin, and hooks
+- memoree backend status                     — show the active storage backend
 
-Skill management (mine + share reusable Claude skills across the org):
+Skill management (mine + share reusable Claude skills through the selected backend):
 ${renderSkillifyCommands()}
 
-Embeddings (semantic memory search) — opt-in, persisted in ~/.deeplake/config.json:
-- hivemind embeddings install                        — download deps (~600MB), symlink agents, set enabled:true
-- hivemind embeddings enable                         — flip enabled:true (run install first if deps missing)
-- hivemind embeddings disable                        — flip enabled:false + SIGTERM daemon (deps stay on disk)
-- hivemind embeddings uninstall [--prune]            — remove agent symlinks + disable; --prune wipes deps too
-- hivemind embeddings status                         — show config + deps + per-agent link state
+Embeddings (semantic memory search) — enabled by default, persisted in ~/.memoree/config.json:
+- memoree embeddings install                        — download deps (~600MB), symlink agents, set enabled:true
+- memoree embeddings enable                         — flip enabled:true (run install first if deps missing)
+- memoree embeddings disable                        — flip enabled:false + SIGTERM daemon (deps stay on disk)
+- memoree embeddings uninstall [--prune]            — remove agent symlinks + disable; --prune wipes deps too
+- memoree embeddings status                         — show config + deps + per-agent link state
 
-IMPORTANT: Only use bash commands (cat, ls, grep, echo, jq, head, tail, etc.) to interact with ~/.deeplake/memory/. Do NOT use python, python3, node, curl, or other interpreters — they are not available in the memory filesystem. Avoid bash brace expansions like \`{1..10}\` (not fully supported); spell out paths explicitly. Bash output is capped at 10MB total — avoid \`for f in *.json; do cat $f\` style loops on the whole sessions dir.
+IMPORTANT: Only use bash commands (cat, ls, grep, echo, jq, head, tail, etc.) to interact with ~/.memoree/memory/. Do NOT use python, python3, node, curl, or other interpreters — they are not available in the memory filesystem. Avoid bash brace expansions like \`{1..10}\` (not fully supported); spell out paths explicitly. Bash output is capped at 10MB total — avoid \`for f in *.json; do cat $f\` style loops on the whole sessions dir.
 
-LIMITS: Do NOT spawn subagents to read Hivemind memory. If a file returns empty after 2 attempts, skip it and move on. Report what you found rather than exhaustively retrying.
+LIMITS: Do NOT spawn subagents to read Memoree memory. If a file returns empty after 2 attempts, skip it and move on. Report what you found rather than exhaustively retrying.
 
-Debugging: Set HIVEMIND_DEBUG=1 to enable verbose logging to ~/.deeplake/hook-debug.log`;
+Debugging: Set MEMOREE_DEBUG=1 to enable verbose logging to ~/.memoree/hook-debug.log`;
 
 const HOME = homedir();
 const { log: wikiLog } = makeWikiLogger(join(HOME, ".claude", "hooks"));
@@ -119,7 +109,7 @@ interface SessionStartInput {
 
 async function main(): Promise<void> {
   // Skip if this is a sub-session spawned by the wiki worker
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   const __hookT0 = Date.now();
   log(`hook entered (pid=${process.pid})`);
@@ -137,45 +127,6 @@ async function main(): Promise<void> {
     // captured event (on Linux the owner record above already does this).
     touchSessionActivity(input.session_id);
   }
-
-  let creds = loadCredentials();
-
-  if (!creds?.token) {
-    log("no credentials found — run /hivemind:login to authenticate");
-    // First-impression bootstrap: when an unauthenticated user opens a
-    // session on a box that has Claude Code transcripts but no local
-    // mining manifest yet, spawn `hivemind skillify mine-local` in the
-    // background. The worker writes to ~/.claude/skills/ + fan-out
-    // symlinks; THIS session sees the standard "not logged in" message,
-    // and the NEXT SessionStart fire surfaces the count + sign-in CTA.
-    // All guards (manifest, lock, no-sessions, no-hivemind-bin) live
-    // inside maybeAutoMineLocal — call is always safe.
-    const auto = maybeAutoMineLocal();
-    log(`auto-mine: ${auto.triggered ? "triggered (background)" : `skipped (${auto.reason})`}`);
-  } else {
-    log(`credentials loaded: org=${creds.orgName ?? creds.orgId}`);
-    // Self-heal the legacy `org switch` regression: pre-fix versions only
-    // rewrote orgId without re-minting, so creds.token still carries the
-    // old org_id claim. Detect drift here and re-bind; non-fatal on
-    // failure (logged + continue with stale token).
-    creds = await healDriftedOrgToken(creds, log);
-    // Backfill userName if missing (for users who logged in before this field was added)
-    if (creds.token && !creds.userName) {
-      try {
-        const { userInfo } = await import("node:os");
-        creds.userName = userInfo().username ?? "unknown";
-        saveCredentials(creds);
-        log(`backfilled and persisted userName: ${creds.userName}`);
-      } catch { /* non-fatal */ }
-    }
-  }
-
-  // Centralized autoupdate fires BEFORE the DB ensure-table calls — those
-  // can stall for tens of seconds against a slow/unreachable backend, and
-  // autoUpdate has no dependency on table state. Run it first so the user
-  // sees the upgrade notice promptly even when the API is down.
-  await autoUpdate(creds, { agent: "claude" });
-
   // Resolve the installed plugin version once up front — it's stamped on
   // every row this session writes (placeholder + capture) and is also used
   // for the user-visible update notice below.
@@ -185,34 +136,33 @@ async function main(): Promise<void> {
 
   // Ensure tables exist and (when capture is enabled) create the placeholder
   // summary via direct SQL. Tables must always be synced so queries return
-  // fresh data — only the placeholder INSERT is skipped when HIVEMIND_CAPTURE=false
+  // fresh data — only the placeholder INSERT is skipped when MEMOREE_CAPTURE=false
   // (benchmark runs, explicit opt-out). Mirrors the guard already in
   // session-start-setup.ts / session-end.ts / codex hooks.
-  // HIVEMIND_CAPTURE=false means full read-only mode — no INSERTs and
+  // MEMOREE_CAPTURE=false means full read-only mode — no INSERTs and
   // no DDL. ensureTable + ensureSessionsTable both create/heal tables
   // (DDL writes), so they MUST be gated on captureEnabled. Codex
   // review pass 4 surfaced this — the prior code ran ensure* even
   // under capture=false. The renderer is read-only and runs
   // regardless; the rules table it queries is lazy-created by the
-  // CLI write path (`hivemind rules add`).
-  const captureEnabled = process.env.HIVEMIND_CAPTURE !== "false" && entrypointPassesOnlyCliGate();
+  // CLI write path (`memoree rules add`).
+  const captureEnabled = process.env.MEMOREE_CAPTURE !== "false" && entrypointPassesOnlyCliGate();
 
-  // Per-directory `.hivemind`: route this tree's traces to a configured
-  // org/workspace, or opt out entirely (`collect: false`). Resolved once and
-  // reused for the placeholder write below and the disclosure banner. Falls
-  // back to the global identity when no `.hivemind` applies.
+  // Per-directory `.memoree`: route this tree's traces to a configured
+  // repository key, or opt out entirely (`collect: false`). Resolved once and
+  // reused for the placeholder write below and the disclosure banner.
   const sessionCwd = input.cwd ?? process.cwd();
   const baseConfig = loadConfig();
-  const storageAvailable = Boolean(baseConfig && ((baseConfig.storage?.kind ?? "deeplake") !== "deeplake" || creds?.token));
+  const storageAvailable = Boolean(baseConfig);
   const dirRes = baseConfig ? resolveDirConfig(baseConfig, sessionCwd) : null;
   const collectHere = captureEnabled && (dirRes?.collect ?? true);
 
-  // Auto-pull skills from all org users into ~/.claude/skills/ on every
+  // Auto-pull shared skills into ~/.claude/skills/ on every
   // SessionStart. File writes inside runPull are idempotent (skipped
   // when local version is at-or-newer than remote), so re-running each
   // session is cheap on disk; the only per-call cost is the SQL
-  // round-trip. Bounded by a 5s timeout so a slow Deeplake never
-  // freezes SessionStart. Hard opt-out via HIVEMIND_AUTOPULL_DISABLED=1.
+  // round-trip. Bounded by a 5s timeout so a slow Memoree never
+  // freezes SessionStart. Hard opt-out via MEMOREE_AUTOPULL_DISABLED=1.
   // All failures swallowed inside autoPullSkills (documented as
   // never-rejecting), so no try/catch needed here.
   const pullResult = await autoPullSkills();
@@ -233,10 +183,10 @@ async function main(): Promise<void> {
           log("placeholder created");
         } else {
           const reason = dirRes && !dirRes.collect
-            ? `.hivemind collect:false (${dirRes.found?.path})`
-            : process.env.HIVEMIND_CAPTURE === "false"
-              ? "HIVEMIND_CAPTURE=false"
-              : "HIVEMIND_CAPTURE_ONLY_CLI gate";
+            ? `.memoree collect:false (${dirRes.found?.path})`
+            : process.env.MEMOREE_CAPTURE === "false"
+              ? "MEMOREE_CAPTURE=false"
+              : "MEMOREE_CAPTURE_ONLY_CLI gate";
           log(`placeholder + schema ensure skipped (${reason})`);
         }
         // Docs auto sync check — the "every so often" the summary worker has.
@@ -283,15 +233,13 @@ async function main(): Promise<void> {
   // invocation arms the session via PreToolUse, then UserPromptSubmit/SessionEnd tick
   // the per-skill counter and fire only on accumulated pushback). See skillopt-trigger.
 
-  // Version notice in additionalContext — informational only; the
-  // upgrade-applied signal goes to stderr from inside autoUpdate (which
-  // already fired earlier in main(), before the DB ensure-table calls).
-  const updateNotice = current ? `\n\n✅ Hivemind v${current}` : "";
+  // Version notice in additionalContext is informational only.
+  const updateNotice = current ? `\n\n✅ Memoree v${current}` : "";
 
-  // No placeholder substitution needed — inject uses bare `hivemind <sub>` form.
+  // No placeholder substitution needed — inject uses bare `memoree <sub>` form.
   const resolvedContext = context;
-  // When the user hasn't signed in but has mined skills locally with
-  // `hivemind skillify mine-local`, surface a count + sign-in CTA in
+  // When the user has mined skills locally with
+  // `memoree skillify mine-local`, surface a count in
   // the model-visible context. The rich concrete-insight banner is
   // delivered on the user-visible systemMessage channel by the
   // notifications rule (src/notifications/rules/local-mined.ts) — it
@@ -308,7 +256,7 @@ async function main(): Promise<void> {
   // from the final `additionalContext` emitted to stdout.
   const localMinedNote = renderLocalMinedNote({ totalCount: localMined });
 
-  // Local code graph context (Phase 3 v1.1). Cheap: reads ~/.hivemind/...
+  // Local code graph context (Phase 3 v1.1). Cheap: reads ~/.memoree/...
   // /.last-build.json (small file populated by writeSnapshot) — never opens
   // the ~1 MB snapshot. Returns null when no graph exists for this repo, in
   // which case we add nothing (avoids a misleading "graph: 0 nodes" line
@@ -319,13 +267,12 @@ async function main(): Promise<void> {
   // pulled bytes land for the NEXT SessionStart to pick up). Putting the
   // spawn here is purely organizational — order doesn't matter because
   // the worker is fully detached.
-  // Gate on creds: pullSnapshot would early-return "skipped-no-auth"
-  // anyway, so spawning a worker without auth is wasted process churn.
+  // Pull the latest snapshot from the selected SQL backend when available.
   if (storageAvailable) spawnGraphPullWorker(input.cwd ?? process.cwd(), __bundleDir);
   const graphLine = graphContextLine(input.cwd ?? process.cwd());
   const graphNote = graphLine ?? "";
 
-  // Effective provider/identity after any Deeplake-only directory routing.
+  // Effective provider/identity after any Memoree-only directory routing.
   const effConfig = dirRes?.config ?? baseConfig;
 
   // Docs wiki note — the agent has no other way to learn the wiki exists.
@@ -335,27 +282,21 @@ async function main(): Promise<void> {
     ? docsWikiContextNote(effConfig.orgId ?? "", deriveProjectKey(input.cwd ?? process.cwd()).key)
     : "";
 
-  // Disclose the EFFECTIVE identity (after any `.hivemind` overlay), so a
+  // Disclose the EFFECTIVE identity (after any `.memoree` overlay), so a
   // directory that routes elsewhere (or opts out) is never silent.
   // NOT gated on `dirRes.collect`: the identity overlay now applies to reads
   // whether or not capture is on, so a `collect:false` directory can still be
   // routed — and must say so.
   const routed = !!(dirRes?.found && baseConfig &&
     (dirRes.config.orgId !== baseConfig.orgId || dirRes.config.workspaceId !== baseConfig.workspaceId));
-  const effOrg = effConfig ? (effConfig.orgName ?? effConfig.orgId) : (creds?.orgName ?? creds?.orgId);
-  const effWs = effConfig ? effConfig.workspaceId : (creds?.workspaceId ?? "default");
   // `routed` covers reads AND capture — both resolve through the same overlay —
   // so the disclosure must never imply one moved without the other.
   const routedNote = routed ? ` · routed by ${dirRes?.found?.path}` : "";
-  const provider = effConfig?.storage?.kind ?? "deeplake";
-  const identityLine = provider === "deeplake"
-    ? (dirRes && !dirRes.collect
-        ? `Deeplake capture is disabled for this directory (${dirRes.found?.path}); memory search uses org: ${effOrg} (workspace: ${effWs})${routedNote}`
-        : `Logged in to Deeplake as org: ${effOrg} (workspace: ${effWs})${routedNote}`)
-    : `Hivemind memory backend: ${provider}${dirRes && !dirRes.collect ? ` · capture disabled by ${dirRes.found?.path}` : ""}`;
+  const provider = effConfig?.storage.kind ?? "sqlite";
+  const identityLine = `Memoree memory backend: ${provider}${dirRes && !dirRes.collect ? ` · capture disabled by ${dirRes.found?.path}` : ""}`;
   const baseContext = storageAvailable && effConfig
     ? `${resolvedContext}\n\n${identityLine}${updateNotice}`
-    : `${resolvedContext}\n\nNot logged in to Deeplake; memory search is unavailable this session.${localMinedNote}${updateNotice}`;
+    : `${resolvedContext}\n\nLocal Memoree storage is unavailable; memory search is unavailable this session.${localMinedNote}${updateNotice}`;
   // Append the rules block when there's something to show, then
   // append the graph note (single line, may be empty). The renderer
   // returns "" on empty state OR failure, so the ternary stays terse.

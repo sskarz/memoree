@@ -44,7 +44,7 @@ describe("writeNewSkill", () => {
     expect(result.version).toBe(1);
     expect(result.path).toBe(join(skillsRoot, "my-skill", "SKILL.md"));
     expect(existsSync(result.path)).toBe(true);
-    // Caller (the worker → Deeplake INSERT) needs createdAt/updatedAt back.
+    // Caller (the worker → Memoree INSERT) needs createdAt/updatedAt back.
     expect(result.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(result.updatedAt).toBe(result.createdAt);
 
@@ -77,7 +77,7 @@ describe("writeNewSkill", () => {
   });
 
   it("length-caps an over-long name and returns the canonical name", () => {
-    const long = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const long = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     const result = writeNewSkill({
       skillsRoot, name: long, description: "", body: VALID_BODY, sourceSessions: [], agent: "x",
     });
@@ -106,7 +106,7 @@ describe("mergeSkill", () => {
     // Round-1 regression: a MERGE into a pre-cap over-long skill must find and
     // update THAT dir (preserving version/lineage), not create a truncated v1.
     // Verified end-to-end against the real functions on a real FS (2026-07-20).
-    const long = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization"; // 69 chars
+    const long = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization"; // 69 chars
     expect(long.length).toBeGreaterThan(64);
     mkdirSync(join(skillsRoot, long), { recursive: true });
     writeFileSync(join(skillsRoot, long, "SKILL.md"),
@@ -419,7 +419,7 @@ describe("capSkillName (64-char frontmatter-name ceiling)", () => {
   });
 
   it("truncates a >64 name to <=64 with a hyphen-aligned prefix + hash suffix", () => {
-    const long = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const long = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     expect(long.length).toBeGreaterThan(MAX_SKILL_NAME_LEN);
     const capped = capSkillName(long);
     expect(capped.length).toBeLessThanOrEqual(MAX_SKILL_NAME_LEN);

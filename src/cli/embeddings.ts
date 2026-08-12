@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { HOME, ensureDir, log, pkgRoot, symlinkForce, warn, writeJson } from "./util.js";
 import { pidPathFor, socketPathFor } from "../embeddings/protocol.js";
 import { getEmbeddingsEnabled, setEmbeddingsEnabled } from "../user-config.js";
-import { ensureGraphDeps } from "./graph-deps.js";
 
 /**
  * Shared-deps location for the embedding daemon's runtime dependencies.
@@ -16,7 +15,7 @@ import { ensureGraphDeps } from "./graph-deps.js";
  * the shared `node_modules` so node's standard module resolution finds
  * the package via the symlink walk.
  */
-export const SHARED_DIR = join(HOME, ".hivemind", "embed-deps");
+export const SHARED_DIR = join(HOME, ".memoree", "embed-deps");
 export const SHARED_NODE_MODULES = join(SHARED_DIR, "node_modules");
 export const SHARED_DAEMON_PATH = join(SHARED_DIR, "embed-daemon.js");
 export const TRANSFORMERS_PKG = "@huggingface/transformers";
@@ -28,26 +27,26 @@ export interface AgentInstall {
 }
 
 /**
- * Discover every hivemind plugin install on disk. Each agent's installer
+ * Discover every memoree plugin install on disk. Each agent's installer
  * lays down the bundle in a known location; we look for those locations
  * and report any that have a `bundle/` directory present.
  *
  * Pure: takes `home` so tests can drive it against a tmp dir without
  * monkey-patching os.homedir().
  */
-export function findHivemindInstalls(home: string = HOME): AgentInstall[] {
+export function findMemoreeInstalls(home: string = HOME): AgentInstall[] {
   const out: AgentInstall[] = [];
   const fixed: AgentInstall[] = [
-    { id: "codex", pluginDir: join(home, ".codex", "hivemind") },
-    { id: "cursor", pluginDir: join(home, ".cursor", "hivemind") },
-    { id: "hermes", pluginDir: join(home, ".hermes", "hivemind") },
+    { id: "codex", pluginDir: join(home, ".codex", "memoree") },
+    { id: "cursor", pluginDir: join(home, ".cursor", "memoree") },
+    { id: "hermes", pluginDir: join(home, ".hermes", "memoree") },
   ];
   for (const inst of fixed) {
     if (existsSync(join(inst.pluginDir, "bundle"))) out.push(inst);
   }
-  // Claude Code marketplace cache: ~/.claude/plugins/cache/hivemind/hivemind/<version>/
+  // Claude Code marketplace cache: ~/.claude/plugins/cache/memoree/memoree/<version>/
   // Multiple versions can coexist — link each one that has a bundle.
-  const ccCache = join(home, ".claude", "plugins", "cache", "hivemind", "hivemind");
+  const ccCache = join(home, ".claude", "plugins", "cache", "memoree", "memoree");
   if (existsSync(ccCache)) {
     let entries: string[] = [];
     try { entries = readdirSync(ccCache); } catch { /* unreadable; skip */ }
@@ -115,7 +114,7 @@ function ensureSharedDeps(): void {
     let existing: { dependencies?: Record<string, string> } = {};
     try { existing = JSON.parse(readFileSync(pkgPath, "utf8")); } catch { /* none yet */ }
     writeJson(pkgPath, {
-      name: "hivemind-embed-deps",
+      name: "memoree-embed-deps",
       version: "1.0.0",
       private: true,
       dependencies: { ...(existing.dependencies ?? {}), [TRANSFORMERS_PKG]: TRANSFORMERS_RANGE },
@@ -128,7 +127,7 @@ function ensureSharedDeps(): void {
     log(`  Embeddings     shared deps already present at ${SHARED_DIR}`);
   }
   // Always (re)deposit the canonical embed-daemon.js. Cheap copy; keeps the
-  // daemon up-to-date when the user reinstalls hivemind without re-installing
+  // daemon up-to-date when the user reinstalls memoree without re-installing
   // the deps. Pi (and any agent that doesn't ship its own bundle) launches
   // this exact file.
   ensureDir(SHARED_DIR);
@@ -149,7 +148,7 @@ function linkAgent(install: AgentInstall): void {
   const link = join(install.pluginDir, "node_modules");
   // Don't try to overwrite a real `node_modules` directory: `symlinkForce`
   // calls `unlinkSync` first, which throws EISDIR on directories and would
-  // abort `hivemind embeddings install` partway through, leaving some
+  // abort `memoree embeddings install` partway through, leaving some
   // agents linked and others not. Defer to whatever the user/marketplace
   // installed there — the same state `status` already surfaces as
   // `owns-own-node-modules`. (Symlinks at this path, including stale ones
@@ -166,31 +165,36 @@ function linkAgent(install: AgentInstall): void {
 
 /**
  * Heavy "install" path: install shared embedding deps if missing, then
- * symlink every detected hivemind plugin install to them, then flip the
+ * symlink every detected memoree plugin install to them, then flip the
  * user-config flag to enabled. Idempotent: re-runs after installing a new
  * agent just add the missing symlink and skip the npm install.
  *
  * Running `install` is the canonical way to opt in to embeddings. After
- * this finishes, `embeddings.enabled` in `~/.deeplake/config.json` is
+ * this finishes, `embeddings.enabled` in `~/.memoree/config.json` is
  * `true`, regardless of any prior value (running install overrides a
  * prior `disable`).
  */
-export function installEmbeddings(): void {
+export function installEmbeddings(opts: { quietNoInstalls?: boolean } = {}): void {
   ensureSharedDeps();
-  // Provision the code-graph parsers into the same shared dir so the
-  // graph-on-stop hook (which symlinks here) can auto-build the graph.
-  // Best-effort — a native-build failure never aborts the embeddings install.
-  ensureGraphDeps();
-  const installs = findHivemindInstalls();
+  const installs = findMemoreeInstalls();
   if (installs.length === 0) {
-    warn("  Embeddings     no hivemind installs detected — run `hivemind install` first");
-    warn("                 (the shared deps are in place; subsequent agent installs will pick them up if you re-run `hivemind embeddings install`)");
+    if (!opts.quietNoInstalls) {
+      warn("  Embeddings     no Memoree agent installs detected");
+      warn("                 (shared deps are ready; re-run this command after installing another integration to link it)");
+    }
   } else {
     for (const inst of installs) linkAgent(inst);
   }
   setEmbeddingsEnabled(true);
-  log(`  Embeddings     enabled in ~/.deeplake/config.json`);
+  log(`  Embeddings     enabled in ~/.memoree/config.json`);
   log(`  Embeddings     ready. Restart your agents to pick up.`);
+}
+
+/** Download and initialize the default model during onboarding. */
+export async function preloadEmbeddingModel(): Promise<void> {
+  const { NomicEmbedder } = await import("../embeddings/nomic.js");
+  await new NomicEmbedder().load();
+  log("  Embeddings     default model ready");
 }
 
 /**
@@ -201,9 +205,9 @@ export function installEmbeddings(): void {
  */
 export function enableEmbeddings(): void {
   setEmbeddingsEnabled(true);
-  log(`  Embeddings     enabled in ~/.deeplake/config.json`);
+  log(`  Embeddings     enabled in ~/.memoree/config.json`);
   if (!isSharedDepsInstalled()) {
-    warn(`  Embeddings     shared deps not installed yet — run \`hivemind embeddings install\` to download them`);
+    warn(`  Embeddings     shared deps not installed yet — run \`memoree embeddings install\` to download them`);
   } else {
     log(`  Embeddings     shared deps present — sessions will start producing embeddings on next restart`);
   }
@@ -216,7 +220,7 @@ export function enableEmbeddings(): void {
  * effect immediately. Counterpart to `install`.
  */
 export function uninstallEmbeddings(opts?: { prune?: boolean }): void {
-  const installs = findHivemindInstalls();
+  const installs = findMemoreeInstalls();
   for (const inst of installs) {
     const link = join(inst.pluginDir, "node_modules");
     if (isSymlinkToSharedDeps(link, SHARED_NODE_MODULES)) {
@@ -230,7 +234,7 @@ export function uninstallEmbeddings(opts?: { prune?: boolean }): void {
   }
   setEmbeddingsEnabled(false);
   killEmbedDaemon();
-  log(`  Embeddings     disabled in ~/.deeplake/config.json`);
+  log(`  Embeddings     disabled in ~/.memoree/config.json`);
 }
 
 /**
@@ -242,8 +246,8 @@ export function uninstallEmbeddings(opts?: { prune?: boolean }): void {
 export function disableEmbeddings(): void {
   setEmbeddingsEnabled(false);
   killEmbedDaemon();
-  log(`  Embeddings     disabled in ~/.deeplake/config.json`);
-  log(`  Embeddings     daemon terminated; shared deps preserved (run \`hivemind embeddings uninstall\` to remove)`);
+  log(`  Embeddings     disabled in ~/.memoree/config.json`);
+  log(`  Embeddings     daemon terminated; shared deps preserved (run \`memoree embeddings uninstall\` to remove)`);
 }
 
 /**
@@ -310,22 +314,22 @@ export function _isDaemonAliveOnSocket(sockPath: string, timeoutMs: number = 200
 
 export function statusEmbeddings(): void {
   const enabled = getEmbeddingsEnabled();
-  log(`Config:        ~/.deeplake/config.json embeddings.enabled = ${enabled}`);
+  log(`Config:        ~/.memoree/config.json embeddings.enabled = ${enabled}`);
   log(`Shared deps:   ${SHARED_DIR}`);
   log(`Installed:     ${isSharedDepsInstalled() ? "yes" : "no"}`);
   log(`Daemon:        ${existsSync(SHARED_DAEMON_PATH) ? SHARED_DAEMON_PATH : "(not present)"}`);
   if (!enabled) {
     log("");
-    log(`Embeddings are DISABLED in user config. Run \`hivemind embeddings enable\` to opt in,`);
-    log(`or \`hivemind embeddings install\` if the shared deps are not yet downloaded.`);
+    log(`Embeddings are DISABLED in user config. Run \`memoree embeddings enable\` to opt in,`);
+    log(`or \`memoree embeddings install\` if the shared deps are not yet downloaded.`);
   } else if (!isSharedDepsInstalled()) {
     log("");
     warn(`Embeddings are enabled in config but shared deps are missing.`);
-    warn(`Run \`hivemind embeddings install\` to download @huggingface/transformers.`);
+    warn(`Run \`memoree embeddings install\` to download @huggingface/transformers.`);
   }
   log("");
   log(`Agent installs:`);
-  const installs = findHivemindInstalls();
+  const installs = findMemoreeInstalls();
   if (installs.length === 0) {
     log(`  (none detected)`);
     return;

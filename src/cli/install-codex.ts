@@ -3,13 +3,13 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { HOME, pkgRoot, ensureDir, copyDir, writeJson, writeJsonIfChanged, symlinkForce, writeVersionStamp, log, warn } from "./util.js";
 import { getVersion } from "./version.js";
-import { upsertMarkedBlock, stripMarkedBlock, HIVEMIND_BLOCK_START, HIVEMIND_BLOCK_END } from "./agents-md.js";
+import { upsertMarkedBlock, stripMarkedBlock, MEMOREE_BLOCK_START, MEMOREE_BLOCK_END } from "./agents-md.js";
 
 const CODEX_HOME = join(HOME, ".codex");
-const PLUGIN_DIR = join(CODEX_HOME, "hivemind");
+const PLUGIN_DIR = join(CODEX_HOME, "memoree");
 const HOOKS_PATH = join(CODEX_HOME, "hooks.json");
 const AGENTS_SKILLS_DIR = join(HOME, ".agents", "skills");
-const SKILL_LINK = join(AGENTS_SKILLS_DIR, "hivemind-memory");
+const SKILL_LINK = join(AGENTS_SKILLS_DIR, "memoree-memory");
 // Codex auto-loads ~/.codex/AGENTS.md into the model context every session,
 // SILENTLY (no user-visible TUI cell — verified empirically). This is the
 // proactive-memory channel Codex's user-visible `additionalContext` can't be:
@@ -17,18 +17,18 @@ const SKILL_LINK = join(AGENTS_SKILLS_DIR, "hivemind-memory");
 // goals before starting work, without clobbering the TUI. We own only the
 // marker-fenced block; the user's own AGENTS.md content is preserved.
 const AGENTS_MD = join(CODEX_HOME, "AGENTS.md");
-const CODEX_AGENTS_BLOCK = `${HIVEMIND_BLOCK_START}
-## Hivemind Memory
+const CODEX_AGENTS_BLOCK = `${MEMOREE_BLOCK_START}
+## Memoree Memory
 
-You have global team memory at \`~/.deeplake/memory/\`, shared across all sessions, users, and agents in your org. Proactively consult it before starting a task — and whenever the user asks you to recall, look up, or remember anything:
+You have global team memory at \`~/.memoree/memory/\`, shared across all sessions, users, and agents in your org. Proactively consult it before starting a task — and whenever the user asks you to recall, look up, or remember anything:
 
-- Team rules: \`hivemind rules list\`
-- Your open goals: \`hivemind goal list --mine\`
-- Past sessions: start at \`~/.deeplake/memory/index.md\`, then read \`~/.deeplake/memory/summaries/<user>/<session>.md\`; only fall back to raw \`~/.deeplake/memory/sessions/<user>/*.jsonl\` when a summary lacks the detail.
-- Keyword search: \`grep -ri "keyword" ~/.deeplake/memory/summaries/\` (use \`grep\`, NOT \`rg\`/ripgrep — it may not be installed).
+- Team rules: \`memoree rules list\`
+- Your open goals: \`memoree goal list --mine\`
+- Past sessions: start at \`~/.memoree/memory/index.md\`, then read \`~/.memoree/memory/summaries/<user>/<session>.md\`; only fall back to raw \`~/.memoree/memory/sessions/<user>/*.jsonl\` when a summary lacks the detail.
+- Keyword search: \`grep -ri "keyword" ~/.memoree/memory/summaries/\` (use \`grep\`, NOT \`rg\`/ripgrep — it may not be installed).
 
 Use only bash builtins (cat, ls, grep, jq, head, tail, sed, awk, wc, sort, find) to read this filesystem — rg/ripgrep, node, python, curl are not available there. Do not spawn subagents to read memory.
-${HIVEMIND_BLOCK_END}`;
+${MEMOREE_BLOCK_END}`;
 
 function hookCmd(bundleFile: string, timeout: number, matcher?: string): Record<string, unknown> {
   const block: Record<string, unknown> = {
@@ -68,11 +68,11 @@ function stopBlockWithGraph(timeout: number): Record<string, unknown> {
   };
 }
 
-// Hivemind's codex bundle entry-points. A `command` whose path ends in
-// `bundle/<one of these>.js` is almost certainly hivemind regardless of
+// Memoree's codex bundle entry-points. A `command` whose path ends in
+// `bundle/<one of these>.js` is almost certainly memoree regardless of
 // where on disk it lives — no other plugin we know of ships this exact
 // filename set under a `bundle/` directory.
-const HIVEMIND_BUNDLE_FILES = [
+const MEMOREE_BUNDLE_FILES = [
   "session-start.js",
   "session-start-setup.js",
   "capture.js",
@@ -84,20 +84,20 @@ const HIVEMIND_BUNDLE_FILES = [
 
 // True when `entry` is one of our hook blocks. Two ways to recognise it:
 //   1. It points into the canonical install dir `<pluginDir>/bundle/`.
-//   2. It points at a path matching `bundle/<known-hivemind-file>.js`,
+//   2. It points at a path matching `bundle/<known-memoree-file>.js`,
 //      regardless of the parent directory. This catches dual-install
-//      scenarios — e.g. a user kept a local dev clone of hivemind wired in
+//      scenarios — e.g. a user kept a local dev clone of memoree wired in
 //      under a different path (`/path/to/my-clone/codex/bundle/...`) and
-//      then ran `hivemind install`, which previously left the dev clone's
+//      then ran `memoree install`, which previously left the dev clone's
 //      hooks alongside ours and they raced on every codex session.
 //
-// Used to strip stale hivemind entries on re-install (so re-installing
+// Used to strip stale memoree entries on re-install (so re-installing
 // doesn't duplicate our hooks) WITHOUT touching the user's own hook
 // entries that happen to share an event.
 //
 // Exported with an injectable `pluginDir` so unit tests can drive it
 // without depending on the real ~/.codex layout.
-export function isHivemindHookEntry(entry: unknown, pluginDir: string = PLUGIN_DIR): boolean {
+export function isMemoreeHookEntry(entry: unknown, pluginDir: string = PLUGIN_DIR): boolean {
   if (!entry || typeof entry !== "object") return false;
   const e = entry as Record<string, unknown>;
   const hooks = Array.isArray(e.hooks) ? (e.hooks as unknown[]) : [];
@@ -106,31 +106,31 @@ export function isHivemindHookEntry(entry: unknown, pluginDir: string = PLUGIN_D
     const cmd = (h as Record<string, unknown>).command;
     if (typeof cmd !== "string") return false;
     // Normalize path separators before matching. On Windows the hook command
-    // is written via join() (backslashes: `...\hivemind\bundle\capture.js`),
+    // is written via join() (backslashes: `...\memoree\bundle\capture.js`),
     // but our match patterns use forward slashes. Without this, dedup never
     // matched the prior install on Windows, so every re-install APPENDED a
-    // duplicate hivemind hook — the user's "PostToolUse runs twice" bug.
+    // duplicate memoree hook — the user's "PostToolUse runs twice" bug.
     const nCmd = cmd.replace(/\\/g, "/");
     const nPluginDir = pluginDir.replace(/\\/g, "/");
     if (nCmd.includes(`${nPluginDir}/bundle/`)) return true;
-    return HIVEMIND_BUNDLE_FILES.some(f => nCmd.includes(`/bundle/${f}`));
+    return MEMOREE_BUNDLE_FILES.some(f => nCmd.includes(`/bundle/${f}`));
   });
 }
 
-// Like isHivemindHookEntry, but only matches entries that point OUTSIDE
+// Like isMemoreeHookEntry, but only matches entries that point OUTSIDE
 // the canonical install dir. Used to surface a warning when re-install
-// strips a sibling hivemind clone — those are usually accidental dev-loop
+// strips a sibling memoree clone — those are usually accidental dev-loop
 // leftovers, but a user who genuinely wants two installs side-by-side
 // needs to see what got removed.
-function isForeignHivemindHookEntry(entry: unknown, pluginDir: string = PLUGIN_DIR): boolean {
-  if (!isHivemindHookEntry(entry, pluginDir)) return false;
+function isForeignMemoreeHookEntry(entry: unknown, pluginDir: string = PLUGIN_DIR): boolean {
+  if (!isMemoreeHookEntry(entry, pluginDir)) return false;
   const e = entry as Record<string, unknown>;
   const hooks = Array.isArray(e.hooks) ? (e.hooks as unknown[]) : [];
   return hooks.every(h => {
     if (!h || typeof h !== "object") return false;
     const cmd = (h as Record<string, unknown>).command;
     if (typeof cmd !== "string") return false;
-    // Same separator normalization as isHivemindHookEntry — a canonical-path
+    // Same separator normalization as isMemoreeHookEntry — a canonical-path
     // entry written with backslashes on Windows must NOT be mis-flagged as
     // "foreign" (which would emit a spurious dev-clone warning on re-install).
     return !cmd.replace(/\\/g, "/").includes(`${pluginDir.replace(/\\/g, "/")}/bundle/`);
@@ -138,10 +138,10 @@ function isForeignHivemindHookEntry(entry: unknown, pluginDir: string = PLUGIN_D
 }
 
 // Pure merge of two hooks-config shapes. Behavior:
-//   - Strip prior hivemind entries (matched via isHivemindHookEntry) from
+//   - Strip prior memoree entries (matched via isMemoreeHookEntry) from
 //     each event the user already had configured, so a re-install doesn't
 //     duplicate our hooks.
-//   - Drop events whose surviving (non-hivemind) entry list is empty.
+//   - Drop events whose surviving (non-memoree) entry list is empty.
 //   - Append our entries to each event we declare; preserve any other
 //     events the user had configured.
 //   - Preserve any non-hooks top-level fields from `existing`.
@@ -160,7 +160,7 @@ export function mergeHooks(
 
   const merged: Record<string, unknown[]> = {};
   for (const [event, entries] of Object.entries(existingHooks)) {
-    const surviving = (entries ?? []).filter(e => !isHivemindHookEntry(e, pluginDir));
+    const surviving = (entries ?? []).filter(e => !isMemoreeHookEntry(e, pluginDir));
     if (surviving.length) merged[event] = surviving;
   }
   for (const [event, entries] of Object.entries(ourHooks)) {
@@ -171,7 +171,7 @@ export function mergeHooks(
 
 // Filesystem-bound wrapper: reads HOOKS_PATH (if present) and feeds the
 // parsed result to the pure mergeHooks. Catches malformed JSON and warns.
-// Also surfaces a warning listing any foreign-path hivemind entries
+// Also surfaces a warning listing any foreign-path memoree entries
 // stripped (e.g. a dev clone wired in under a different directory).
 function mergeHooksJson(ours: Record<string, unknown>): Record<string, unknown> {
   let existing: Record<string, unknown> = {};
@@ -183,18 +183,18 @@ function mergeHooksJson(ours: Record<string, unknown>): Record<string, unknown> 
   } catch {
     warn(`  Codex          ${HOOKS_PATH} unparseable — ignoring prior content`);
   }
-  reportForeignHivemindHooks(existing);
+  reportForeignMemoreeHooks(existing);
   return mergeHooks(existing, ours);
 }
 
-function reportForeignHivemindHooks(existing: Record<string, unknown>): void {
+function reportForeignMemoreeHooks(existing: Record<string, unknown>): void {
   const existingHooks = (existing.hooks && typeof existing.hooks === "object")
     ? existing.hooks as Record<string, unknown[]>
     : {};
   const foreign = new Set<string>();
   for (const entries of Object.values(existingHooks)) {
     for (const e of entries ?? []) {
-      if (!isForeignHivemindHookEntry(e)) continue;
+      if (!isForeignMemoreeHookEntry(e)) continue;
       const hooks = Array.isArray((e as Record<string, unknown>).hooks)
         ? ((e as Record<string, unknown>).hooks as unknown[])
         : [];
@@ -205,7 +205,7 @@ function reportForeignHivemindHooks(existing: Record<string, unknown>): void {
     }
   }
   if (foreign.size === 0) return;
-  warn(`  Codex          stripping ${foreign.size} hivemind hook(s) from a non-canonical path:`);
+  warn(`  Codex          stripping ${foreign.size} memoree hook(s) from a non-canonical path:`);
   for (const cmd of foreign) warn(`                   ${cmd}`);
   warn(`                 (these were probably leftover from a local dev clone — re-add them manually if intentional)`);
 }
@@ -248,7 +248,7 @@ function stripLegacyCodexHooksKey(): void {
 }
 
 /**
- * Idempotently upsert the hivemind block into ~/.codex/AGENTS.md, the file
+ * Idempotently upsert the memoree block into ~/.codex/AGENTS.md, the file
  * Codex auto-loads into model context every session. Writes only when the
  * content actually changes, preserving any user content outside the markers.
  */
@@ -274,7 +274,7 @@ function writeCodexAgentsBlock(): void {
 }
 
 /**
- * Strip the hivemind block from ~/.codex/AGENTS.md on uninstall, deleting the
+ * Strip the memoree block from ~/.codex/AGENTS.md on uninstall, deleting the
  * file when nothing else remains and otherwise preserving the user's content.
  */
 function removeCodexAgentsBlock(): void {
@@ -287,7 +287,7 @@ function removeCodexAgentsBlock(): void {
     log(`  Codex          removed empty ${AGENTS_MD}`);
   } else {
     writeFileSync(AGENTS_MD, stripped);
-    log(`  Codex          stripped hivemind block from ${AGENTS_MD}`);
+    log(`  Codex          stripped memoree block from ${AGENTS_MD}`);
   }
 }
 
@@ -314,7 +314,7 @@ export function installCodex(): void {
   }
 
   ensureDir(AGENTS_SKILLS_DIR);
-  const skillTarget = join(PLUGIN_DIR, "skills", "deeplake-memory");
+  const skillTarget = join(PLUGIN_DIR, "skills", "memoree-memory");
   if (existsSync(skillTarget)) {
     symlinkForce(skillTarget, SKILL_LINK);
   } else {
@@ -326,7 +326,7 @@ export function installCodex(): void {
   // ensurePluginNodeModulesLink skips existing real directories — so we
   // replace an empty placeholder dir with a symlink here at install time.
   const pluginNm = join(PLUGIN_DIR, "node_modules");
-  const embedDepsNm = join(HOME, ".hivemind", "embed-deps", "node_modules");
+  const embedDepsNm = join(HOME, ".memoree", "embed-deps", "node_modules");
   if (existsSync(embedDepsNm)) {
     try {
       const st = lstatSync(pluginNm);
@@ -343,7 +343,7 @@ export function installCodex(): void {
 
 export function uninstallCodex(): void {
   if (existsSync(HOOKS_PATH)) {
-    // Symmetric with install: strip ONLY our hivemind entries via mergeHooks.
+    // Symmetric with install: strip ONLY our memoree entries via mergeHooks.
     // The pre-fix unconditional unlinkSync(HOOKS_PATH) destroyed any user-
     // defined hooks (e.g. a custom Notification handler) that lived alongside
     // ours. mergeHooks(existing, { hooks: {} }) preserves the user's events
@@ -368,7 +368,7 @@ export function uninstallCodex(): void {
         log(`  Codex          removed ${HOOKS_PATH}`);
       } else {
         writeJson(HOOKS_PATH, stripped);
-        log(`  Codex          stripped hivemind hooks from ${HOOKS_PATH}`);
+        log(`  Codex          stripped memoree hooks from ${HOOKS_PATH}`);
       }
     }
   }

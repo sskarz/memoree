@@ -19,7 +19,7 @@ import { forceSessionEndTrigger } from "../skillify/triggers.js";
 import { parseTranscript } from "../notifications/transcript-parser.js";
 import { appendUsageRecord } from "../notifications/usage-tracker.js";
 import { entrypointPassesOnlyCliGate } from "./shared/capture-gate.js";
-import { isHivemindPluginEnabled } from "../utils/plugin-state.js";
+import { isMemoreePluginEnabled } from "../utils/plugin-state.js";
 
 const log = (msg: string) => _log("session-end", msg);
 
@@ -32,7 +32,7 @@ interface StopInput {
 
 /**
  * Parse the session transcript for memory-search activity and append one
- * record to `~/.deeplake/usage-stats.jsonl`. Fail-soft on every step.
+ * record to `~/.memoree/usage-stats.jsonl`. Fail-soft on every step.
  *
  * Runs independent of the wiki-worker lock — even sessions where the
  * wiki worker can't run still contribute to the savings recap (the recap
@@ -53,9 +53,9 @@ function recordSessionUsage(transcriptPath: string | undefined, sessionId: strin
 }
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
-  if (process.env.HIVEMIND_CAPTURE === "false") return;
-  if (!isHivemindPluginEnabled()) { log("plugin disabled, skipping session-end"); return; }
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_CAPTURE === "false") return;
+  if (!isMemoreePluginEnabled()) { log("plugin disabled, skipping session-end"); return; }
   if (!entrypointPassesOnlyCliGate()) return;
 
   const input = await readStdin<StopInput>();
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   const base = loadConfig();
   if (!base) { log("no config"); return; }
 
-  // Per-directory `.hivemind`: honor opt-out and trusted org/workspace routing,
+  // Per-directory `.memoree`: honor opt-out and trusted org/workspace routing,
   // matching the capture hook so the end-of-session summary lands (or doesn't)
   // in the same place its events did.
   const resolved = resolveDirConfig(base, cwd || process.cwd());
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
 
   // Coordinate with the periodic worker: if one is already running for this
   // session, skip. Two workers writing the same summary row trip the
-  // Deeplake UPDATE-coalescing quirk (see CLAUDE.md) and drop one write.
+  // SQL UPDATE-coalescing quirk (see CLAUDE.md) and drop one write.
   if (!tryAcquireLock(sessionId)) {
     wikiLog(`SessionEnd: periodic worker already running for ${sessionId}, skipping`);
     return;

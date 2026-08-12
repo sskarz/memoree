@@ -2,7 +2,7 @@
 
 > Category: Auth | Version: 1.0 | Date: June 2026 | Status: Active
 
-Explains how Hivemind authenticates users and manages multi-org/workspace state: the OAuth 2.0 Device Authorization Flow, JWT-based org selection, long-lived API token minting, and the drift-repair mechanism that keeps credentials consistent across org switches.
+Explains how Memoree authenticates users and manages multi-org/workspace state: the OAuth 2.0 Device Authorization Flow, JWT-based org selection, long-lived API token minting, and the drift-repair mechanism that keeps credentials consistent across org switches.
 
 **Related:**
 - [`../security/credential-storage.md`](../security/credential-storage.md)
@@ -16,9 +16,9 @@ Explains how Hivemind authenticates users and manages multi-org/workspace state:
 
 ## Why this exists
 
-Hivemind runs inside coding agents (Claude Code, Codex, Cursor, etc.) as a plugin or hook. It must authenticate without prompting for a password inside a non-interactive terminal. The OAuth 2.0 Device Authorization Flow (RFC 8628) solves this: the user visits a browser URL on any device while the CLI polls for an approval signal. No password ever passes through the plugin process.
+Memoree runs inside coding agents (Claude Code, Codex, Cursor, etc.) as a plugin or hook. It must authenticate without prompting for a password inside a non-interactive terminal. The OAuth 2.0 Device Authorization Flow (RFC 8628) solves this: the user visits a browser URL on any device while the CLI polls for an approval signal. No password ever passes through the plugin process.
 
-Once authenticated, every subsequent API call carries a long-lived, org-bound JWT that the Deeplake backend validates. The credentials are persisted locally so re-authentication is rare (one year by default).
+Once authenticated, every subsequent API call carries a long-lived, org-bound JWT that the Memoree backend validates. The credentials are persisted locally so re-authentication is rare (one year by default).
 
 ---
 
@@ -29,8 +29,8 @@ The flow lives in `src/commands/auth.ts` and is initiated by `login()` -> `devic
 ```mermaid
 sequenceDiagram
     autonumber
-    participant cli as Hivemind CLI
-    participant api as Deeplake API
+    participant cli as Memoree CLI
+    participant api as Memoree API
     participant browser as User Browser
 
     cli->>api: POST /auth/device/code
@@ -50,12 +50,12 @@ sequenceDiagram
     end
     cli->>api: POST /users/me/tokens { name, duration: 365d, organization_id }
     api-->>cli: long-lived org-bound JWT
-    cli->>cli: saveCredentials to ~/.deeplake/credentials.json (mode 0600)
+    cli->>cli: saveCredentials to the removed cloud credentials file (mode 0600)
 ```
 
 The short-lived `access_token` from step 5 is used only for the `/users/me/tokens` mint (step 6). It is never written to disk. The persisted credential is always the org-bound 365-day token produced in step 6.
 
-**Token naming**: the `name` field sent to `/users/me/tokens` follows the pattern `deeplake-plugin-<date>` (for initial login) or `deeplake-plugin-switch-<Date.now()>` (for org switches). Deeplake's backend rejects duplicate `(user_id, name)` pairs with a misleading 500, so org-switch names include millisecond resolution to avoid collisions on the same calendar day.
+**Token naming**: the `name` field sent to `/users/me/tokens` follows the pattern `memoree-plugin-<date>` (for initial login) or `memoree-plugin-switch-<Date.now()>` (for org switches). Memoree's backend rejects duplicate `(user_id, name)` pairs with a misleading 500, so org-switch names include millisecond resolution to avoid collisions on the same calendar day.
 
 ---
 
@@ -65,11 +65,11 @@ After obtaining a token, `saveCredentialsFromToken()` resolves which organizatio
 
 | Priority | Source | When used |
 |---|---|---|
-| 1st | `HIVEMIND_ORG_ID` env var | Explicit override; always wins |
-| 2nd | `org_id` JWT claim (only for `skipTokenMint=true` paths) | API token pasted via `--token` or `HIVEMIND_TOKEN` |
+| 1st | `REMOVED_CLOUD_ORG_VARIABLE` env var | Explicit override; always wins |
+| 2nd | `org_id` JWT claim (only for `skipTokenMint=true` paths) | API token pasted via `--token` or `REMOVED_CLOUD_TOKEN_VARIABLE` |
 | 3rd | `orgs[0]` from `GET /organizations` | Device flow fallback; overridden by the upcoming mint |
 
-For multi-org accounts on the device flow path, `orgs[0]` is selected and then a token is minted bound to that org. The user can switch later with `hivemind org switch`. For the `--token` path, priority 2 extracts the `org_id` claim so a pre-minted API key routes to the correct org without any user interaction.
+For multi-org accounts on the device flow path, `orgs[0]` is selected and then a token is minted bound to that org. The user can switch later with the removed organization switch command. For the `--token` path, priority 2 extracts the `org_id` claim so a pre-minted API key routes to the correct org without any user interaction.
 
 ---
 
@@ -83,7 +83,7 @@ payload = base64url_decode(parts[1])
 return JSON.parse(payload)        // Record<string, unknown>
 ```
 
-The decode is intentionally verify-free. It is used only to read the `org_id` claim for routing decisions (not for access control). Signature verification happens on the Deeplake API server for every authenticated request. The JWT never bypasses the server-side gate.
+The decode is intentionally verify-free. It is used only to read the `org_id` claim for routing decisions (not for access control). Signature verification happens on the Memoree API server for every authenticated request. The JWT never bypasses the server-side gate.
 
 The `org_id` claim carries the organization the token was minted against. This is the single source of truth used by `healDriftedOrgToken` to detect credential drift.
 
@@ -103,7 +103,7 @@ This ensures `creds.orgId` and `creds.token`'s `org_id` JWT claim are always ali
 
 ### Workspace switch
 
-`switchWorkspace(workspaceId)` is simpler: it updates only `creds.workspaceId` in the local credentials file. No new token is minted because workspace context is passed to Deeplake via the `X-Activeloop-Org-Id` header per request, not baked into the JWT.
+`switchWorkspace(workspaceId)` is simpler: it updates only `creds.workspaceId` in the local credentials file. No new token is minted because workspace context is passed to Memoree via the `X-sskarz-Org-Id` header per request, not baked into the JWT.
 
 ---
 
@@ -135,9 +135,9 @@ The heal is best-effort: token mint failure logs a warning but does not block th
 
 ## Environment-Variable and Token-Flag Paths
 
-The `--token <value>` CLI flag and the `HIVEMIND_TOKEN` environment variable bypass the device flow entirely. Both paths call `saveCredentialsFromToken(token, apiUrl, { skipTokenMint: true })`. The token is assumed to be long-lived and org-bound already. The org is resolved from the `org_id` JWT claim (priority 2 from Section 3).
+The `--token <value>` CLI flag and the `REMOVED_CLOUD_TOKEN_VARIABLE` environment variable bypass the device flow entirely. Both paths call `saveCredentialsFromToken(token, apiUrl, { skipTokenMint: true })`. The token is assumed to be long-lived and org-bound already. The org is resolved from the `org_id` JWT claim (priority 2 from Section 3).
 
-Headless / CI installs use this path. The token is never echoed to stdout; it is written directly to `~/.deeplake/credentials.json`.
+Headless / CI installs use this path. The token is never echoed to stdout; it is written directly to `the removed cloud credentials file`.
 
 ---
 

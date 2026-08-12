@@ -12,7 +12,7 @@
  */
 
 /**
- * Full snapshot written to ~/.hivemind/graphs/<repo-key>/snapshots/<commit-sha>.json
+ * Full snapshot written to ~/.memoree/graphs/<repo-key>/snapshots/<commit-sha>.json
  * Shape is NetworkX node-link compatible (directed multigraph).
  *
  * Content-hash contract: the canonical SHA256 (computed in snapshot.ts, Task #4)
@@ -47,8 +47,8 @@ export interface GraphSnapshot {
 export interface GraphMetadata {
   /** Bump when GraphSnapshot shape changes. */
   schema_version: 1;
-  /** Distinguishes hivemind-produced snapshots from graphify-produced ones. */
-  generator: "hivemind-graph";
+  /** Distinguishes memoree-produced snapshots from graphify-produced ones. */
+  generator: "memoree-graph";
   /** Git HEAD at extraction time; null if cwd isn't a git repo. */
   commit_sha: string | null;
   /** Stable per-repo identifier — sha1 of normalized git remote URL. */
@@ -57,7 +57,7 @@ export interface GraphMetadata {
 
 /**
  * Volatile metadata. Bytes from this object do NOT contribute to snapshot_sha256.
- * Captures contextual info useful for inspection / queries / cloud row metadata,
+ * Captures contextual info useful for inspection, queries, and backend row metadata,
  * but excluded from content identity so dedup works across worktrees / branches.
  */
 export interface GraphObservation {
@@ -78,7 +78,7 @@ export interface GraphObservation {
    */
   repo_project: string;
   /**
-   * hivemind plugin version this snapshot was built with. Observation only:
+   * memoree plugin version this snapshot was built with. Observation only:
    * a version bump that doesn't change `schema_version` shouldn't invalidate
    * dedup against snapshots built by earlier versions.
    */

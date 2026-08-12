@@ -1,46 +1,65 @@
 # Architecture
 
-## Storage layer
+## Local-first storage
 
-Runtime features depend on a provider-neutral storage contract for parameterized queries, transactions, table and column discovery, additive schema healing, and cleanup. The factory selects one of three adapters:
+Memoree uses a provider-neutral SQL contract for parameterized queries,
+transactions, schema discovery, additive schema healing, and cleanup. There are
+two implementations:
 
-- Deeplake uses the existing HTTP SQL transport and server-side vector scoring.
-- SQLite uses Node's built-in `node:sqlite` with WAL, foreign keys, a busy timeout, and JSON-text vectors.
-- PostgreSQL is dynamically imported, uses a bounded `pg` pool, and scopes all tables to a validated schema.
+- SQLite is the default. It uses Node's built-in `node:sqlite`, WAL mode,
+  foreign keys, a busy timeout, and JSON-text vectors in
+  `~/.memoree/memoree.sqlite3`.
+- PostgreSQL is an advanced opt-in backend. It uses a bounded `pg` pool and a
+  validated schema. Its connection string is read only from
+  `MEMOREE_POSTGRES_URL`.
 
-Logical schema types are rendered per provider. SQLite and vanilla PostgreSQL perform bounded application-side cosine scoring when embeddings are present and fall back to lexical results when they are disabled or malformed. Detached workers receive provider metadata only and reload credentials or connection URLs from protected configuration or inherited environment variables.
+Both providers implement the same schemas for memory, sessions, skills, shared
+rules, goals, KPIs, documents, and codebase snapshots. Application-side cosine
+scoring supplies semantic retrieval, with lexical fallback whenever embeddings
+are disabled, unavailable, or malformed.
 
-## Integration model per agent
+Configuration under `~/.memoree/config.json` contains non-secret backend,
+capture, embedding, and local identity settings. Detached workers receive only
+provider kind and table metadata, then reload backend configuration in their
+own process. PostgreSQL URLs are never serialized into worker handoffs.
 
-| Agent             | Mechanism                          | Hooks/tools wired                                                                       |
-|-------------------|------------------------------------|-----------------------------------------------------------------------------------------|
-| **Claude Code**   | Marketplace plugin                 | `SessionStart` · `UserPromptSubmit` · `PreToolUse` · `PostToolUse` · `Stop` · `SubagentStop` · `SessionEnd` |
-| **Codex**         | `~/.codex/hooks.json`              | `SessionStart` · `UserPromptSubmit` · `PreToolUse(Bash)` · `PostToolUse` · `Stop`        |
-| **OpenClaw**      | Native extension at `~/.openclaw/extensions/hivemind/` | `agent_end` capture · `before_agent_start` recall · contracted tools (`hivemind_search`/`read`/`index`) |
-| **Cursor (1.7+)** | `~/.cursor/hooks.json`             | `sessionStart` · `beforeSubmitPrompt` · `postToolUse` · `afterAgentResponse` · `stop` · `sessionEnd` |
-| **Hermes**        | Skill at `~/.hermes/skills/hivemind-memory/` | recall via grep on `~/.deeplake/memory/`                                                |
-| **pi**            | `~/.pi/agent/AGENTS.md` + skill    | recall via grep on `~/.deeplake/memory/`                                                |
+## Capture and synthesis
 
-## Monorepo structure
+Agent hooks append events directly to the selected SQL backend. Summary workers
+read those events and invoke the agent's installed CLI; Claude Code synthesis
+uses the local `claude` executable. The embedding daemon runs locally from
+`~/.memoree/embed-deps`, caches its model under `~/.memoree/models`, and writes
+vectors back through the same storage contract.
 
+The virtual memory filesystem under `~/.memoree/memory` exposes indexes,
+summaries, and session records without introducing another source of truth.
+
+## Integration model
+
+| Agent | Installation | Main lifecycle |
+|---|---|---|
+| Claude Code | Local marketplace plugin | Session start, capture, recall, stop, session end |
+| Codex | Explicit `memoree codex install` | Session start, capture, recall, stop |
+| Cursor | Explicit `memoree cursor install` | Session start, prompt/tool capture, stop, session end |
+| Hermes | Explicit `memoree hermes install` | Hooks, skill, and MCP |
+| OpenClaw | Explicit `memoree claw install` | Native extension and contracted tools |
+| pi | Explicit `memoree pi install` | Extension, recall, capture, summary worker |
+
+Default onboarding installs Claude Code only. Other integrations, graph setup,
+documentation ingestion, history backfill, and skill mining remain explicit.
+
+## Repository layout
+
+```text
+src/                    TypeScript core, CLI, hooks, storage, retrieval
+harnesses/              Per-agent manifests, skills, and packaged bundles
+embeddings/             Standalone local embedding daemon entry
+docs/                   User and architecture documentation
+scripts/                Build, packaging, audit, and verification utilities
+tests/                   Runtime-specific and shared Vitest coverage
+library/                 Archived QA and requirements records
+bundle/                  Generated `memoree` executable bundle
 ```
-hivemind/
-├── src/                    ← shared core (API client, auth, config, SQL utils)
-│   ├── hooks/              ← Claude Code hooks
-│   ├── hooks/codex/        ← Codex hooks
-│   ├── hooks/cursor/       ← Cursor hooks
-│   ├── hooks/hermes/       ← Hermes shell hooks
-│   ├── hooks/pi/           ← pi wiki-worker (extension lives in harnesses/pi/extension-source/)
-│   ├── embeddings/         ← nomic embed-daemon + protocol + SQL helpers
-│   ├── mcp/                ← MCP server (used by Hermes; available to any future MCP-aware client)
-│   ├── commands/           ← auth, auth-creds, auth-login, session-prune
-│   └── cli/                ← unified `hivemind install` CLI + per-agent installers
-├── harnesses/claude-code/            ← Claude Code plugin source (marketplace-distributed)
-├── harnesses/codex/                  ← Codex plugin build output (npm-distributed)
-├── cursor/                 ← Cursor plugin build output (npm-distributed)
-├── harnesses/hermes/                 ← Hermes plugin build output (npm-distributed)
-├── mcp/                    ← MCP server build output (shared by Hermes + future MCP clients)
-├── harnesses/openclaw/               ← OpenClaw plugin source + build output (ClawHub-distributed)
-├── harnesses/pi/                     ← pi extension source (ships raw .ts; pi compiles at load)
-└── bundle/                 ← unified `hivemind` CLI build output
-```
+
+Generated `dist/` and `bundle/` files are produced by `npm run build` and are
+not edited manually.

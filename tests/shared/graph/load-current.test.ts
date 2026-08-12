@@ -6,7 +6,7 @@ import { loadCurrentSnapshot, workTreeIdFor } from "../../../src/graph/load-curr
 import { repoDir } from "../../../src/graph/snapshot.js";
 import { deriveProjectKey } from "../../../src/utils/repo-identity.js";
 
-const ORIG = process.env.HIVEMIND_GRAPHS_HOME;
+const ORIG = process.env.MEMOREE_GRAPHS_HOME;
 let graphsHome: string;
 let cwd: string;
 
@@ -29,11 +29,11 @@ function writeSnapshotFile(dir: string, fileBase: string, body: string): void {
 beforeEach(() => {
   graphsHome = mkdtempSync(join(tmpdir(), "graphs-home-"));
   cwd = mkdtempSync(join(tmpdir(), "repo-"));
-  process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+  process.env.MEMOREE_GRAPHS_HOME = graphsHome;
 });
 afterEach(() => {
-  if (ORIG === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-  else process.env.HIVEMIND_GRAPHS_HOME = ORIG;
+  if (ORIG === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+  else process.env.MEMOREE_GRAPHS_HOME = ORIG;
   rmSync(graphsHome, { recursive: true, force: true });
   rmSync(cwd, { recursive: true, force: true });
 });

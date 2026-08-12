@@ -11,19 +11,19 @@
  * sessions table and prints the model / reasoning_effort / token_usage that
  * actually landed in the JSONB `message` column.
  *
- * It exercises the whole path — parser -> entry build -> SQL INSERT -> Deeplake
+ * It exercises the whole path — parser -> entry build -> SQL INSERT -> Memoree
  * -> read-back — not just the parser in isolation.
  *
  * Safety:
- *   - Writes to a THROWAWAY table (HIVEMIND_SESSIONS_TABLE, default
+ *   - Writes to a THROWAWAY table (MEMOREE_SESSIONS_TABLE, default
  *     `sessions_modeltest`), never the production `sessions` table.
- *   - HIVEMIND_WIKI_WORKER=1 suppresses the hooks' side effects (owner walk,
+ *   - MEMOREE_WIKI_WORKER=1 suppresses the hooks' side effects (owner walk,
  *     periodic summary spawn, stop trigger) so only the INSERT runs.
  *   - Deletes its own rows on completion.
  *
  * Usage:
  *   node scripts/trace-model-usage-e2e.mjs            # trace + report + cleanup
- *   HIVEMIND_SESSIONS_TABLE=my_test node scripts/trace-model-usage-e2e.mjs
+ *   MEMOREE_SESSIONS_TABLE=my_test node scripts/trace-model-usage-e2e.mjs
  *   KEEP=1 node scripts/trace-model-usage-e2e.mjs     # keep rows for inspection
  */
 
@@ -34,7 +34,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const TABLE = process.env.HIVEMIND_SESSIONS_TABLE ?? "sessions_modeltest";
+const TABLE = process.env.MEMOREE_SESSIONS_TABLE ?? "sessions_modeltest";
 const RUN_TAG = "modeltest-" + Date.now().toString(36);
 const MAX_FILES_PER_AGENT = Number(process.env.MAX_FILES ?? 300);
 
@@ -42,15 +42,15 @@ const { parseClaudeTurnMeta, parseCodexTurnMeta, scanClaudeTurnForCapture, sdkTu
   join(ROOT, "dist/src/notifications/model-usage.js")
 );
 const { loadConfig } = await import(join(ROOT, "dist/src/config.js"));
-const { DeeplakeApi } = await import(join(ROOT, "dist/src/deeplake-api.js"));
+const { MemoreeApi } = await import(join(ROOT, "dist/src/memoree-api.js"));
 
 // Env shared by every hook invocation: throwaway table, no side effects, no embed.
 const HOOK_ENV = {
   ...process.env,
-  HIVEMIND_SESSIONS_TABLE: TABLE,
-  HIVEMIND_WIKI_WORKER: "1",
-  HIVEMIND_EMBEDDINGS: "false",
-  HIVEMIND_CAPTURE: "true",
+  MEMOREE_SESSIONS_TABLE: TABLE,
+  MEMOREE_WIKI_WORKER: "1",
+  MEMOREE_EMBEDDINGS: "false",
+  MEMOREE_CAPTURE: "true",
 };
 
 /** Newest-first list of transcript files under a directory tree, capped. */
@@ -190,10 +190,10 @@ function parseClaudeLive(file) {
 async function main() {
   const config = loadConfig();
   if (!config) {
-    console.error("No Deeplake credentials resolved (log in with `hivemind login`).");
+    console.error("Memoree storage is unavailable. Run `memoree doctor`.");
     process.exit(1);
   }
-  console.log(`Org: ${config.orgName} | table: ${TABLE} | run: ${RUN_TAG}\n`);
+  console.log(`Backend: ${config.storage.kind} | table: ${TABLE} | run: ${RUN_TAG}\n`);
 
   const claudeModels = pickOnePerModel(
     listTranscripts(join(homedir(), ".claude", "projects"), MAX_FILES_PER_AGENT),
@@ -273,7 +273,7 @@ async function main() {
   // sessions table is read-after-write lagged — a row INSERTed moments ago may
   // not be visible on an immediate SELECT (the backend even returns rows=0 on
   // the write) — so poll until every invoked model is visible or we time out.
-  const api = new DeeplakeApi(
+  const api = new MemoreeApi(
     config.token,
     config.apiUrl,
     config.orgId,

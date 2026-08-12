@@ -6,13 +6,15 @@ import { unlinkSync, writeFileSync, existsSync, mkdirSync as mkdirSync2, chmodSy
 
 // dist/src/embeddings/nomic.js
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { homedir as homedir2 } from "node:os";
+import { join as join2 } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // dist/src/embeddings/protocol.js
+import { homedir } from "node:os";
+import { join } from "node:path";
 var PROTOCOL_VERSION = 1;
-var DEFAULT_SOCKET_DIR = "/tmp";
+var DEFAULT_SOCKET_DIR = join(homedir(), ".memoree", "run");
 var DEFAULT_MODEL_REPO = "nomic-ai/nomic-embed-text-v1.5";
 var DEFAULT_DTYPE = "q8";
 var DEFAULT_DIMS = 768;
@@ -20,14 +22,14 @@ var DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1e3;
 var DOC_PREFIX = "search_document: ";
 var QUERY_PREFIX = "search_query: ";
 function socketPathFor(uid, dir = DEFAULT_SOCKET_DIR) {
-  return `${dir}/hivemind-embed-${uid}.sock`;
+  return `${dir}/memoree-embed-${uid}.sock`;
 }
 function pidPathFor(uid, dir = DEFAULT_SOCKET_DIR) {
-  return `${dir}/hivemind-embed-${uid}.pid`;
+  return `${dir}/memoree-embed-${uid}.pid`;
 }
 
 // dist/src/embeddings/nomic.js
-async function _importFromCanonicalSharedDeps(sharedDir = join(homedir(), ".hivemind", "embed-deps")) {
+async function _importFromCanonicalSharedDeps(sharedDir = join2(homedir2(), ".memoree", "embed-deps")) {
   const base = pathToFileURL(`${sharedDir}/`).href;
   const absMain = createRequire(base).resolve("@huggingface/transformers");
   const mod = await import(pathToFileURL(absMain).href);
@@ -57,7 +59,7 @@ async function defaultImportTransformers(canonical = _importFromCanonicalSharedD
   } catch (bareErr) {
     const detail = bareErr instanceof Error ? bareErr.message : String(bareErr);
     const canonicalDetail = canonicalErr instanceof Error ? canonicalErr.message : String(canonicalErr);
-    throw new Error(`@huggingface/transformers is not installed anywhere reachable. Run \`hivemind embeddings install\` to install it. (canonical: ${canonicalDetail}; bare: ${detail})`);
+    throw new Error(`@huggingface/transformers is not installed anywhere reachable. Run \`memoree embeddings install\` to install it. (canonical: ${canonicalDetail}; bare: ${detail})`);
   }
 }
 var _importTransformers = defaultImportTransformers;
@@ -81,6 +83,7 @@ var NomicEmbedder = class {
       const mod = await _importTransformers();
       mod.env.allowLocalModels = false;
       mod.env.useFSCache = true;
+      mod.env.cacheDir = join2(homedir2(), ".memoree", "models");
       this.pipeline = await mod.pipeline("feature-extraction", this.repo, { dtype: this.dtype });
     })();
     try {
@@ -135,11 +138,11 @@ var NomicEmbedder = class {
 
 // dist/src/utils/debug.js
 import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname, join as join2 } from "node:path";
-import { homedir as homedir2 } from "node:os";
-var LOG = join2(homedir2(), ".deeplake", "hook-debug.log");
+import { dirname, join as join3 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+var LOG = join3(homedir3(), ".memoree", "hook-debug.log");
 function isDebug() {
-  return process.env.HIVEMIND_DEBUG === "1";
+  return process.env.MEMOREE_DEBUG === "1";
 }
 function log(tag, msg) {
   if (!isDebug())
@@ -288,8 +291,8 @@ var EmbedDaemon = class {
 };
 var invokedDirectly = import.meta.url === `file://${process.argv[1]}` || process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop() ?? "");
 if (invokedDirectly) {
-  const dims = process.env.HIVEMIND_EMBED_DIMS ? Number(process.env.HIVEMIND_EMBED_DIMS) : void 0;
-  const idleTimeoutMs = process.env.HIVEMIND_EMBED_IDLE_MS ? Number(process.env.HIVEMIND_EMBED_IDLE_MS) : void 0;
+  const dims = process.env.MEMOREE_EMBED_DIMS ? Number(process.env.MEMOREE_EMBED_DIMS) : void 0;
+  const idleTimeoutMs = process.env.MEMOREE_EMBED_IDLE_MS ? Number(process.env.MEMOREE_EMBED_IDLE_MS) : void 0;
   const d = new EmbedDaemon({ dims, idleTimeoutMs });
   d.start().catch((e) => {
     log2(`fatal: ${e.message}`);

@@ -21,7 +21,7 @@ import { join } from "node:path";
 
 let workDir: string;
 let graphsHome: string;
-const prevHome = process.env.HIVEMIND_GRAPHS_HOME;
+const prevHome = process.env.MEMOREE_GRAPHS_HOME;
 
 function captureLogs(fn: () => Promise<void> | void): Promise<{ out: string; err: string }> {
   const out: string[] = [];
@@ -46,38 +46,38 @@ describe("runPullCommand — every PullOutcome branch", () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "outcome-pull-cwd-"));
     graphsHome = mkdtempSync(join(tmpdir(), "outcome-pull-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
     vi.resetModules();
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     try { rmSync(workDir, { recursive: true, force: true }); } catch {}
     try { rmSync(graphsHome, { recursive: true, force: true }); } catch {}
   });
 
   async function runPullWithOutcome(outcome: unknown): Promise<{ out: string; err: string }> {
-    vi.doMock("../../../src/graph/deeplake-pull.js", () => ({
+    vi.doMock("../../../src/graph/snapshot-pull.js", () => ({
       pullSnapshot: vi.fn(async () => outcome),
     }));
     const { runGraphCommand } = await import("../../../src/commands/graph.js");
     return captureLogs(() => runGraphCommand(["pull", "--cwd", workDir]));
   }
 
-  it("pulled → prints commit, sha256, bytes, origin, cloud ts", async () => {
+  it("pulled → prints commit, sha256, bytes, origin, backend ts", async () => {
     const { out } = await runPullWithOutcome({
       kind: "pulled",
       commitSha: "9c4a7ce83f8cf79cb76c585175037912dc2ebef7",
       snapshotSha256: "749fc890608bad00df55dbe1d85b9b697a850f092a4d26a128d6b230b179514f",
       bytes: 1014683,
-      cloudTs: 1779402726801,
+      backendTs: 1779402726801,
       sourceWorktreePath: "e01c87cb64b9f223",
     });
     expect(out).toContain("Pulled commit 9c4a7ce");
     expect(out).toContain("sha256:");
     expect(out).toContain("bytes:");
     expect(out).toContain("worktree_id=e01c87cb64b9f223");
-    expect(out).toContain("cloud ts:");
+    expect(out).toContain("backend ts:");
   });
 
   it("up-to-date → prints already-up-to-date with commit + sha", async () => {
@@ -90,39 +90,39 @@ describe("runPullCommand — every PullOutcome branch", () => {
     expect(out).toContain("1d32aaa");
   });
 
-  it("local-newer → prints local+cloud ts comparison", async () => {
+  it("local-newer → prints local+backend ts comparison", async () => {
     const { out } = await runPullWithOutcome({
       kind: "local-newer",
       commitSha: "abc1234abc1234abc1234abc1234abc1234abc12",
       localTs: 2_000_000_000_000,
-      cloudTs: 1_000_000_000_000,
+      backendTs: 1_000_000_000_000,
     });
     expect(out).toContain("Local is newer");
     expect(out).toContain("commit:");
     expect(out).toContain("local ts:");
-    expect(out).toContain("cloud ts:");
+    expect(out).toContain("backend ts:");
   });
 
-  it("no-cloud-row → prints no-cloud message + suggestion to build", async () => {
+  it("no-backend-row → prints no-backend message + suggestion to build", async () => {
     const { out } = await runPullWithOutcome({
-      kind: "no-cloud-row",
+      kind: "no-backend-row",
       commitSha: "1234567890abcdef1234567890abcdef12345678",
     });
-    expect(out).toContain("No cloud snapshot");
+    expect(out).toContain("No backend snapshot");
     expect(out).toContain("1234567");
     expect(out).toContain("graph build");
   });
 
-  it("skipped-no-auth → prints login hint", async () => {
-    const { out } = await runPullWithOutcome({ kind: "skipped-no-auth" });
+  it("skipped-no-config → prints doctor hint", async () => {
+    const { out } = await runPullWithOutcome({ kind: "skipped-no-config" });
     expect(out).toContain("Skipped");
-    expect(out).toContain("not authenticated");
-    expect(out).toContain("hivemind login");
+    expect(out).toContain("storage configuration unavailable");
+    expect(out).toContain("memoree doctor");
   });
 
   it("skipped-disabled → prints env var", async () => {
     const { out } = await runPullWithOutcome({ kind: "skipped-disabled" });
-    expect(out).toContain("HIVEMIND_GRAPH_PULL=0");
+    expect(out).toContain("MEMOREE_GRAPH_PULL=0");
   });
 
   it("skipped-no-head → prints not-in-git-repo message", async () => {
@@ -144,12 +144,12 @@ describe("runInitCommand — every InstallStatus branch", () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "outcome-init-cwd-"));
     graphsHome = mkdtempSync(join(tmpdir(), "outcome-init-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
     vi.resetModules();
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     try { rmSync(workDir, { recursive: true, force: true }); } catch {}
     try { rmSync(graphsHome, { recursive: true, force: true }); } catch {}
   });
@@ -198,12 +198,12 @@ describe("runUninstallCommand — every UninstallStatus branch", () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "outcome-uninstall-cwd-"));
     graphsHome = mkdtempSync(join(tmpdir(), "outcome-uninstall-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
     vi.resetModules();
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     try { rmSync(workDir, { recursive: true, force: true }); } catch {}
     try { rmSync(graphsHome, { recursive: true, force: true }); } catch {}
   });
@@ -250,12 +250,12 @@ describe("runHistoryCommand — argument parsing branches", () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "outcome-hist-cwd-"));
     graphsHome = mkdtempSync(join(tmpdir(), "outcome-hist-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
     vi.resetModules();
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     try { rmSync(workDir, { recursive: true, force: true }); } catch {}
     try { rmSync(graphsHome, { recursive: true, force: true }); } catch {}
   });
@@ -290,12 +290,12 @@ describe("runDiffCommand — argument parsing branches", () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "outcome-diff-cwd-"));
     graphsHome = mkdtempSync(join(tmpdir(), "outcome-diff-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
     vi.resetModules();
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     try { rmSync(workDir, { recursive: true, force: true }); } catch {}
     try { rmSync(graphsHome, { recursive: true, force: true }); } catch {}
   });

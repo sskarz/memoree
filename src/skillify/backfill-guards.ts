@@ -14,7 +14,7 @@ export interface AutoBackfillGuardReport {
     | "manifest-exists"
     | "lock-exists"
     | "no-local-sessions"
-    | "no-hivemind-bin"
+    | "no-memoree-bin"
     | "lock-acquire-failed"
     | "spawn-failed";
 }
@@ -55,7 +55,7 @@ export function runBackfillGuards(deps: GuardDeps): AutoBackfillGuardReport {
   }
 
   if (!deps.hasAgents()) return { triggered: false, reason: "no-local-sessions" };
-  if (!deps.hasLauncher()) return { triggered: false, reason: "no-hivemind-bin" };
+  if (!deps.hasLauncher()) return { triggered: false, reason: "no-memoree-bin" };
   if (!deps.acquireLock()) return { triggered: false, reason: "lock-acquire-failed" };
 
   if (!deps.spawn()) {

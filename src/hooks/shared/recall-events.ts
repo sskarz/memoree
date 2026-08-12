@@ -2,7 +2,7 @@
  * Always-on recall telemetry sink.
  *
  * Appends one JSON line per recall-worthy invocation to
- * `~/.deeplake/recall-events.jsonl` — INDEPENDENT of HIVEMIND_DEBUG, so
+ * `~/.memoree/recall-events.jsonl` — INDEPENDENT of MEMOREE_DEBUG, so
  * "did recall fire / how often / hit-rate / score distribution" is a one-line
  * `jq` over the file rather than detective work across logs. Failure-isolated:
  * telemetry must never throw or block the hook.
@@ -32,7 +32,7 @@ export interface RecallEvent {
 }
 
 function eventsPath(): string {
-  return join(homedir(), ".deeplake", "recall-events.jsonl");
+  return join(homedir(), ".memoree", "recall-events.jsonl");
 }
 
 /** Append one recall event as a JSONL line. Never throws. */

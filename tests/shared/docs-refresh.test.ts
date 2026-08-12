@@ -161,7 +161,7 @@ describe("refreshDocs", () => {
     ]);
     const generate = vi.fn(async () => "new doc body");
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: s, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s, repoRoot: dir,
       impacted: impacted(), docsById: new Map([["a.ts", d]]), generate,
     });
     expect(report.refreshed).toBe(1);
@@ -170,7 +170,7 @@ describe("refreshDocs", () => {
     // 2 queries: getDocLatest + UPDATE-in-place. The UPDATE carries the FRESH
     // anchor (recomputed from current code), not the stale stored hash.
     expect(calls).toHaveLength(2);
-    expect(calls[1]).toMatch(/^UPDATE "hivemind_docs" SET/);
+    expect(calls[1]).toMatch(/^UPDATE "memoree_docs" SET/);
     expect(calls[1]).toContain("new doc body");
     expect(calls[1]).toContain(buildAnchor(foo, dir)!.content_hash);
     expect(calls[1]).not.toContain("stale");
@@ -181,7 +181,7 @@ describe("refreshDocs", () => {
     const { calls, query } = mockQuery([]);
     const huge = Array.from({ length: DEFAULT_MAX_CHANGED_LINES + 10 }, (_, i) => `l${i}`).join("\n");
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: s, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s, repoRoot: dir,
       impacted: impacted(), docsById: new Map([["a.ts", d]]), generate: async () => huge,
     });
     expect(report.rejected).toBe(1);
@@ -195,7 +195,7 @@ describe("refreshDocs", () => {
     const { calls, query } = mockQuery([]);
     const generate = vi.fn(async () => "small");
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: s, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s, repoRoot: dir,
       impacted: impacted(), docsById: new Map([["a.ts", d]]), generate,
     });
     expect(report.rejected).toBe(1);
@@ -208,7 +208,7 @@ describe("refreshDocs", () => {
   it("skips an impacted doc that has no current row", async () => {
     const { query } = mockQuery([]);
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: s, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s, repoRoot: dir,
       impacted: impacted(), docsById: new Map(), generate: async () => "x",
     });
     expect(report.skipped).toBe(1);
@@ -219,7 +219,7 @@ describe("refreshDocs", () => {
     const d = doc({ anchors: [{ symbol_id: foo.id, content_hash: "x" }] });
     const { calls, query } = mockQuery([]);
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: s, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s, repoRoot: dir,
       impacted: impacted(), docsById: new Map([["a.ts", d]]),
       generate: async () => { throw new Error("LLM down"); },
     });
@@ -240,7 +240,7 @@ describe("refreshDocs", () => {
     ]);
     const generate = vi.fn(async () => "should never be called");
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: emptySnap, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: emptySnap, repoRoot: dir,
       impacted: [{ doc_id: "a.ts", reasons: [{ kind: "symbol_missing", symbol_id: gone }] }],
       docsById: new Map([["a.ts", d]]), generate,
     });
@@ -251,7 +251,7 @@ describe("refreshDocs", () => {
     expect(generate).not.toHaveBeenCalled();
     // archiveDoc = getDocLatest + UPDATE(status='archived'); nothing else.
     expect(calls).toHaveLength(2);
-    expect(calls[1]).toMatch(/^UPDATE "hivemind_docs" SET/);
+    expect(calls[1]).toMatch(/^UPDATE "memoree_docs" SET/);
     expect(calls[1]).toContain("status = 'archived'");
   });
 
@@ -263,7 +263,7 @@ describe("refreshDocs", () => {
       () => [],
     ]);
     const report = await refreshDocs({
-      query, tableName: "hivemind_docs", snap: s, repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s, repoRoot: dir,
       impacted: impacted(), docsById: new Map([["a.ts", d]]), generate: async () => "small",
     });
     expect(report.refreshed).toBe(1);

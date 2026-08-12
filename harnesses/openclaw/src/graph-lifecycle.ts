@@ -17,25 +17,25 @@ let graphPullSpawned = false;
 
 /** Resolve the git repo root the graph should index for this gateway. */
 export function resolveGraphCwd(): string {
-  const tuning = (globalThis as Record<string, unknown>).__hivemind_tuning__ as
+  const tuning = (globalThis as Record<string, unknown>).__memoree_tuning__ as
     Record<string, string | undefined> | undefined;
-  const fromTuning = tuning?.HIVEMIND_GRAPH_CWD?.trim();
+  const fromTuning = tuning?.MEMOREE_GRAPH_CWD?.trim();
   if (fromTuning) return fromTuning;
-  const fromEnv = inheritedEnv.env?.HIVEMIND_GRAPH_CWD?.trim();
+  const fromEnv = inheritedEnv.env?.MEMOREE_GRAPH_CWD?.trim();
   if (fromEnv) return fromEnv;
   return process.cwd();
 }
 
 function graphOnStopDisabled(): boolean {
-  const tuning = (globalThis as Record<string, unknown>).__hivemind_tuning__ as
+  const tuning = (globalThis as Record<string, unknown>).__memoree_tuning__ as
     Record<string, string | undefined> | undefined;
-  return tuning?.HIVEMIND_GRAPH_ON_STOP === "0" || inheritedEnv.env?.HIVEMIND_GRAPH_ON_STOP === "0";
+  return tuning?.MEMOREE_GRAPH_ON_STOP === "0" || inheritedEnv.env?.MEMOREE_GRAPH_ON_STOP === "0";
 }
 
 function graphPullDisabled(): boolean {
-  const tuning = (globalThis as Record<string, unknown>).__hivemind_tuning__ as
+  const tuning = (globalThis as Record<string, unknown>).__memoree_tuning__ as
     Record<string, string | undefined> | undefined;
-  return tuning?.HIVEMIND_GRAPH_PULL === "0" || inheritedEnv.env?.HIVEMIND_GRAPH_PULL === "0";
+  return tuning?.MEMOREE_GRAPH_PULL === "0" || inheritedEnv.env?.MEMOREE_GRAPH_PULL === "0";
 }
 
 export interface GraphSpawnDeps {

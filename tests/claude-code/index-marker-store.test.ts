@@ -3,7 +3,7 @@ import { join, basename } from "node:path";
 
 /**
  * Source-level tests for src/index-marker-store.ts — fs-backed lookup-index
- * freshness markers. Extracted from src/deeplake-api.ts in PR #76 so the
+ * freshness markers. Extracted from src/memoree-api.ts in PR #76 so the
  * openclaw plugin's bundle could split fs writes from its fetch calls.
  *
  * Branches covered:
@@ -47,7 +47,7 @@ async function importMarkerStore() {
   return await import("../../src/index-marker-store.js");
 }
 
-const ENV_KEYS = ["HIVEMIND_INDEX_MARKER_DIR", "HIVEMIND_INDEX_MARKER_TTL_MS"];
+const ENV_KEYS = ["MEMOREE_INDEX_MARKER_DIR", "MEMOREE_INDEX_MARKER_TTL_MS"];
 
 beforeEach(() => {
   for (const k of ENV_KEYS) delete process.env[k];
@@ -64,15 +64,15 @@ afterEach(() => {
 });
 
 describe("getIndexMarkerDir", () => {
-  it("uses HIVEMIND_INDEX_MARKER_DIR when set", async () => {
-    process.env.HIVEMIND_INDEX_MARKER_DIR = "/custom/marker/dir";
+  it("uses MEMOREE_INDEX_MARKER_DIR when set", async () => {
+    process.env.MEMOREE_INDEX_MARKER_DIR = "/custom/marker/dir";
     const { getIndexMarkerDir } = await importMarkerStore();
     expect(getIndexMarkerDir()).toBe("/custom/marker/dir");
   });
 
-  it("falls back to tmpdir()/hivemind-deeplake-indexes when env unset", async () => {
+  it("falls back to tmpdir()/memoree-memoree-indexes when env unset", async () => {
     const { getIndexMarkerDir } = await importMarkerStore();
-    expect(getIndexMarkerDir()).toBe(join("/tmp/test-tmp", "hivemind-deeplake-indexes"));
+    expect(getIndexMarkerDir()).toBe(join("/tmp/test-tmp", "memoree-memoree-indexes"));
     expect(tmpdirMock).toHaveBeenCalled();
   });
 });
@@ -81,7 +81,7 @@ describe("buildIndexMarkerPath", () => {
   it("joins workspace/org/table/suffix with __ separators", async () => {
     const { buildIndexMarkerPath } = await importMarkerStore();
     const p = buildIndexMarkerPath("ws1", "org1", "memory", "path_creation_date");
-    expect(p).toBe(join("/tmp/test-tmp", "hivemind-deeplake-indexes", "ws1__org1__memory__path_creation_date.json"));
+    expect(p).toBe(join("/tmp/test-tmp", "memoree-memoree-indexes", "ws1__org1__memory__path_creation_date.json"));
   });
 
   it("escapes any character outside [a-zA-Z0-9_.-] in the marker key", async () => {
@@ -97,7 +97,7 @@ describe("buildIndexMarkerPath", () => {
 });
 
 describe("hasFreshIndexMarker", () => {
-  const markerPath = "/tmp/test-tmp/hivemind-deeplake-indexes/m.json";
+  const markerPath = "/tmp/test-tmp/memoree-memoree-indexes/m.json";
 
   it("returns false when the marker file doesn't exist", async () => {
     existsSyncMock.mockReturnValue(false);
@@ -157,8 +157,8 @@ describe("hasFreshIndexMarker", () => {
     expect(hasFreshIndexMarker(markerPath)).toBe(false);
   });
 
-  it("respects HIVEMIND_INDEX_MARKER_TTL_MS env override", async () => {
-    process.env.HIVEMIND_INDEX_MARKER_TTL_MS = String(1000); // 1 second
+  it("respects MEMOREE_INDEX_MARKER_TTL_MS env override", async () => {
+    process.env.MEMOREE_INDEX_MARKER_TTL_MS = String(1000); // 1 second
     existsSyncMock.mockReturnValue(true);
     const tenSecAgo = new Date(Date.now() - 10_000).toISOString();
     readFileSyncMock.mockReturnValue(JSON.stringify({ updatedAt: tenSecAgo }));
@@ -169,14 +169,14 @@ describe("hasFreshIndexMarker", () => {
 
 describe("writeIndexMarker", () => {
   it("ensures the marker dir exists, then writes a JSON timestamp", async () => {
-    const markerPath = "/tmp/test-tmp/hivemind-deeplake-indexes/m.json";
+    const markerPath = "/tmp/test-tmp/memoree-memoree-indexes/m.json";
     const { writeIndexMarker } = await importMarkerStore();
     writeIndexMarker(markerPath);
 
     expect(mkdirSyncMock).toHaveBeenCalledTimes(1);
     // join(...) so the expected separator matches the host (`\` on Windows).
     expect(mkdirSyncMock).toHaveBeenCalledWith(
-      join("/tmp/test-tmp", "hivemind-deeplake-indexes"),
+      join("/tmp/test-tmp", "memoree-memoree-indexes"),
       { recursive: true },
     );
     expect(writeFileSyncMock).toHaveBeenCalledTimes(1);

@@ -1,7 +1,7 @@
 /**
- * Tiny on-disk markers used by DeeplakeApi to remember which lookup indexes
+ * Tiny on-disk markers used by MemoreeApi to remember which lookup indexes
  * we've already created on a given table. Extracted into its own file so
- * deeplake-api.ts contains only network operations — needed for per-file
+ * memoree-api.ts contains only network operations — needed for per-file
  * static-analysis rules that flag fs+fetch co-occurrence.
  */
 
@@ -9,10 +9,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const INDEX_MARKER_TTL_MS = Number(process.env.HIVEMIND_INDEX_MARKER_TTL_MS ?? 6 * 60 * 60_000);
+const INDEX_MARKER_TTL_MS = Number(process.env.MEMOREE_INDEX_MARKER_TTL_MS ?? 6 * 60 * 60_000);
 
 export function getIndexMarkerDir(): string {
-  return process.env.HIVEMIND_INDEX_MARKER_DIR ?? join(tmpdir(), "hivemind-deeplake-indexes");
+  return process.env.MEMOREE_INDEX_MARKER_DIR ?? join(tmpdir(), "memoree-memoree-indexes");
 }
 
 export function buildIndexMarkerPath(workspaceId: string, orgId: string, table: string, suffix: string): string {

@@ -1,11 +1,11 @@
 /**
- * `hivemind memory backfill` — stage knowledge from a fresh user's own past
+ * `memoree memory backfill` — stage knowledge from a fresh user's own past
  * local agent sessions into team memory, WITHOUT requiring sign-in.
  *
  * This is the memory analogue of `skillify mine-local`. Where mine-local
  * extracts reusable *skills*, this extracts the *knowledge graph* (entities,
  * decisions, relationships, facts) that the live SessionEnd path already
- * builds via the wiki prompt — but over the user's pre-Hivemind history.
+ * builds via the wiki prompt — but over the user's pre-Memoree history.
  *
  * Two-phase, split at the upload boundary (see pending-memory-manifest.ts):
  *
@@ -16,7 +16,7 @@
  *        (default 6 weeks).
  *     3. Dedup against already-staged session ids.
  *     4. For each session: replay JSONL through the wiki prompt (claude -p),
- *        write the summary to ~/.claude/hivemind/pending-memory/<id>.md,
+ *        write the summary to ~/.claude/memoree/pending-memory/<id>.md,
  *        compute the embedding LOCALLY via the embed daemon, and append an
  *        `uploaded: false` row to the manifest.
  *
@@ -321,18 +321,18 @@ export async function executeBackfill(
 /**
  * Release the install-time spawn lock — ONLY when this process owns it.
  * The spawn worker (spawn-backfill-memory-worker.ts) acquires the lock and
- * sets HIVEMIND_BACKFILL_LOCK_OWNED=1 in the spawned process's env. A manual
- * `hivemind memory backfill` invocation never owns the lock, so it must not
+ * sets MEMOREE_BACKFILL_LOCK_OWNED=1 in the spawned process's env. A manual
+ * `memoree memory backfill` invocation never owns the lock, so it must not
  * delete one another (spawned) process is holding.
  */
 export function releaseBackfillLock(lockPath: string = PENDING_MEMORY_LOCK_PATH): void {
-  if (process.env.HIVEMIND_BACKFILL_LOCK_OWNED !== "1") return;
+  if (process.env.MEMOREE_BACKFILL_LOCK_OWNED !== "1") return;
   try {
     if (existsSync(lockPath)) unlinkSync(lockPath);
   } catch { /* best-effort */ }
 }
 
-/** CLI entry for `hivemind memory backfill`: plan, then extract unless --dry-run. */
+/** CLI entry for `memoree memory backfill`: plan, then extract unless --dry-run. */
 export async function runBackfillMemory(argv: string[]): Promise<number> {
   const cwd = process.cwd();
   const opts = parseBackfillArgs(argv, cwd);

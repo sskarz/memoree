@@ -13,9 +13,9 @@ import { getVersion } from "./version.js";
 // differ ("type" + "command" + "timeout"; no "matcher" wrapper at the top).
 
 const CURSOR_HOME = join(HOME, ".cursor");
-const PLUGIN_DIR = join(CURSOR_HOME, "hivemind");
+const PLUGIN_DIR = join(CURSOR_HOME, "memoree");
 const HOOKS_PATH = join(CURSOR_HOME, "hooks.json");
-const HIVEMIND_MARKER_KEY = "_hivemindManaged";
+const MEMOREE_MARKER_KEY = "_memoreeManaged";
 
 interface CursorHookEntry {
   type: "command" | "prompt";
@@ -45,7 +45,7 @@ function buildHookConfig(): Record<string, CursorHookEntry[]> {
   return {
     sessionStart: [buildHookCmd("session-start.js", 30)],
     beforeSubmitPrompt: [buildHookCmd("capture.js", 10)],
-    // preToolUse with Shell matcher rewrites grep/rg against ~/.deeplake/memory/
+    // preToolUse with Shell matcher rewrites grep/rg against ~/.memoree/memory/
     // into a single SQL fast-path call, matching Claude Code / Codex accuracy.
     preToolUse: [buildHookCmdShellMatcher("pre-tool-use.js", 30)],
     postToolUse: [buildHookCmd("capture.js", 15)],
@@ -59,15 +59,15 @@ function buildHookConfig(): Record<string, CursorHookEntry[]> {
   };
 }
 
-export function isHivemindEntry(entry: unknown): boolean {
+export function isMemoreeEntry(entry: unknown): boolean {
   if (!entry || typeof entry !== "object") return false;
   const cmd = (entry as { command?: string }).command;
   if (typeof cmd !== "string") return false;
   // Normalize separators: on Windows the command is written with backslashes
-  // (`...\.cursor\hivemind\bundle\capture.js`), so a forward-slash-only match
+  // (`...\.cursor\memoree\bundle\capture.js`), so a forward-slash-only match
   // would fail and re-install would duplicate the hooks (same Windows bug as
-  // codex's isHivemindHookEntry).
-  return cmd.replace(/\\/g, "/").includes("/.cursor/hivemind/bundle/");
+  // codex's isMemoreeHookEntry).
+  return cmd.replace(/\\/g, "/").includes("/.cursor/memoree/bundle/");
 }
 
 function mergeHooks(existing: Record<string, unknown> | null): Record<string, unknown> {
@@ -77,10 +77,10 @@ function mergeHooks(existing: Record<string, unknown> | null): Record<string, un
   const ours = buildHookConfig();
   for (const [event, entries] of Object.entries(ours)) {
     const prior = Array.isArray(root.hooks[event]) ? root.hooks[event] : [];
-    const stripped = prior.filter(e => !isHivemindEntry(e));
+    const stripped = prior.filter(e => !isMemoreeEntry(e));
     root.hooks[event] = [...stripped, ...entries];
   }
-  (root as Record<string, unknown>)[HIVEMIND_MARKER_KEY] = { version: getVersion() };
+  (root as Record<string, unknown>)[MEMOREE_MARKER_KEY] = { version: getVersion() };
   return root as unknown as Record<string, unknown>;
 }
 
@@ -89,12 +89,12 @@ export function stripHooksFromConfig(existing: Record<string, unknown> | null): 
   const root = existing as { hooks?: Record<string, unknown[]> };
   if (root.hooks) {
     for (const event of Object.keys(root.hooks)) {
-      root.hooks[event] = (root.hooks[event] ?? []).filter(e => !isHivemindEntry(e));
+      root.hooks[event] = (root.hooks[event] ?? []).filter(e => !isMemoreeEntry(e));
       if (root.hooks[event].length === 0) delete root.hooks[event];
     }
     if (Object.keys(root.hooks).length === 0) delete root.hooks;
   }
-  delete (existing as Record<string, unknown>)[HIVEMIND_MARKER_KEY];
+  delete (existing as Record<string, unknown>)[MEMOREE_MARKER_KEY];
   return existing;
 }
 
@@ -114,7 +114,7 @@ export function installCursor(): void {
   writeJsonIfChanged(HOOKS_PATH, merged);
 
   const pluginNm = join(PLUGIN_DIR, "node_modules");
-  const embedDepsNm = join(HOME, ".hivemind", "embed-deps", "node_modules");
+  const embedDepsNm = join(HOME, ".memoree", "embed-deps", "node_modules");
   if (existsSync(embedDepsNm)) {
     try { const st = lstatSync(pluginNm); if (st.isDirectory() && !st.isSymbolicLink()) rmSync(pluginNm, { recursive: true }); } catch { /* ok */ }
     symlinkForce(embedDepsNm, pluginNm);

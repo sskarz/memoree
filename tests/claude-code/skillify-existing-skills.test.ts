@@ -53,12 +53,12 @@ describe("listAllExistingSkills", () => {
 
   it("reads from both project and global roots, tagging the source", () => {
     writeSkill(projectRoot(), "deploy", "project body");
-    writeSkill(globalRoot(), "hivemind-plugin-testing--alice", "global body");
+    writeSkill(globalRoot(), "memoree-plugin-testing--alice", "global body");
     const skills = listAllExistingSkills(projectCwd);
     // Project is enumerated first, then global.
     expect(skills).toEqual([
       { name: "deploy", body: expect.stringContaining("project body"), source: "project" },
-      { name: "hivemind-plugin-testing--alice", body: expect.stringContaining("global body"), source: "global" },
+      { name: "memoree-plugin-testing--alice", body: expect.stringContaining("global body"), source: "global" },
     ]);
   });
 
@@ -100,7 +100,7 @@ describe("renderExistingSkillsBlock", () => {
   it("only [project] skills are MERGE-eligible (post-#125 review: worker's mergeSkill is rooted at cfg.install)", () => {
     writeSkill(projectRoot(), "deploy", "p body");
     writeSkill(globalRoot(), "team-standup--d", "g body");
-    writeSkill(globalRoot(), "pg-deeplake-cred-callback--levon", "g body 2");
+    writeSkill(globalRoot(), "pg-memoree-cred-callback--levon", "g body 2");
     const result = renderExistingSkillsBlock(projectCwd, 10_000);
     // [global] entries are reference-only until the worker can resolve a
     // global mergeSkill root (`<root>/<name>--<author>`) and translate

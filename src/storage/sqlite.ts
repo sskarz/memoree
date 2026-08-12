@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { WriteRow } from "../deeplake-api.js";
+import type { WriteRow } from "./backend.js";
 import type { BackendTableNames, ExecuteResult, QueryRow, SqlValue, StorageBackend } from "./backend.js";
 import { SqlStorageBackend } from "./backend.js";
 
@@ -70,7 +70,7 @@ export class SqliteBackend extends SqlStorageBackend {
     super(tableName, tableNames);
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     // Keep node:sqlite out of non-SQLite startup. In bundled runtimes this
-    // remains a native dynamic import, so Deeplake/PostgreSQL users do not
+    // remains a native dynamic import, so Memoree/PostgreSQL users do not
     // load the experimental SQLite module or see its warning.
     this.dbPromise = import("node:sqlite").then(async ({ DatabaseSync }) => {
       const db = new DatabaseSync(path, { timeout: 5000 });

@@ -67,8 +67,8 @@ const validConfig = {
 };
 
 beforeEach(() => {
-  delete process.env.HIVEMIND_WIKI_WORKER;
-  delete process.env.HIVEMIND_CAPTURE;
+  delete process.env.MEMOREE_WIKI_WORKER;
+  delete process.env.MEMOREE_CAPTURE;
   stdinMock.mockReset().mockResolvedValue({ session_id: "sid-1", cwd: "/proj" });
   loadConfigMock.mockReset().mockReturnValue(validConfig);
   spawnMock.mockReset();
@@ -85,16 +85,16 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("session-end hook", () => {
-  it("returns immediately when HIVEMIND_WIKI_WORKER=1 (nested worker invocation)", async () => {
-    process.env.HIVEMIND_WIKI_WORKER = "1";
+  it("returns immediately when MEMOREE_WIKI_WORKER=1 (nested worker invocation)", async () => {
+    process.env.MEMOREE_WIKI_WORKER = "1";
     await runHook();
     expect(stdinMock).not.toHaveBeenCalled();
     expect(spawnMock).not.toHaveBeenCalled();
     expect(tryAcquireLockMock).not.toHaveBeenCalled();
   });
 
-  it("returns immediately when HIVEMIND_CAPTURE=false (opt-out)", async () => {
-    process.env.HIVEMIND_CAPTURE = "false";
+  it("returns immediately when MEMOREE_CAPTURE=false (opt-out)", async () => {
+    process.env.MEMOREE_CAPTURE = "false";
     await runHook();
     expect(stdinMock).not.toHaveBeenCalled();
     expect(spawnMock).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Codex PreToolUse hook — intercepts Bash commands targeting ~/.deeplake/memory/.
+ * Codex PreToolUse hook — intercepts Bash commands targeting ~/.memoree/memory/.
  *
  * Decision -> wire mapping. Codex >= 0.136 parses PreToolUse JSON on stdout
  * (verified against codex-rs/hooks/src/events/pre_tool_use.rs, tag rust-v0.136.0):
@@ -14,7 +14,7 @@
  * `allow` exists for memory writes: the hook performs the VFS/SQL write itself,
  * then rewrites the host command to a harmless echo so Codex does NOT re-run the
  * original redirect. A plain exit-0 with no JSON makes Codex run the original
- * `echo ... > ~/.deeplake/memory/...` against the on-disk mount — the double
+ * `echo ... > ~/.memoree/memory/...` against the on-disk mount — the double
  * execution that errors "No such file or directory" when the subdir is absent (F3).
  *
  * The source logic is exported so tests can exercise it directly without
@@ -83,7 +83,7 @@ export interface CodexPreToolDecision {
 }
 
 export function buildUnsupportedGuidance(): string {
-  return "This command is not supported for ~/.deeplake/memory/ operations. " +
+  return "This command is not supported for ~/.memoree/memory/ operations. " +
     "Only bash builtins are available: cat, ls, grep, echo, jq, head, tail, wc, sort, find, etc. " +
     "Do NOT use python, python3, node, curl, or other interpreters. " +
     "Rewrite your command using only bash tools and retry.";
@@ -133,7 +133,7 @@ export async function processCodexPreToolUse(
     readCachedIndexContentFn = readCachedIndexContent,
     writeCachedIndexContentFn = writeCachedIndexContent,
     runVfsShellFn = (command: string) => {
-      const shellBundle = join(__bundleDir, "shell", "deeplake-shell.js");
+      const shellBundle = join(__bundleDir, "shell", "memoree-shell.js");
       const proc = spawnSync("node", [shellBundle, "-c", command], {
         encoding: "utf-8",
         timeout: 10_000,
@@ -144,10 +144,10 @@ export async function processCodexPreToolUse(
     logFn = log,
   } = deps;
 
-  // Route memory reads/writes through the nearest `.hivemind`, like capture —
+  // Route memory reads/writes through the nearest `.memoree`, like capture —
   // a directory pinned to another workspace must read/write THAT workspace, not
   // the global one. Applied to the injected/default base alike (a no-op when no
-  // `.hivemind` applies). See src/dir-config.ts.
+  // `.memoree` applies). See src/dir-config.ts.
   const config = baseConfig ? resolveDirConfig(baseConfig, input.cwd ?? process.cwd()).config : baseConfig;
 
   const cmd = input.tool_input?.command ?? "";
@@ -180,8 +180,8 @@ export async function processCodexPreToolUse(
   }
 
   if (config) {
-    const table = process.env["HIVEMIND_TABLE"] ?? "memory";
-    const sessionsTable = process.env["HIVEMIND_SESSIONS_TABLE"] ?? "sessions";
+    const table = process.env["MEMOREE_TABLE"] ?? "memory";
+    const sessionsTable = process.env["MEMOREE_SESSIONS_TABLE"] ?? "sessions";
     const api = createApi(table, config);
 
     const readVirtualPathContentsWithCache = async (
@@ -221,7 +221,7 @@ export async function processCodexPreToolUse(
       const lsDocs = rewritten.match(/^ls\s+(?:-[a-zA-Z]+\s+)*\/docs\/?\s*$/);
       if (lsDocs) {
         logFn("docs vfs intercept: ls /docs");
-        const r = await handleDocsVfs("", (sql) => api.query(sql), process.env["HIVEMIND_DOCS_TABLE"] ?? config.docsTableName, { project: deriveProjectKey(input.cwd ?? process.cwd()).key, dialect: api.dialect });
+        const r = await handleDocsVfs("", (sql) => api.query(sql), process.env["MEMOREE_DOCS_TABLE"] ?? config.docsTableName, { project: deriveProjectKey(input.cwd ?? process.cwd()).key, dialect: api.dialect });
         const body = r.kind === "ok" ? r.body : "(docs unavailable)";
         return { action: "block", output: body, rewrittenCommand: rewritten };
       }
@@ -288,7 +288,7 @@ export async function processCodexPreToolUse(
       // + config-backed. Same route Claude's pre-tool-use uses.
       if (virtualPath && (virtualPath === "/docs" || virtualPath.startsWith("/docs/"))) {
         logFn(`docs vfs intercept: ${virtualPath}`);
-        const docsTable = process.env["HIVEMIND_DOCS_TABLE"] ?? config.docsTableName;
+        const docsTable = process.env["MEMOREE_DOCS_TABLE"] ?? config.docsTableName;
         const sub = virtualPath === "/docs" ? "" : virtualPath.slice("/docs/".length);
         const r = await handleDocsVfs(sub, (sql) => api.query(sql), docsTable, { embedQuery: makeQueryEmbedder(), project: deriveProjectKey(input.cwd ?? process.cwd()).key, dialect: api.dialect });
         const body = r.kind === "ok" ? r.body : `${virtualPath}: No such file or directory`;

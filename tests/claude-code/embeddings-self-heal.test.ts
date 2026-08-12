@@ -23,7 +23,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "hvm-self-heal-"));
   pluginDir = join(root, "plugin-v1");
   bundleDir = join(pluginDir, "bundle");
-  sharedNodeModules = join(root, ".hivemind", "embed-deps", "node_modules");
+  sharedNodeModules = join(root, ".memoree", "embed-deps", "node_modules");
   link = join(pluginDir, "node_modules");
   mkdirSync(bundleDir, { recursive: true });
 });

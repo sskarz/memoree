@@ -75,7 +75,7 @@ if (process.platform === "darwin") {
 ```ts
 function readSessionSummary(sessionId: string): string | null {
   const user = creds?.userName ?? "unknown";
-  const path = join(homedir(), ".deeplake", "memory", "summaries", user, `${sessionId}.md`);
+  const path = join(homedir(), ".memoree", "memory", "summaries", user, `${sessionId}.md`);
   // no validation of sessionId before use
   return readFileSync(path, "utf-8");
 }
@@ -93,7 +93,7 @@ function readSessionSummary(sessionId: string): string | null {
   if (!SESSION_ID_RE.test(sessionId)) return null;
   const user = creds?.userName ?? "unknown";
   if (user.includes("/") || user.includes("\\") || user.includes("..")) return null;
-  const path = join(homedir(), ".deeplake", "memory", "summaries", user, `${sessionId}.md`);
+  const path = join(homedir(), ".memoree", "memory", "summaries", user, `${sessionId}.md`);
   ...
 }
 ```
@@ -131,20 +131,20 @@ function getNonce(): string {
 ---
 
 ### FINDING-04 - MEDIUM - FIXED
-**Title:** `execSync` used for `hivemind login` unnecessarily spawning a shell
+**Title:** `execSync` used for the removed cloud sign-in command unnecessarily spawning a shell
 
 **File:** `cursor-extension/src/auth/device-flow.ts:147-153`
 
 **Pattern before:**
 ```ts
-execSync("hivemind login", { stdio: "inherit", timeout: 300000 });
+execSync("the removed cloud sign-in command", { stdio: "inherit", timeout: 300000 });
 ```
 
 **Reasoning:** `execSync` with a single string argument invokes `/bin/sh -c` on Unix, creating a shell. While the argument is hardcoded here (no immediate injection risk), consistent use of `execFileSync` with an argument array eliminates the shell entirely and prevents a class of errors if the call site is ever refactored.
 
 **Fix applied:**
 ```ts
-execFileSync("hivemind", ["login"], { stdio: "inherit", timeout: 300000 });
+execFileSync("memoree", ["login"], { stdio: "inherit", timeout: 300000 });
 ```
 
 ---
@@ -207,7 +207,7 @@ Generate the hash with `openssl dgst -sha384 -binary d3.v7.min.js | openssl base
 
 Credentials written at `cursor-extension/src/auth/device-flow.ts:111-112`:
 ```ts
-mkdirSync(deeplakeConfigDir(), { recursive: true, mode: 0o700 });
+mkdirSync(memoreeConfigDir(), { recursive: true, mode: 0o700 });
 writeFileSync(credentialsPath(), JSON.stringify(creds, null, 2), { mode: 0o600 });
 ```
 Directory created `0700`, file created `0600`. None detected in logs. **No findings.**
@@ -222,6 +222,6 @@ Directory created `0700`, file created `0600`. None detected in logs. **No findi
 
 | File | Change |
 |---|---|
-| `cursor-extension/src/auth/device-flow.ts` | Replace `execSync` with `execFileSync` for `openBrowser` and `loginViaHivemindCli`; remove unused `execSync` import |
+| `cursor-extension/src/auth/device-flow.ts` | Replace `execSync` with `execFileSync` for `openBrowser` and `loginViaMemoreeCli`; remove unused `execSync` import |
 | `cursor-extension/src/webview/DashboardPanel.ts` | Add `SESSION_ID_RE` allowlist validation and `user` path safety check in `readSessionSummary` |
 | `cursor-extension/src/webview/html/dashboard-shell.ts` | Replace `Math.random()` nonce with `crypto.randomBytes(16).toString("hex")` |

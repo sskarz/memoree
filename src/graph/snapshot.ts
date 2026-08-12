@@ -12,7 +12,7 @@
  * Out of scope for Phase 1 (deferred):
  *   - Hard-link dedup across snapshots (Phase 1.5: snapshots/by-content/<sha>.json)
  *   - history.jsonl append (Phase 2)
- *   - Cloud push (Phase 3)
+ *   - Backend snapshot synchronization
  */
 
 import { createHash } from "node:crypto";
@@ -34,11 +34,11 @@ import type {
 } from "./types.js";
 
 /**
- * Root for hivemind graph state on disk. Honors HIVEMIND_GRAPHS_HOME so
- * tests can point at a tmp dir without touching the real ~/.hivemind/.
+ * Root for memoree graph state on disk. Honors MEMOREE_GRAPHS_HOME so
+ * tests can point at a tmp dir without touching the real ~/.memoree/.
  */
 export function graphsRoot(): string {
-  return process.env.HIVEMIND_GRAPHS_HOME ?? join(homedir(), ".hivemind", "graphs");
+  return process.env.MEMOREE_GRAPHS_HOME ?? join(homedir(), ".memoree", "graphs");
 }
 
 /** Per-repo storage directory: graphsRoot() / <repo-key>. */

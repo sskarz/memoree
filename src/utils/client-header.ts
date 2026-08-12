@@ -1,28 +1,28 @@
 /**
- * X-Deeplake-Client header helper.
+ * X-Memoree-Client header helper.
  *
- * The deeplake-api backend reads X-Deeplake-Client to attribute traffic by
- * client family (distinguishes hivemind traffic from activeloop-cli /
- * device-code-flow traffic). Every outbound request to deeplake-api carries
+ * The memoree-api backend reads X-Memoree-Client to attribute traffic by
+ * client family (distinguishes memoree traffic from sskarz-cli /
+ * device-code-flow traffic). Every outbound request to memoree-api carries
  * this header.
  *
- * Static "hivemind" — no version dimension. The version part used to be
- * baked in via esbuild's `define: { __HIVEMIND_VERSION__: ... }`, but
+ * Static "memoree" — no version dimension. The version part used to be
+ * baked in via esbuild's `define: { __MEMOREE_VERSION__: ... }`, but
  * keeping every per-bundle build step in sync was a recurring source of
  * bugs (cursor / hermes / mcp / unified CLI all shipped with the literal
  * unsubstituted at one point), and the backend doesn't actively use the
  * version dimension. If version-level attribution becomes useful again,
  * re-introduce the define on every build step that ships a bundle hitting
- * deeplake-api.
+ * memoree-api.
  */
-export const DEEPLAKE_CLIENT_HEADER = "X-Deeplake-Client";
+export const MEMOREE_CLIENT_HEADER = "X-Memoree-Client";
 
-/** Returns "hivemind" — the value for the X-Deeplake-Client header. */
-export function deeplakeClientValue(): string {
-  return "hivemind";
+/** Returns "memoree" — the value for the X-Memoree-Client header. */
+export function memoreeClientValue(): string {
+  return "memoree";
 }
 
-/** Returns { "X-Deeplake-Client": "hivemind" } for spreading into a headers object. */
-export function deeplakeClientHeader(): Record<string, string> {
-  return { [DEEPLAKE_CLIENT_HEADER]: deeplakeClientValue() };
+/** Returns { "X-Memoree-Client": "memoree" } for spreading into a headers object. */
+export function memoreeClientHeader(): Record<string, string> {
+  return { [MEMOREE_CLIENT_HEADER]: memoreeClientValue() };
 }

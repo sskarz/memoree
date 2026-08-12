@@ -138,7 +138,7 @@ describe("handleGraphVfs — branch coverage gaps", () => {
     const commit = "a".repeat(40);
     const snap = {
       directed: true, multigraph: true,
-      graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: commit, repo_key: "k" },
+      graph: { schema_version: 1, generator: "memoree-graph", commit_sha: commit, repo_key: "k" },
       observation: { ts: "2026-01-01T00:00:00Z", branch: "main", worktree_path: "/t", repo_project: "p", generator_version: "0", source_files_extracted: 1, source_files_skipped: 0 },
       nodes: nodes.map((n) => ({ ...n, source_file: "f.ts", source_location: "L1", language: "typescript" })),
       links: links.map((l) => ({ ...l, confidence: "EXTRACTED" })),
@@ -229,24 +229,24 @@ describe("handleGraphVfs — branch coverage gaps", () => {
     if (r.kind === "ok") expect(r.body).toMatch(/no longer in the snapshot|Re-run find/);
   });
 
-  it("default makeApi path: pushSnapshot without injected makeApi exercises real DeeplakeApi construction (no network)", async () => {
+  it("default makeApi path: pushSnapshot without injected makeApi exercises real MemoreeApi construction (no network)", async () => {
     // CodeRabbit-driven coverage: `defaultMakeApi` was uncovered because all
     // push tests inject `makeApi`. Call pushSnapshot WITHOUT makeApi and
     // make it short-circuit before any network call by passing loadConfig
-    // that returns null → exits at the skipped-no-auth gate, but ONLY after
+    // that returns null → exits at the skipped-no-config gate, but ONLY after
     // the function-entry code path ran.
-    const { pushSnapshot } = await import("../../../src/graph/deeplake-push.js");
+    const { pushSnapshot } = await import("../../../src/graph/snapshot-push.js");
     const r = await pushSnapshot(
       {
         directed: true, multigraph: true,
-        graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: "x", repo_key: "k" },
+        graph: { schema_version: 1, generator: "memoree-graph", commit_sha: "x", repo_key: "k" },
         observation: { ts: "2026-01-01T00:00:00Z", branch: null, worktree_path: "/t", repo_project: "p", generator_version: "0", source_files_extracted: 1, source_files_skipped: 0 },
         nodes: [], links: [],
       },
       "wt-id",
-      { loadConfig: () => null },  // → skipped-no-auth before makeApi is called
+      { loadConfig: () => null },  // → skipped-no-config before makeApi is called
     );
-    expect(r.kind).toBe("skipped-no-auth");
+    expect(r.kind).toBe("skipped-no-config");
   });
 
   it("index.md renders even when commit_sha is null (commitless build)", () => {
@@ -255,7 +255,7 @@ describe("handleGraphVfs — branch coverage gaps", () => {
     const sha = "b".repeat(64);
     const snap = {
       directed: true, multigraph: true,
-      graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: null, repo_key: "k" },
+      graph: { schema_version: 1, generator: "memoree-graph", commit_sha: null, repo_key: "k" },
       observation: { ts: "2026-01-01T00:00:00Z", branch: null, worktree_path: "/t", repo_project: "p", generator_version: "0", source_files_extracted: 1, source_files_skipped: 0 },
       nodes: [{ id: "f.ts:foo:function", label: "foo", kind: "function", source_file: "f.ts", source_location: "L1", language: "typescript", exported: false }],
       links: [],

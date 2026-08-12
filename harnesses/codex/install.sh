@@ -1,9 +1,9 @@
 #!/bin/bash
-# Hivemind — Codex CLI plugin installer.
-# This script now delegates to the unified `hivemind` CLI, which handles
+# Memoree — Codex CLI plugin installer.
+# This script now delegates to the unified `memoree` CLI, which handles
 # Claude Code, Codex, and OpenClaw from a single entrypoint.
 #
-# Equivalent to: npx @deeplake/hivemind@latest codex install
+# Equivalent to: npx memoree@latest codex install
 
 set -e
-exec npx -y @deeplake/hivemind@latest codex install
+exec npx -y memoree@latest codex install

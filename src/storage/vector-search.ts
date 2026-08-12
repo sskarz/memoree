@@ -47,6 +47,6 @@ export function scoreVectorRows(
 }
 
 export function vectorScanLimit(): number {
-  const raw = Number.parseInt(process.env.HIVEMIND_VECTOR_SCAN_LIMIT ?? "2000", 10);
+  const raw = Number.parseInt(process.env.MEMOREE_VECTOR_SCAN_LIMIT ?? "2000", 10);
   return Number.isFinite(raw) && raw > 0 ? raw : 2000;
 }

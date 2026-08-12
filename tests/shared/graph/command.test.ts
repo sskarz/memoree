@@ -57,14 +57,14 @@ function initTinyGitRepo(dir: string, files: Record<string, string>): string {
 describe("runGraphCommand — help and dispatch", () => {
   it("prints USAGE when called with no args", async () => {
     const { out } = await captureOutput(() => runGraphCommand([]));
-    expect(out).toContain("hivemind graph");
+    expect(out).toContain("memoree graph");
     expect(out).toContain("build");
   });
 
   it("prints USAGE on --help / -h / help", async () => {
     for (const flag of ["--help", "-h", "help"]) {
       const { out } = await captureOutput(() => runGraphCommand([flag]));
-      expect(out).toContain("hivemind graph");
+      expect(out).toContain("memoree graph");
     }
   });
 
@@ -87,17 +87,17 @@ describe("runGraphCommand — help and dispatch", () => {
 describe("runGraphCommand build — end-to-end against a tiny git repo", () => {
   let workDir: string;
   let graphsHome: string;
-  const prevGraphsHome = process.env.HIVEMIND_GRAPHS_HOME;
+  const prevGraphsHome = process.env.MEMOREE_GRAPHS_HOME;
 
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), "graph-cmd-work-"));
     graphsHome = mkdtempSync(join(tmpdir(), "graph-cmd-home-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
   });
 
   afterEach(() => {
-    if (prevGraphsHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevGraphsHome;
+    if (prevGraphsHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevGraphsHome;
     rmSync(workDir, { recursive: true, force: true });
     rmSync(graphsHome, { recursive: true, force: true });
   });
@@ -177,16 +177,16 @@ describe("runGraphCommand build — end-to-end against a tiny git repo", () => {
 describe("runGraphCommand — dispatcher coverage for non-build subcommands", () => {
   let graphsHome: string;
   let workDir: string;
-  const prevHome = process.env.HIVEMIND_GRAPHS_HOME;
+  const prevHome = process.env.MEMOREE_GRAPHS_HOME;
 
   beforeEach(() => {
     graphsHome = mkdtempSync(join(tmpdir(), "graph-disp-home-"));
     workDir = mkdtempSync(join(tmpdir(), "graph-disp-work-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     rmSync(workDir, { recursive: true, force: true });
     rmSync(graphsHome, { recursive: true, force: true });
   });
@@ -235,12 +235,12 @@ describe("runGraphCommand — dispatcher coverage for non-build subcommands", ()
     expect((out + err).length).toBeGreaterThan(0);
   });
 
-  it("pull: skipped-no-auth when loadConfig returns null (no credentials)", async () => {
+  it("pull: skipped-no-config when loadConfig returns null (no credentials)", async () => {
     // workDir has no git repo; pull early-returns "skipped-no-head"
     // (we don't need auth here — readHead null short-circuits). Either
-    // skipped-no-auth or skipped-no-head is acceptable — both prove the
+    // skipped-no-config or skipped-no-head is acceptable — both prove the
     // dispatch branch ran without crashing.
     const { out, err } = await captureOutput(() => runGraphCommand(["pull", "--cwd", workDir]));
-    expect(`${out}\n${err}`).toMatch(/Skipped|no.cloud.row|not in a git repo|not authenticated/i);
+    expect(`${out}\n${err}`).toMatch(/Skipped|no.backend.row|not in a git repo|storage unavailable/i);
   });
 });

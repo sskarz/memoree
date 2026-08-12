@@ -2,14 +2,13 @@
 
 /**
  * Codex SessionStart async setup hook:
- * Runs server-side operations (table creation, placeholder, version check)
+ * Runs local storage operations (table creation and placeholder creation)
  * in the background so they don't block session startup.
  */
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
-import { loadCredentials, saveCredentials } from "../../commands/auth.js";
 import { loadConfig } from "../../config.js";
 import { resolveDirConfig } from "../../dir-config.js";
 import { createStorageBackend } from "../../storage/factory.js";
@@ -18,7 +17,6 @@ import { readStdin } from "../../utils/stdin.js";
 import { createPlaceholderSummary } from "../shared/placeholder-summary.js";
 import { log as _log } from "../../utils/debug.js";
 import { makeWikiLogger } from "../../utils/wiki-log.js";
-import { autoUpdate } from "../shared/autoupdate.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { spawnDetachedNodeWorker } from "../../utils/spawn-detached.js";
 const log = (msg: string) => _log("codex-session-setup", msg);
@@ -47,7 +45,7 @@ interface CodexSessionStartInput {
 }
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   const input = await readStdin<CodexSessionStartInput>();
 
@@ -56,34 +54,15 @@ async function main(): Promise<void> {
   // DETACHED worker — NOT run inline — because a cold provision runs npm +
   // a from-source native compile that can exceed this hook's ~120s async
   // timeout; the worker outlives the hook and finishes in the background.
-  // Fired BEFORE the credentials early-return: provisioning is purely local
-  // and must not depend on login. Best-effort — the spawn helper swallows any
+  // Provisioning is purely local and does not depend on authentication.
+  // Best-effort — the spawn helper swallows any
   // failure, and ensureGraphDeps inside the worker serializes via its own lock.
   spawnDetachedNodeWorker(join(__bundleDir, "graph-deps-worker.js"));
-
-  const creds = loadCredentials();
   const baseStorageConfig = loadConfig();
-  const storageAvailable = Boolean(baseStorageConfig && ((baseStorageConfig.storage?.kind ?? "deeplake") !== "deeplake" || creds?.token));
-  if (!storageAvailable) { log(creds?.token ? "no storage configuration" : "no credentials"); return; }
-
-  // Backfill userName if missing
-  if (creds && !creds.userName) {
-    try {
-      const { userInfo } = await import("node:os");
-      creds.userName = userInfo().username ?? "unknown";
-      saveCredentials(creds);
-      log(`backfilled userName: ${creds.userName}`);
-    } catch { /* non-fatal */ }
-  }
-
-  // Centralized autoupdate fires BEFORE the DB ensure-table calls — those
-  // can stall for tens of seconds against a slow/unreachable backend, and
-  // autoUpdate has no dependency on table state. Run it first so the user
-  // sees the upgrade notice promptly even when the API is down.
-  await autoUpdate(creds, { agent: "codex", bundleDir: __bundleDir });
+  if (!baseStorageConfig) { log("no storage configuration"); return; }
 
   // Table setup + sync — always sync, only skip placeholder when capture disabled
-  const captureEnabled = process.env.HIVEMIND_CAPTURE !== "false";
+  const captureEnabled = process.env.MEMOREE_CAPTURE !== "false";
   if (input.session_id) {
     try {
       const base = baseStorageConfig;
@@ -98,8 +77,8 @@ async function main(): Promise<void> {
           log("setup complete");
         } else {
           log(!dirRes.collect
-            ? `setup skipped — .hivemind collect:false (${dirRes.found?.path})`
-            : "setup skipped — HIVEMIND_CAPTURE=false");
+            ? `setup skipped — .memoree collect:false (${dirRes.found?.path})`
+            : "setup skipped — MEMOREE_CAPTURE=false");
         }
       }
     } catch (e: any) {

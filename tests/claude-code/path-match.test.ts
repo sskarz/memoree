@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { extractMemoryOp } from "../../src/path-match.js";
 
 const HOME = homedir();
-const MEM = `${HOME}/.deeplake/memory`;
+const MEM = `${HOME}/.memoree/memory`;
 
 describe("extractMemoryOp", () => {
   describe("Read", () => {
@@ -17,9 +17,9 @@ describe("extractMemoryOp", () => {
     });
 
     it("expands tilde in file_path", () => {
-      const op = extractMemoryOp("Read", { file_path: "~/.deeplake/memory/foo.md" }, MEM);
+      const op = extractMemoryOp("Read", { file_path: "~/.memoree/memory/foo.md" }, MEM);
       expect(op?.op).toBe("read");
-      expect(op?.path).toBe(`${HOME}/.deeplake/memory/foo.md`);
+      expect(op?.path).toBe(`${HOME}/.memoree/memory/foo.md`);
     });
 
     it("returns null when file_path is absent", () => {
@@ -73,8 +73,8 @@ describe("extractMemoryOp", () => {
       expect(op).toEqual({ path: MEM, op: "bash" });
     });
 
-    it("returns bash op when command contains the literal ~/.deeplake/memory sentinel", () => {
-      const op = extractMemoryOp("Bash", { command: "cat ~/.deeplake/memory/foo.md" }, MEM);
+    it("returns bash op when command contains the literal ~/.memoree/memory sentinel", () => {
+      const op = extractMemoryOp("Bash", { command: "cat ~/.memoree/memory/foo.md" }, MEM);
       expect(op).toEqual({ path: MEM, op: "bash" });
     });
 
@@ -95,8 +95,8 @@ describe("extractMemoryOp", () => {
 
   describe("tilde expansion in memoryPath", () => {
     it("expands tilde in the memoryPath argument itself", () => {
-      const op = extractMemoryOp("Read", { file_path: `${HOME}/.deeplake/memory/x.md` }, "~/.deeplake/memory");
-      expect(op).toEqual({ path: `${HOME}/.deeplake/memory/x.md`, op: "read" });
+      const op = extractMemoryOp("Read", { file_path: `${HOME}/.memoree/memory/x.md` }, "~/.memoree/memory");
+      expect(op).toEqual({ path: `${HOME}/.memoree/memory/x.md`, op: "read" });
     });
   });
 });

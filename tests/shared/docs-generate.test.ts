@@ -127,13 +127,13 @@ describe("generateDocs", () => {
     const { calls, query } = mockQuery([]); // setDoc: SELECT [] then INSERT v1
     const generate = vi.fn(async () => "# a.ts\nfoo returns 1.");
     const report = await generateDocs({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir,
       project: "p", existing: new Set(), generate, concurrency: 2,
     });
     expect(report.created).toBe(1);          // a.test.ts excluded by default
     expect(report.targets).toBe(1);
     expect(generate).toHaveBeenCalledOnce();
-    const insert = calls.find((c) => /INSERT INTO "hivemind_docs"/.test(c))!;
+    const insert = calls.find((c) => /INSERT INTO "memoree_docs"/.test(c))!;
     expect(insert).toContain("a.ts:foo:function");   // anchored
     expect(insert).toContain("foo returns 1.");
   });
@@ -142,7 +142,7 @@ describe("generateDocs", () => {
     const { query } = mockQuery([]);
     const generate = vi.fn(async () => "x");
     const report = await generateDocs({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir,
       existing: new Set(["a.ts"]), generate,
     });
     expect(report.created).toBe(0);
@@ -152,7 +152,7 @@ describe("generateDocs", () => {
   it("records a failure when generation throws", async () => {
     const { query } = mockQuery([]);
     const report = await generateDocs({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir,
       existing: new Set(), generate: async () => { throw new Error("LLM down"); },
     });
     expect(report.failed).toBe(1);
@@ -238,7 +238,7 @@ describe("generateDocs — batch path", () => {
     });
     const generate = vi.fn(async (i: GenDocInput) => `# ${i.doc_id} single`);
     const report = await generateDocs({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir,
       existing: new Set(), generate, batchSize: 5, batchGenerate, concurrency: 1,
     });
     expect(report.created).toBe(2);                 // both landed
@@ -252,7 +252,7 @@ describe("generateDocs — batch path", () => {
     const batchGenerate = vi.fn(async () => { throw new Error("batch LLM down"); });
     const generate = vi.fn(async (i: GenDocInput) => `# ${i.doc_id}`);
     const report = await generateDocs({
-      query, tableName: "hivemind_docs", snap: s(), repoRoot: dir,
+      query, tableName: "memoree_docs", snap: s(), repoRoot: dir,
       existing: new Set(), generate, batchSize: 5, batchGenerate, concurrency: 1,
     });
     expect(report.created).toBe(2);

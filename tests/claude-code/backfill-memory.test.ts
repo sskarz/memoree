@@ -367,7 +367,7 @@ describe("runExtract", () => {
 describe("releaseBackfillLock", () => {
   let dir: string;
   let lock: string;
-  const prev = process.env.HIVEMIND_BACKFILL_LOCK_OWNED;
+  const prev = process.env.MEMOREE_BACKFILL_LOCK_OWNED;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "lock-"));
@@ -375,23 +375,23 @@ describe("releaseBackfillLock", () => {
     writeFileSync(lock, "1");
   });
   afterEach(() => {
-    if (prev === undefined) delete process.env.HIVEMIND_BACKFILL_LOCK_OWNED;
-    else process.env.HIVEMIND_BACKFILL_LOCK_OWNED = prev;
+    if (prev === undefined) delete process.env.MEMOREE_BACKFILL_LOCK_OWNED;
+    else process.env.MEMOREE_BACKFILL_LOCK_OWNED = prev;
     rmSync(dir, { recursive: true, force: true });
   });
 
   it("removes the lock only when this process owns it", () => {
-    delete process.env.HIVEMIND_BACKFILL_LOCK_OWNED;
+    delete process.env.MEMOREE_BACKFILL_LOCK_OWNED;
     releaseBackfillLock(lock);
     expect(existsSync(lock)).toBe(true); // not owned → untouched
 
-    process.env.HIVEMIND_BACKFILL_LOCK_OWNED = "1";
+    process.env.MEMOREE_BACKFILL_LOCK_OWNED = "1";
     releaseBackfillLock(lock);
     expect(existsSync(lock)).toBe(false); // owned → removed
   });
 
   it("is a no-op (no throw) when the owned lock file is already gone", () => {
-    process.env.HIVEMIND_BACKFILL_LOCK_OWNED = "1";
+    process.env.MEMOREE_BACKFILL_LOCK_OWNED = "1";
     rmSync(lock);
     expect(() => releaseBackfillLock(lock)).not.toThrow();
   });

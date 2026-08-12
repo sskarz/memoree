@@ -79,7 +79,7 @@ describe("processCodexPreToolUse: pass-through + unsafe", () => {
   it("blocks (not `guide`) the unsafe command when a memory-path command uses an interpreter", async () => {
     // "guide" exits 0 and would let Codex run python on the host; must block.
     const d = await processCodexPreToolUse(
-      toolInput("python ~/.deeplake/memory/x.py"),
+      toolInput("python ~/.memoree/memory/x.py"),
       baseDeps(),
     );
     expect(d.action).toBe("block");
@@ -91,7 +91,7 @@ describe("processCodexPreToolUse: pass-through + unsafe", () => {
     // Must be "block" (exit 2), not "guide" (exit 0): guide would let Codex run
     // the original command on the host. Block stops it and injects guidance.
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/index.md"),
+      toolInput("cat ~/.memoree/memory/index.md"),
       { ...baseDeps(), config: null as any },
     );
     expect(d.action).toBe("block");
@@ -100,7 +100,7 @@ describe("processCodexPreToolUse: pass-through + unsafe", () => {
 
   it("blocks with a not-found result (not generic guidance) for a concrete cat on a missing VFS file", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/nonexistent.md"),
+      toolInput("cat ~/.memoree/memory/nonexistent.md"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -119,7 +119,7 @@ describe("processCodexPreToolUse: compiled bash fast-path", () => {
   it("delegates to executeCompiledBashCommand and blocks with its output when a segment compiles", async () => {
     const executeCompiledBashCommandFn = vi.fn(async () => "COMPILED OUTPUT") as any;
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/index.md && ls ~/.deeplake/memory/summaries"),
+      toolInput("cat ~/.memoree/memory/index.md && ls ~/.memoree/memory/summaries"),
       { ...baseDeps(), executeCompiledBashCommandFn },
     );
     expect(d.action).toBe("block");
@@ -140,7 +140,7 @@ describe("processCodexPreToolUse: compiled bash fast-path", () => {
     }) as any;
 
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/index.md && cat ~/.deeplake/memory/sessions/x.json", { session_id: "sess-A" }),
+      toolInput("cat ~/.memoree/memory/index.md && cat ~/.memoree/memory/sessions/x.json", { session_id: "sess-A" }),
       {
         ...baseDeps({ readCachedIndexContentFn, readVirtualPathContentsFn }),
         executeCompiledBashCommandFn,
@@ -160,7 +160,7 @@ describe("processCodexPreToolUse: compiled bash fast-path", () => {
 describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
   it("cat <file> returns raw content", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/sessions/a.json"),
+      toolInput("cat ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -172,7 +172,7 @@ describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
 
   it("head -N <file> slices to the first N lines", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("head -2 ~/.deeplake/memory/sessions/a.json"),
+      toolInput("head -2 ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -184,7 +184,7 @@ describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
 
   it("head <file> (no -N) defaults to 10 lines", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("head ~/.deeplake/memory/sessions/a.json"),
+      toolInput("head ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -198,7 +198,7 @@ describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
 
   it("tail -N <file> slices to the last N lines", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("tail -2 ~/.deeplake/memory/sessions/a.json"),
+      toolInput("tail -2 ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -210,7 +210,7 @@ describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
 
   it("tail <file> defaults to the last 10 lines", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("tail ~/.deeplake/memory/sessions/a.json"),
+      toolInput("tail ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -224,7 +224,7 @@ describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
 
   it("wc -l <file> returns `<count> <virtualPath>`", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("wc -l ~/.deeplake/memory/sessions/a.json"),
+      toolInput("wc -l ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -236,7 +236,7 @@ describe("processCodexPreToolUse: direct read (cat/head/tail/wc)", () => {
 
   it("cat | head pipeline collapses to a single head read", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/sessions/a.json | head -3"),
+      toolInput("cat ~/.memoree/memory/sessions/a.json | head -3"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -254,7 +254,7 @@ describe("processCodexPreToolUse: /index.md caching + fallback", () => {
     const readCachedIndexContentFn = vi.fn(() => "CACHED-BODY");
     const readVirtualPathContentFn = vi.fn(async () => "FRESH") as any;
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/index.md", { session_id: "s-cache" }),
+      toolInput("cat ~/.memoree/memory/index.md", { session_id: "s-cache" }),
       {
         ...baseDeps({ readCachedIndexContentFn, readVirtualPathContentFn }),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -267,7 +267,7 @@ describe("processCodexPreToolUse: /index.md caching + fallback", () => {
   it("on cache miss fetches /index.md via readVirtualPathContent + writes it into the cache", async () => {
     const writeCachedIndexContentFn = vi.fn();
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/index.md", { session_id: "s-miss" }),
+      toolInput("cat ~/.memoree/memory/index.md", { session_id: "s-miss" }),
       {
         ...baseDeps({ writeCachedIndexContentFn }),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -286,7 +286,7 @@ describe("processCodexPreToolUse: /index.md caching + fallback", () => {
       { path: "/summaries/a/s2.md", project: "", description: "", creation_date: "2026-04-19" },
     ]);
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/index.md"),
+      toolInput("cat ~/.memoree/memory/index.md"),
       {
         ...baseDeps({ createApi: vi.fn(() => api) }),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -309,7 +309,7 @@ describe("processCodexPreToolUse: ls branch", () => {
     ]) as any;
 
     const d = await processCodexPreToolUse(
-      toolInput("ls ~/.deeplake/memory/summaries"),
+      toolInput("ls ~/.memoree/memory/summaries"),
       {
         ...baseDeps({ listVirtualPathRowsFn }),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -322,7 +322,7 @@ describe("processCodexPreToolUse: ls branch", () => {
 
   it("long-format listing includes permission strings and sizes", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("ls -la ~/.deeplake/memory/summaries"),
+      toolInput("ls -la ~/.memoree/memory/summaries"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -340,7 +340,7 @@ describe("processCodexPreToolUse: ls branch", () => {
 
   it("ls on an empty or non-existent directory returns a 'cannot access' message", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("ls ~/.deeplake/memory/nope"),
+      toolInput("ls ~/.memoree/memory/nope"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -360,7 +360,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
     ]) as any;
 
     const d = await processCodexPreToolUse(
-      toolInput("find ~/.deeplake/memory/sessions -name '*.json'"),
+      toolInput("find ~/.memoree/memory/sessions -name '*.json'"),
       {
         ...baseDeps({ findVirtualPathsFn }),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -371,7 +371,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
 
   it("find … | wc -l collapses to the count", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("find ~/.deeplake/memory/sessions -name '*.json' | wc -l"),
+      toolInput("find ~/.memoree/memory/sessions -name '*.json' | wc -l"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -383,7 +383,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
 
   it("find with zero matches returns '(no matches)'", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("find ~/.deeplake/memory/sessions -name '*.xyz'"),
+      toolInput("find ~/.memoree/memory/sessions -name '*.xyz'"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -396,7 +396,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
   it("grep via parseBashGrep delegates to handleGrepDirect", async () => {
     const handleGrepDirectFn = vi.fn(async () => "/sessions/a.json:matching line") as any;
     const d = await processCodexPreToolUse(
-      toolInput("grep -l foo ~/.deeplake/memory/sessions/*.json"),
+      toolInput("grep -l foo ~/.memoree/memory/sessions/*.json"),
       {
         ...baseDeps({ handleGrepDirectFn }),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -408,7 +408,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
 
   it("blocks (does NOT run a shell or proceed to host) when the direct-query path throws mid-flow", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/sessions/a.json"),
+      toolInput("cat ~/.memoree/memory/sessions/a.json"),
       {
         ...baseDeps(),
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
@@ -421,7 +421,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
 });
 
 describe("processCodexPreToolUse: memory write redirect (F3 — no double execution)", () => {
-  const writeCmd = "echo 'hello' > ~/.deeplake/memory/h2h/relay-codex.md";
+  const writeCmd = "echo 'hello' > ~/.memoree/memory/h2h/relay-codex.md";
 
   function writeDeps(extra: Record<string, any> = {}) {
     return {
@@ -452,7 +452,7 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
     // Negative assertions: the host must NOT re-execute the write. The rewrite
     // must contain neither a redirect operator nor the memory path.
     expect(d.replacementCommand).not.toMatch(/>/);
-    expect(d.replacementCommand).not.toContain(".deeplake/memory");
+    expect(d.replacementCommand).not.toContain(".memoree/memory");
   });
 
   it("POSIX-escapes single quotes in the VFS output so it can't break out of the rewrite", async () => {
@@ -469,7 +469,7 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
     // must recognize the redirect regardless of surrounding whitespace.
     const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)" }));
     const d = await processCodexPreToolUse(
-      toolInput("echo 'hello'>~/.deeplake/memory/h2h/relay-codex.md"),
+      toolInput("echo 'hello'>~/.memoree/memory/h2h/relay-codex.md"),
       writeDeps({ runVfsShellFn }),
     );
     expect(d.action).toBe("allow");
@@ -481,7 +481,7 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
     // guard must keep them on the block path (no allow rewrite).
     const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "x" }));
     const d = await processCodexPreToolUse(
-      toolInput("echo hello 2>~/.deeplake/memory/h2h/err.md"),
+      toolInput("echo hello 2>~/.memoree/memory/h2h/err.md"),
       writeDeps({ runVfsShellFn }),
     );
     expect(d.action).toBe("block");
@@ -508,7 +508,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       { path: "/other/z.json", size_bytes: 5 },          // outside /sessions → skipped
     ]) as any;
     const d = await processCodexPreToolUse(
-      toolInput("ls -l ~/.deeplake/memory/sessions"),
+      toolInput("ls -l ~/.memoree/memory/sessions"),
       { ...baseDeps({ listVirtualPathRowsFn }), ...noCompiled() },
     );
     expect(d.action).toBe("block");
@@ -525,7 +525,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       { path: "/index.md", size_bytes: 2 },
     ]) as any;
     const d = await processCodexPreToolUse(
-      toolInput("ls ~/.deeplake/memory"),
+      toolInput("ls ~/.memoree/memory"),
       { ...baseDeps({ listVirtualPathRowsFn }), ...noCompiled() },
     );
     expect(d.action).toBe("block");
@@ -535,7 +535,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
 
   it("ls on an unknown dir returns 'cannot access'", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("ls ~/.deeplake/memory/nope"),
+      toolInput("ls ~/.memoree/memory/nope"),
       { ...baseDeps({ listVirtualPathRowsFn: vi.fn(async () => []) as any }), ...noCompiled() },
     );
     expect(d.action).toBe("block");
@@ -544,7 +544,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
 
   it("find -name with a double-quoted pattern resolves matches", async () => {
     const d = await processCodexPreToolUse(
-      toolInput('find ~/.deeplake/memory/sessions -name "*.md"'),
+      toolInput('find ~/.memoree/memory/sessions -name "*.md"'),
       { ...baseDeps({ findVirtualPathsFn: vi.fn(async () => ["/sessions/a.md"]) as any }), ...noCompiled() },
     );
     expect(d.output).toBe("/sessions/a.md");
@@ -552,7 +552,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
 
   it("find -name with an unquoted pattern resolves matches", async () => {
     const d = await processCodexPreToolUse(
-      toolInput("find ~/.deeplake/memory/sessions -name *.md"),
+      toolInput("find ~/.memoree/memory/sessions -name *.md"),
       { ...baseDeps({ findVirtualPathsFn: vi.fn(async () => ["/sessions/b.md"]) as any }), ...noCompiled() },
     );
     expect(d.output).toBe("/sessions/b.md");
@@ -561,7 +561,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
   it("find rooted at the mount (/) normalizes the dir argument to '/'", async () => {
     const findVirtualPathsFn = vi.fn(async () => ["/x.json"]) as any;
     const d = await processCodexPreToolUse(
-      toolInput("find ~/.deeplake/memory -name '*.json'"),
+      toolInput("find ~/.memoree/memory -name '*.json'"),
       { ...baseDeps({ findVirtualPathsFn }), ...noCompiled() },
     );
     expect(d.output).toBe("/x.json");
@@ -573,7 +573,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
   it("a non-redirect echo handled by the VFS shell stays on block (not allow)", async () => {
     const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "echoed" }));
     const d = await processCodexPreToolUse(
-      toolInput("echo hello ~/.deeplake/memory/note.txt"),
+      toolInput("echo hello ~/.memoree/memory/note.txt"),
       { ...baseDeps(), ...noCompiled(), runVfsShellFn },
     );
     expect(d.action).toBe("block");
@@ -584,7 +584,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
   it("a write succeeds via stdout even when the VFS shell exits non-zero", async () => {
     const runVfsShellFn = vi.fn(() => ({ status: 1, stdout: "still wrote" }));
     const d = await processCodexPreToolUse(
-      toolInput("echo 'x' > ~/.deeplake/memory/h2h/a.md"),
+      toolInput("echo 'x' > ~/.memoree/memory/h2h/a.md"),
       { ...baseDeps(), ...noCompiled(), runVfsShellFn },
     );
     expect(d.action).toBe("allow");
@@ -594,7 +594,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
   it("a write with empty stdout defaults the echoed result to (done)", async () => {
     const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "" }));
     const d = await processCodexPreToolUse(
-      toolInput("echo 'x' > ~/.deeplake/memory/h2h/a.md"),
+      toolInput("echo 'x' > ~/.memoree/memory/h2h/a.md"),
       { ...baseDeps(), ...noCompiled(), runVfsShellFn },
     );
     expect(d.action).toBe("allow");
@@ -605,7 +605,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
     const tryGraphReadFn = vi.fn(() => "GRAPH SNAPSHOT BODY") as any;
     const executeCompiledBashCommandFn = vi.fn(async () => "SHOULD-NOT-RUN") as any;
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/graph/index.md"),
+      toolInput("cat ~/.memoree/memory/graph/index.md"),
       { ...baseDeps({ tryGraphReadFn }), executeCompiledBashCommandFn },
     );
     expect(d.action).toBe("block");
@@ -617,20 +617,20 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
     const calls: string[] = [];
     const api = { query: vi.fn(async (sql: string) => { calls.push(sql); return []; }) } as any;
     const d = await processCodexPreToolUse(
-      toolInput("ls ~/.deeplake/memory/docs") as any,
-      baseDeps({ createApi: vi.fn(() => api), config: { ...BASE_CONFIG, docsTableName: "hivemind_docs" } as any }),
+      toolInput("ls ~/.memoree/memory/docs") as any,
+      baseDeps({ createApi: vi.fn(() => api), config: { ...BASE_CONFIG, docsTableName: "memoree_docs" } as any }),
     );
     expect(d.action).toBe("block");
     expect(d.output).toContain("Docs Index");
-    expect(calls.some((c) => /hivemind_docs/.test(c))).toBe(true); // docs table, not memory
+    expect(calls.some((c) => /memoree_docs/.test(c))).toBe(true); // docs table, not memory
   });
 
   it("a cat of /docs/find is answered from the docs table, PROJECT-SCOPED to the cwd repo", async () => {
     const calls: string[] = [];
     const api = { query: vi.fn(async (sql: string) => { calls.push(sql); return [{ path: "src/a.ts", content: "# a" }]; }) } as any;
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/docs/find/auth") as any,
-      baseDeps({ createApi: vi.fn(() => api), config: { ...BASE_CONFIG, docsTableName: "hivemind_docs" } as any }),
+      toolInput("cat ~/.memoree/memory/docs/find/auth") as any,
+      baseDeps({ createApi: vi.fn(() => api), config: { ...BASE_CONFIG, docsTableName: "memoree_docs" } as any }),
     );
     expect(d.action).toBe("block");
     expect(d.output).toContain("src/a.ts");
@@ -641,10 +641,10 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
 
   it("resolves a read using the DEFAULT createApi + log deps (no injection)", async () => {
     // Omit createApi / logFn / cache deps so their default values run: the default
-    // createApi constructs a DeeplakeApi (no network at construction) and the
+    // createApi constructs a MemoreeApi (no network at construction) and the
     // module-level `log` executes. The injected read fn keeps it off the network.
     const d = await processCodexPreToolUse(
-      toolInput("cat ~/.deeplake/memory/sessions/a.json"),
+      toolInput("cat ~/.memoree/memory/sessions/a.json"),
       {
         config: BASE_CONFIG as any,
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,

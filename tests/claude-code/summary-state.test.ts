@@ -364,39 +364,39 @@ describe("owner-process liveness (procInfo / findSessionOwner / ownerLiveness)",
 });
 
 describe("activeWindowMs", () => {
-  const orig = process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS;
+  const orig = process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS;
   afterAll(() => {
-    if (orig === undefined) delete process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS;
-    else process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS = orig;
+    if (orig === undefined) delete process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS;
+    else process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS = orig;
   });
 
   it("defaults to 10 minutes when unset", () => {
-    delete process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS;
+    delete process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS;
     expect(mod.activeWindowMs()).toBe(10 * 60 * 1000);
   });
 
   it("respects a valid override and ignores invalid values", () => {
-    process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS = "120000";
+    process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS = "120000";
     expect(mod.activeWindowMs()).toBe(120000);
-    process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS = "nope";
+    process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS = "nope";
     expect(mod.activeWindowMs()).toBe(10 * 60 * 1000);
-    process.env.HIVEMIND_ACTIVE_SESSION_WINDOW_MS = "-5";
+    process.env.MEMOREE_ACTIVE_SESSION_WINDOW_MS = "-5";
     expect(mod.activeWindowMs()).toBe(10 * 60 * 1000);
   });
 });
 
 describe("loadTriggerConfig", () => {
-  const origN = process.env.HIVEMIND_SUMMARY_EVERY_N_MSGS;
-  const origH = process.env.HIVEMIND_SUMMARY_EVERY_HOURS;
+  const origN = process.env.MEMOREE_SUMMARY_EVERY_N_MSGS;
+  const origH = process.env.MEMOREE_SUMMARY_EVERY_HOURS;
 
   beforeEach(() => {
-    delete process.env.HIVEMIND_SUMMARY_EVERY_N_MSGS;
-    delete process.env.HIVEMIND_SUMMARY_EVERY_HOURS;
+    delete process.env.MEMOREE_SUMMARY_EVERY_N_MSGS;
+    delete process.env.MEMOREE_SUMMARY_EVERY_HOURS;
   });
 
   afterAll(() => {
-    if (origN !== undefined) process.env.HIVEMIND_SUMMARY_EVERY_N_MSGS = origN;
-    if (origH !== undefined) process.env.HIVEMIND_SUMMARY_EVERY_HOURS = origH;
+    if (origN !== undefined) process.env.MEMOREE_SUMMARY_EVERY_N_MSGS = origN;
+    if (origH !== undefined) process.env.MEMOREE_SUMMARY_EVERY_HOURS = origH;
   });
 
   it("falls back to defaults when env vars are unset", () => {
@@ -406,23 +406,23 @@ describe("loadTriggerConfig", () => {
   });
 
   it("respects valid env overrides", () => {
-    process.env.HIVEMIND_SUMMARY_EVERY_N_MSGS = "30";
-    process.env.HIVEMIND_SUMMARY_EVERY_HOURS = "1";
+    process.env.MEMOREE_SUMMARY_EVERY_N_MSGS = "30";
+    process.env.MEMOREE_SUMMARY_EVERY_HOURS = "1";
     const cfg = mod.loadTriggerConfig();
     expect(cfg.everyNMessages).toBe(30);
     expect(cfg.everyHours).toBe(1);
   });
 
   it("ignores invalid values and uses defaults", () => {
-    process.env.HIVEMIND_SUMMARY_EVERY_N_MSGS = "not-a-number";
-    process.env.HIVEMIND_SUMMARY_EVERY_HOURS = "-5";
+    process.env.MEMOREE_SUMMARY_EVERY_N_MSGS = "not-a-number";
+    process.env.MEMOREE_SUMMARY_EVERY_HOURS = "-5";
     const cfg = mod.loadTriggerConfig();
     expect(cfg.everyNMessages).toBe(50);
     expect(cfg.everyHours).toBe(2);
   });
 
   it("accepts fractional hours", () => {
-    process.env.HIVEMIND_SUMMARY_EVERY_HOURS = "0.5";
+    process.env.MEMOREE_SUMMARY_EVERY_HOURS = "0.5";
     const cfg = mod.loadTriggerConfig();
     expect(cfg.everyHours).toBe(0.5);
   });

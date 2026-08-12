@@ -2,7 +2,7 @@
 
 > Category: Operations | Version: 1.0 | Date: June 2026 | Status: Active
 
-Architecture of the Hivemind unified command-line tool, subcommand dispatching, authentication flows, and operational database commands.
+Architecture of the Memoree unified command-line tool, subcommand dispatching, authentication flows, and operational database commands.
 
 **Related:**
 - [`../auth/auth-architecture.md`](../auth/auth-architecture.md)
@@ -16,7 +16,7 @@ Architecture of the Hivemind unified command-line tool, subcommand dispatching, 
 
 ## Why this architecture exists
 
-Hivemind is built with a single unified command-line interface (CLI) to reduce complexity for users and developers. Rather than requiring distinct setup tools for each of the six supported coding assistants, the global `hivemind` executable handles all environments. It performs auto-detection of assistants, wires local plugin shims, synchronizes codebase graphs, and hosts secure authentication controls.
+Memoree is built with a single unified command-line interface (CLI) to reduce complexity for users and developers. Rather than requiring distinct setup tools for each of the six supported coding assistants, the global `memoree` executable handles all environments. It performs auto-detection of assistants, wires local plugin shims, synchronizes codebase graphs, and hosts secure authentication controls.
 
 The design relies on a split:
 * **The Unified Entry Point (`src/cli/index.ts`):** Parses global CLI flags and dispatches arguments to specialized subcommands or separate scripts.
@@ -84,20 +84,20 @@ If a command matches one of the organization or workspace subcommands, the dispa
 
 ## Authentication and Device Authorization Flow
 
-Hivemind relies on the RFC 8628 Device Authorization Flow to handle sign-ins securely. This enables headless installs, remote-SSH environments, and local terminals to authenticate against the Deeplake cloud without manual token generation.
+Memoree relies on the RFC 8628 Device Authorization Flow to handle sign-ins securely. This enables headless installs, remote-SSH environments, and local terminals to authenticate against the Memoree cloud without manual token generation.
 
 The flow operates as follows:
 1. **Device Code Request:** The client calls `/auth/device/code` on the API and receives a verification URI and user code.
 2. **User Authorization:** The client opens the default browser pointing to the complete URI or instructs the user to open it manually.
 3. **Token Polling:** The client polls the `/auth/device/token` endpoint at the prescribed interval. If the authorization is pending, it continues; if verified, it receives a short-lived token.
-4. **Credential Storage:** The token is validated against the `/me` endpoint, a preferred organization is selected (supporting overrides like `HIVEMIND_ORG_ID`), and a long-lived API token is minted through the `/users/me/tokens` endpoint.
-5. **Serialization:** Credentials are written to `~/.deeplake/credentials.json` with user-private filesystem permissions (`0600`).
+4. **Credential Storage:** The token is validated against the `/me` endpoint, a preferred organization is selected (supporting overrides like `REMOVED_CLOUD_ORG_VARIABLE`), and a long-lived API token is minted through the `/users/me/tokens` endpoint.
+5. **Serialization:** Credentials are written to `the removed cloud credentials file` with user-private filesystem permissions (`0600`).
 
 ### Resolving Token Drift
 
 A known challenge in multi-tenant SaaS environments is JWT organization drift. If a user switches organizations through the CLI, their stored active organization ID changed, but their existing org-bound JWT API token remained unchanged. This caused queries to execute against the previous tenant space or fail due to invalid claims.
 
-To resolve this, Hivemind implements a self-healing algorithm `healDriftedOrgToken` that automatically runs on session start. It decodes the JWT payload, compares the `org_id` claim with the active organization ID, and re-mints a corrected token if they mismatch:
+To resolve this, Memoree implements a self-healing algorithm `healDriftedOrgToken` that automatically runs on session start. It decodes the JWT payload, compares the `org_id` claim with the active organization ID, and re-mints a corrected token if they mismatch:
 
 ```217:240:src/commands/auth.ts
 export async function healDriftedOrgToken(
@@ -111,12 +111,12 @@ export async function healDriftedOrgToken(
   log(`token org drift detected: jwt.org_id=${claimOrg} creds.orgId=${creds.orgId} — re-minting`);
   try {
     const apiUrl = creds.apiUrl ?? DEFAULT_API_URL;
-    // Per-mint unique name. Deeplake rejects duplicate (user_id, name) with
+    // Per-mint unique name. Memoree rejects duplicate (user_id, name) with
     // a 500 ("token creation failed"), and the heal runs on EVERY session
     // start across multiple agents — a date-only suffix would collide as
     // soon as the second agent heals on the same day. Date.now() suffices:
     // resolution is ms, only one heal per session, single process per agent.
-    const tokenName = `deeplake-plugin-heal-${Date.now()}`;
+    const tokenName = `memoree-plugin-heal-${Date.now()}`;
     const tokenData = await apiPost("/users/me/tokens", {
       name: tokenName,
       duration: 365 * 24 * 3600,
@@ -129,7 +129,7 @@ export async function healDriftedOrgToken(
 
 ## Operational Database Management: Session Pruning
 
-As coding sessions accumulate, users need a way to inspect, prune, and clear their captured trace history. The `hivemind sessions prune` subcommand provides scoped cleanup of session data by the logged-in author.
+As coding sessions accumulate, users need a way to inspect, prune, and clear their captured trace history. The `memoree sessions prune` subcommand provides scoped cleanup of session data by the logged-in author.
 
 The pruning command uses direct, safe SQL statements to operate on both the `sessions` table (where raw event traces are stored) and the `memory` table (where session summaries reside).
 
@@ -139,7 +139,7 @@ Pruning first queries the sessions table to group events by their session path, 
 
 ```70:90:src/commands/session-prune.ts
 async function listSessions(
-  api: DeeplakeApi,
+  api: MemoreeApi,
   sessionsTable: string,
   author: string,
 ): Promise<SessionInfo[]> {
@@ -171,11 +171,11 @@ async function deleteSessions(
 ): Promise<{ sessionsDeleted: number; summariesDeleted: number }> {
   if (sessionPaths.length === 0) return { sessionsDeleted: 0, summariesDeleted: 0 };
 
-  const sessionsApi = new DeeplakeApi(
+  const sessionsApi = new MemoreeApi(
     config.token, config.apiUrl, config.orgId, config.workspaceId,
     config.sessionsTableName,
   );
-  const memoryApi = new DeeplakeApi(
+  const memoryApi = new MemoreeApi(
     config.token, config.apiUrl, config.orgId, config.workspaceId,
     config.tableName,
   );

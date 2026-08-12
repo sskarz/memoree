@@ -14,7 +14,7 @@ describe("backfillDocEmbeddings", () => {
       return [];
     });
     const embed = vi.fn(async () => [0.1, 0.2, 0.3]);
-    const report = await backfillDocEmbeddings(query, "hivemind_docs", embed, 1);
+    const report = await backfillDocEmbeddings(query, "memoree_docs", embed, 1);
     expect(report).toEqual({ scanned: 3, embedded: 2, skipped: 1 });
     expect(embed).toHaveBeenCalledTimes(2);
     const updates = calls.filter(c => c.startsWith("UPDATE"));
@@ -30,7 +30,7 @@ describe("backfillDocEmbeddings", () => {
       calls.push(sql);
       return sql.startsWith("SELECT") ? [{ id: "1", content: "x", dims: null }] : [];
     });
-    const report = await backfillDocEmbeddings(query, "hivemind_docs", async () => null, 1);
+    const report = await backfillDocEmbeddings(query, "memoree_docs", async () => null, 1);
     expect(report.embedded).toBe(0);
     expect(calls.filter(c => c.startsWith("UPDATE"))).toHaveLength(0);
   });

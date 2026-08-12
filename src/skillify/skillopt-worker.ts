@@ -7,8 +7,8 @@
  *      publishes v+1 DIRECTLY to the org skills table — right then.
  *
  * Runs on the USER's own agent (claude/codex/hermes/cursor/pi) — no org key, cost lands
- * on the user. HIVEMIND_SKILLOPT_WORKER=1 is set by the trigger as a recursion guard.
- * Inputs come via env: HIVEMIND_SKILLOPT_{SESSION,SKILL,REACTION,AGENT}.
+ * on the user. MEMOREE_SKILLOPT_WORKER=1 is set by the trigger as a recursion guard.
+ * Inputs come via env: MEMOREE_SKILLOPT_{SESSION,SKILL,REACTION,AGENT}.
  */
 import path from "node:path";
 import { accessSync, constants as fsConstants } from "node:fs";
@@ -33,7 +33,7 @@ const log = (m: string) => _log("skillopt-worker", m);
 const AGENT_CMD: Record<string, string> = { claude_code: "claude", codex: "codex", cursor: "cursor-agent", hermes: "hermes", pi: "pi" };
 function resolveAgentBin(agent: string): string | undefined {
   // Only resolve KNOWN agents — no `?? agent` fallback. `agent` traces back to the
-  // HIVEMIND_SKILLOPT_AGENT env var; feeding an arbitrary value to a command is a
+  // MEMOREE_SKILLOPT_AGENT env var; feeding an arbitrary value to a command is a
   // command-injection sink (CodeQL: indirect uncontrolled command line). Resolve the
   // whitelisted binary by walking PATH ourselves — no shell, no subprocess — which still
   // finds nvm/volta/fnm installs (they're on PATH), the reason the old `command -v` existed.
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
   const agent = detectScorerAgent();
   const agentBin = resolveAgentBin(agent);
 
-  // Skill bodies come from the Deeplake `skills` table (org-wide source of truth), so
+  // Skill bodies come from the Memoree `skills` table (org-wide source of truth), so
   // we can improve X even if it isn't installed on THIS machine. Optimizer memory
   // (meta) dedups edits across runs so a re-judged window doesn't re-publish.
   const metaFile = path.join(getStateDir(), "skillopt", "meta.jsonl");

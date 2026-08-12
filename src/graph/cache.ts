@@ -2,12 +2,12 @@
  * Per-file extraction cache (Phase 1.5).
  *
  * Phase 1's `runBuildCommand` re-parsed every source file on every invocation
- * (full rebuild, ~2.5s for 280 files on hivemind). With the cache, unchanged
+ * (full rebuild, ~2.5s for 280 files on memoree). With the cache, unchanged
  * files load their FileExtraction from disk in microseconds — full rebuild on
  * 1-file-changed drops to ~85ms (~30× faster).
  *
  * Cache layout:
- *   ~/.hivemind/graphs/<repo-key>/.cache/<content-sha256>.json
+ *   ~/.memoree/graphs/<repo-key>/.cache/<content-sha256>.json
  *     where content-sha256 = sha256(utf8(file content)) — NOT path-derived.
  *     Same content across files / branches / users shares one entry.
  *

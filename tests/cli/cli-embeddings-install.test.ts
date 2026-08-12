@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
-// Mock ONLY the process boundary: ensureSharedDeps / ensureGraphDeps shell out
+// Mock ONLY the process boundary: ensureSharedDeps shells out
 // to `npm install`, which we must not actually run. spawnSync + everything else
 // stay real (importActual).
 vi.mock("node:child_process", async (orig) => ({
@@ -14,40 +14,40 @@ vi.mock("node:child_process", async (orig) => ({
 
 // embeddings.ts binds `HOME`/`SHARED_DIR` at module-evaluation time, and the
 // orchestration functions (installEmbeddings/statusEmbeddings/uninstall) read
-// them (and findHivemindInstalls) with NO injectable seam. Point HOME at a tmp
+// them (and findMemoreeInstalls) with NO injectable seam. Point HOME at a tmp
 // dir BEFORE importing the module so every path resolves under the sandbox and
-// nothing touches the real ~/.hivemind or the real agent installs.
+// nothing touches the real ~/.memoree or the real agent installs.
 const HOME_DIR = mkdtempSync(join(tmpdir(), "emb-install-home-"));
 
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let mod: typeof import("../../src/cli/embeddings.js");
 let cfg: typeof import("../../src/user-config.js");
 
-const PREV_TABLE = process.env.HIVEMIND_TABLE;
+const PREV_TABLE = process.env.MEMOREE_TABLE;
 
 beforeAll(async () => {
   // Sandbox the home dir on POSIX AND Windows (os.homedir reads USERPROFILE on
   // Windows) BEFORE importing embeddings.ts, which binds HOME/SHARED_DIR at load.
   setFakeHome(HOME_DIR);
-  delete process.env.HIVEMIND_TABLE;
+  delete process.env.MEMOREE_TABLE;
   mod = await import("../../src/cli/embeddings.js");
   cfg = await import("../../src/user-config.js");
 });
 
 afterAll(() => {
   clearFakeHome();
-  if (PREV_TABLE === undefined) delete process.env.HIVEMIND_TABLE;
-  else process.env.HIVEMIND_TABLE = PREV_TABLE;
+  if (PREV_TABLE === undefined) delete process.env.MEMOREE_TABLE;
+  else process.env.MEMOREE_TABLE = PREV_TABLE;
   rmSync(HOME_DIR, { recursive: true, force: true });
 });
 
 function freshHome(): void {
-  for (const sub of [".hivemind", ".deeplake", ".codex", ".cursor", ".hermes", ".claude"]) {
+  for (const sub of [".memoree", ".memoree", ".codex", ".cursor", ".hermes", ".claude"]) {
     rmSync(join(HOME_DIR, sub), { recursive: true, force: true });
   }
   cfg._resetUserConfigForTesting();
-  cfg._setConfigPathForTesting(() => join(HOME_DIR, ".deeplake", "config.json"));
-  mkdirSync(join(HOME_DIR, ".deeplake"), { recursive: true });
+  cfg._setConfigPathForTesting(() => join(HOME_DIR, ".memoree", "config.json"));
+  mkdirSync(join(HOME_DIR, ".memoree"), { recursive: true });
 }
 
 describe("installEmbeddings (sandboxed HOME, mocked npm)", () => {
@@ -61,7 +61,7 @@ describe("installEmbeddings (sandboxed HOME, mocked npm)", () => {
     // ensureSharedDeps ran its npm install (mocked) into the sandbox shared dir.
     expect(vi.mocked(cp.execFileSync).mock.calls.some((c) => c[0] === "npm")).toBe(true);
     // A shared package.json was laid down under the tmp HOME.
-    expect(existsSync(join(HOME_DIR, ".hivemind", "embed-deps", "package.json"))).toBe(true);
+    expect(existsSync(join(HOME_DIR, ".memoree", "embed-deps", "package.json"))).toBe(true);
     // Config flag flipped on regardless of whether any agent was detected.
     expect(cfg.getEmbeddingsEnabled()).toBe(true);
   });
@@ -73,8 +73,7 @@ describe("installEmbeddings (sandboxed HOME, mocked npm)", () => {
     const cp = await import("node:child_process");
     vi.mocked(cp.execFileSync).mockClear();
     mod.installEmbeddings();
-    // No transformers `npm install` — the only npm call (if any) is the graph
-    // parsers, never the transformers one.
+    // No transformers `npm install` should run when the shared package exists.
     const transformersInstall = vi.mocked(cp.execFileSync).mock.calls.some(
       (c) => c[0] === "npm" && Array.isArray(c[1]) && c[1].includes(mod.TRANSFORMERS_PKG),
     );
@@ -83,10 +82,10 @@ describe("installEmbeddings (sandboxed HOME, mocked npm)", () => {
   });
 
   it("with a detected agent install → symlinks its node_modules to the shared deps", async () => {
-    // Lay down a codex plugin bundle so findHivemindInstalls() sees it.
-    mkdirSync(join(HOME_DIR, ".codex", "hivemind", "bundle"), { recursive: true });
+    // Lay down a codex plugin bundle so findMemoreeInstalls() sees it.
+    mkdirSync(join(HOME_DIR, ".codex", "memoree", "bundle"), { recursive: true });
     mod.installEmbeddings();
-    const link = join(HOME_DIR, ".codex", "hivemind", "node_modules");
+    const link = join(HOME_DIR, ".codex", "memoree", "node_modules");
     // npm is mocked so the shared node_modules target is never created; assert
     // the symlink itself was laid down and points at the canonical shared dir
     // (existsSync would follow the link to the absent target and report false).
@@ -121,7 +120,7 @@ describe("statusEmbeddings (sandboxed HOME)", () => {
   afterEach(() => { cfg._resetUserConfigForTesting(); vi.restoreAllMocks(); });
 
   it("prints config + shared-deps + per-agent link state without throwing", () => {
-    mkdirSync(join(HOME_DIR, ".codex", "hivemind", "bundle"), { recursive: true });
+    mkdirSync(join(HOME_DIR, ".codex", "memoree", "bundle"), { recursive: true });
     // log()/warn() write to process.stdout/stderr (not console.*), so capture
     // the raw streams.
     const lines: string[] = [];
@@ -140,9 +139,9 @@ describe("statusEmbeddings (sandboxed HOME)", () => {
   it("reports a linked agent + present shared deps (linked/present status arms)", () => {
     // Shared deps present + codex bundle symlinked into them → exercises the
     // isSharedDepsInstalled=true and linked-to-shared status branches.
-    mkdirSync(join(HOME_DIR, ".hivemind", "embed-deps", "node_modules", "@huggingface", "transformers"), { recursive: true });
-    mkdirSync(join(HOME_DIR, ".codex", "hivemind", "bundle"), { recursive: true });
-    mod._linkAgentForTesting({ id: "codex", pluginDir: join(HOME_DIR, ".codex", "hivemind") });
+    mkdirSync(join(HOME_DIR, ".memoree", "embed-deps", "node_modules", "@huggingface", "transformers"), { recursive: true });
+    mkdirSync(join(HOME_DIR, ".codex", "memoree", "bundle"), { recursive: true });
+    mod._linkAgentForTesting({ id: "codex", pluginDir: join(HOME_DIR, ".codex", "memoree") });
     const lines: string[] = [];
     const outSpy = vi.spyOn(process.stdout, "write").mockImplementation((c: unknown) => { lines.push(String(c)); return true; });
     const errSpy = vi.spyOn(process.stderr, "write").mockImplementation((c: unknown) => { lines.push(String(c)); return true; });

@@ -4,7 +4,7 @@
  *   - parseMultiVerdict (multi-skill gate output parsing)
  *
  * The orchestrator runMineLocal itself is exercised by the e2e flow
- * (`hivemind skillify mine-local --force`), not unit-tested here.
+ * (`memoree skillify mine-local --force`), not unit-tested here.
  */
 
 import { describe, it, expect } from "vitest";
@@ -62,7 +62,7 @@ describe("jaccard", () => {
 
 describe("findOverlap", () => {
   const baseline = [
-    { name: "deeplake-schema-migration", desc: "Add required column to existing Deeplake table via lazy ALTER" },
+    { name: "memoree-schema-migration", desc: "Add required column to existing Memoree table via lazy ALTER" },
     { name: "oauth-callback-over-ssh", desc: "Diagnosing ERR_CONNECTION_REFUSED when OAuth callback runs over SSH" },
   ];
 
@@ -73,18 +73,18 @@ describe("findOverlap", () => {
 
   it("detects clear semantic overlap (different wording, same concept)", () => {
     // Same topic as the baseline first entry, different phrasing
-    const result = findOverlap("lazy Deeplake column ALTER migration approach", baseline);
+    const result = findOverlap("lazy Memoree column ALTER migration approach", baseline);
     expect(result).not.toBeNull();
-    expect(result!.name).toBe("deeplake-schema-migration");
+    expect(result!.name).toBe("memoree-schema-migration");
     expect(result!.score).toBeGreaterThanOrEqual(0.4);
   });
 
   it("picks the best match when multiple cross the threshold", () => {
     const overlapping = [
-      { name: "first-match", desc: "deeplake column migration alter table workflow" },
-      { name: "better-match", desc: "deeplake required column lazy alter table existing migration workflow" },
+      { name: "first-match", desc: "memoree column migration alter table workflow" },
+      { name: "better-match", desc: "memoree required column lazy alter table existing migration workflow" },
     ];
-    const result = findOverlap("deeplake required column lazy alter migration", overlapping);
+    const result = findOverlap("memoree required column lazy alter migration", overlapping);
     expect(result).not.toBeNull();
     // The "better-match" shares more non-stopword tokens; score should win.
     expect(result!.name).toBe("better-match");

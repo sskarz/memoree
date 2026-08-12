@@ -14,11 +14,11 @@ describe("docsInstallLines (install-time docs onboarding)", () => {
   it("explains both enabling and disabling in one block", () => {
     const text = docsInstallLines().join("\n");
     // Enable path.
-    expect(text).toContain("hivemind docs sync");
+    expect(text).toContain("memoree docs sync");
     // Disable path — the user must never be stuck after opting in.
-    expect(text).toContain("hivemind docs auto off");
+    expect(text).toContain("memoree docs auto off");
     // Status is discoverable.
-    expect(text).toContain("hivemind docs list");
+    expect(text).toContain("memoree docs list");
   });
 
   it("is a non-empty list of plain strings (safe to feed line-by-line to log)", () => {

@@ -1,18 +1,18 @@
 /**
  * Shared accessor for the memory-backfill staging manifest at
- * ~/.claude/hivemind/pending-memory.json.
+ * ~/.claude/memoree/pending-memory.json.
  *
  * Why this exists: memory ingestion is split at the upload boundary so the
- * expensive, auth-free work happens at `hivemind install` and the cheap,
+ * expensive, auth-free work happens at `memoree install` and the cheap,
  * auth-bound work happens after sign-in.
  *
  *   - EXTRACT (no auth, runs at install in the background): replay the
  *     user's last 4-6 weeks of local agent sessions through the same
  *     wiki-prompt the live SessionEnd path uses, write each summary to
- *     ~/.claude/hivemind/pending-memory/<session_id>.md, compute the
+ *     ~/.claude/memoree/pending-memory/<session_id>.md, compute the
  *     embedding LOCALLY via the embed daemon, and append one row here
  *     with `uploaded: false`.
- *   - FLUSH (needs auth, runs after `hivemind login`/org-select in the
+ *   - FLUSH (runs once the selected SQL backend is available in the
  *     background): read every `uploaded: false` row, INSERT the staged
  *     summary + vector into the chosen org's `memory` table, flip the
  *     row to `uploaded: true`.
@@ -78,20 +78,20 @@ export interface PendingMemoryManifest {
   entries: PendingMemoryEntry[];
 }
 
-const HIVEMIND_DIR = join(homedir(), ".claude", "hivemind");
+const MEMOREE_DIR = join(homedir(), ".claude", "memoree");
 
 /** Directory holding the staged summary + embedding files. */
-export const PENDING_MEMORY_DIR = join(HIVEMIND_DIR, "pending-memory");
+export const PENDING_MEMORY_DIR = join(MEMOREE_DIR, "pending-memory");
 
 /** The staging manifest / flush queue. */
-export const PENDING_MEMORY_MANIFEST_PATH = join(HIVEMIND_DIR, "pending-memory.json");
+export const PENDING_MEMORY_MANIFEST_PATH = join(MEMOREE_DIR, "pending-memory.json");
 
 /**
  * Sibling lock used by the install-time background extract trigger so a
  * crashed run leaves a recoverable sentinel rather than wedging forever.
  * Mirrors LOCAL_MINE_LOCK_PATH.
  */
-export const PENDING_MEMORY_LOCK_PATH = join(HIVEMIND_DIR, "pending-memory.lock");
+export const PENDING_MEMORY_LOCK_PATH = join(MEMOREE_DIR, "pending-memory.lock");
 
 /**
  * Read the manifest. Returns null when the file doesn't exist or is

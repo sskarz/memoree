@@ -1,18 +1,18 @@
 /**
- * Single source of truth for the `hivemind skillify ...` command list.
+ * Single source of truth for the `memoree skillify ...` command list.
  *
  * Two parallel views of the same data live here:
  *
  *   1. `SKILLIFY_COMMANDS` — flat one-line-per-entry. Consumed by the four
  *      per-agent SessionStart inject blocks (claude-code/codex/cursor/hermes),
- *      the pi mirror in `harnesses/pi/extension-source/hivemind.ts`, and the bundle-scan
+ *      the pi mirror in `harnesses/pi/extension-source/memoree.ts`, and the bundle-scan
  *      tests that assert specific subcommand strings appear verbatim in the
  *      shipped JS. Kept as a literal array (not derived) so esbuild preserves
  *      every entry as a string literal in the bundle.
  *
  *   2. `SKILLIFY_SPEC` — hierarchical (subcommand → options → note). Consumed
- *      by `renderCliHelpBlock()` (used by `hivemind --help` in src/cli/index.ts)
- *      and `renderSubcommandUsageBlock()` (used by `hivemind skillify --help`
+ *      by `renderCliHelpBlock()` (used by `memoree --help` in src/cli/index.ts)
+ *      and `renderSubcommandUsageBlock()` (used by `memoree skillify --help`
  *      in src/commands/skillify.ts). Modelling options/notes as structured
  *      data is what makes the 2-column / sub-block help layouts feasible
  *      from a single source.
@@ -37,30 +37,30 @@ export interface SkillifyCommand {
 }
 
 export const SKILLIFY_COMMANDS: SkillifyCommand[] = [
-  { cmd: "hivemind skillify",                            desc: "show scope, team, install, per-project state" },
-  { cmd: "hivemind skillify pull",                       desc: "sync project skills from the org table to local FS" },
-  { cmd: "hivemind skillify pull --user <email>",        desc: "only skills authored by that user" },
-  { cmd: "hivemind skillify pull --users <a,b,c>",       desc: "only skills from those authors" },
-  { cmd: "hivemind skillify pull --all-users",           desc: 'explicit "no author filter" (default)' },
-  { cmd: "hivemind skillify pull --to <project|global>", desc: "install location (project=cwd/.claude/skills, global=~/.claude/skills)" },
-  { cmd: "hivemind skillify pull --dry-run",             desc: "preview without touching disk" },
-  { cmd: "hivemind skillify pull --force",               desc: "overwrite local files even if up-to-date (creates .bak)" },
-  { cmd: "hivemind skillify pull <skill-name>",          desc: "pull only that one skill (combines with --user)" },
-  { cmd: "hivemind skillify push <skill-name>",          desc: "upload a local skill to the org table (inverse of pull)" },
-  { cmd: "hivemind skillify push --from <project|global>", desc: "which local skills dir to read (default: project)" },
-  { cmd: "hivemind skillify push --dry-run",             desc: "preview without writing to the org table" },
-  { cmd: "hivemind skillify unpull",                     desc: "remove every skill previously installed by pull" },
-  { cmd: "hivemind skillify unpull --user <email>",      desc: "remove only that author's pulls" },
-  { cmd: "hivemind skillify unpull --not-mine",          desc: "remove all pulls except your own" },
-  { cmd: "hivemind skillify unpull --dry-run",           desc: "preview without touching disk" },
-  { cmd: "hivemind skillify scope <me|team|org>",        desc: "sharing scope for newly mined skills" },
-  { cmd: "hivemind skillify install <project|global>",   desc: "default install location for new skills" },
-  { cmd: "hivemind skillify promote <skill-name>",       desc: "move a project skill to the global location" },
-  { cmd: "hivemind skillify team add|remove|list <name>", desc: "manage team member list" },
-  { cmd: "hivemind skillify mine-local",                 desc: "one-shot: mine skills from local sessions (no auth needed)" },
-  { cmd: "hivemind skillify mine-local --n <num|all>",   desc: "how many sessions to mine (default: 8)" },
-  { cmd: "hivemind skillify mine-local --force",         desc: "re-run even if the manifest sentinel exists" },
-  { cmd: "hivemind skillify mine-local --dry-run",       desc: "stop before calling the LLM gate" },
+  { cmd: "memoree skillify",                            desc: "show scope, team, install, per-project state" },
+  { cmd: "memoree skillify pull",                       desc: "sync project skills from the org table to local FS" },
+  { cmd: "memoree skillify pull --user <email>",        desc: "only skills authored by that user" },
+  { cmd: "memoree skillify pull --users <a,b,c>",       desc: "only skills from those authors" },
+  { cmd: "memoree skillify pull --all-users",           desc: 'explicit "no author filter" (default)' },
+  { cmd: "memoree skillify pull --to <project|global>", desc: "install location (project=cwd/.claude/skills, global=~/.claude/skills)" },
+  { cmd: "memoree skillify pull --dry-run",             desc: "preview without touching disk" },
+  { cmd: "memoree skillify pull --force",               desc: "overwrite local files even if up-to-date (creates .bak)" },
+  { cmd: "memoree skillify pull <skill-name>",          desc: "pull only that one skill (combines with --user)" },
+  { cmd: "memoree skillify push <skill-name>",          desc: "upload a local skill to the org table (inverse of pull)" },
+  { cmd: "memoree skillify push --from <project|global>", desc: "which local skills dir to read (default: project)" },
+  { cmd: "memoree skillify push --dry-run",             desc: "preview without writing to the org table" },
+  { cmd: "memoree skillify unpull",                     desc: "remove every skill previously installed by pull" },
+  { cmd: "memoree skillify unpull --user <email>",      desc: "remove only that author's pulls" },
+  { cmd: "memoree skillify unpull --not-mine",          desc: "remove all pulls except your own" },
+  { cmd: "memoree skillify unpull --dry-run",           desc: "preview without touching disk" },
+  { cmd: "memoree skillify scope <me|team|org>",        desc: "sharing scope for newly mined skills" },
+  { cmd: "memoree skillify install <project|global>",   desc: "default install location for new skills" },
+  { cmd: "memoree skillify promote <skill-name>",       desc: "move a project skill to the global location" },
+  { cmd: "memoree skillify team add|remove|list <name>", desc: "manage team member list" },
+  { cmd: "memoree skillify mine-local",                 desc: "one-shot: mine skills from local sessions (no auth needed)" },
+  { cmd: "memoree skillify mine-local --n <num|all>",   desc: "how many sessions to mine (default: 8)" },
+  { cmd: "memoree skillify mine-local --force",         desc: "re-run even if the manifest sentinel exists" },
+  { cmd: "memoree skillify mine-local --dry-run",       desc: "stop before calling the LLM gate" },
 ];
 
 /** A single flag-style option attached to a subcommand. */
@@ -71,7 +71,7 @@ export interface SkillifyOption {
 
 /** A skillify subcommand with structured options + optional extra note. */
 export interface SkillifySubcommand {
-  /** Full command without positional args, e.g. "hivemind skillify pull". */
+  /** Full command without positional args, e.g. "memoree skillify pull". */
   cmd: string;
   /** Optional positional args appended to `cmd` in renderings, e.g. "<skill-name>". */
   args?: string;
@@ -90,11 +90,11 @@ export interface SkillifySubcommand {
  */
 export const SKILLIFY_SPEC: SkillifySubcommand[] = [
   {
-    cmd: "hivemind skillify",
+    cmd: "memoree skillify",
     desc: "show scope, team, install, per-project state",
   },
   {
-    cmd: "hivemind skillify pull",
+    cmd: "memoree skillify pull",
     desc: "sync project skills from the org table to local FS",
     options: [
       { flag: "--user <email>",          desc: "only skills authored by that user" },
@@ -105,10 +105,10 @@ export const SKILLIFY_SPEC: SkillifySubcommand[] = [
       { flag: "--force",                 desc: "overwrite local files even if up-to-date (creates .bak)" },
       { flag: "<skill-name>",            desc: "pull only that one skill (combines with --user)" },
     ],
-    note: "every agent's SessionStart hook auto-runs 'pull --all-users --to global' on every session. File writes are idempotent (skipped when local is at-or-newer than remote). Disable via HIVEMIND_AUTOPULL_DISABLED=1.",
+    note: "every agent's SessionStart hook auto-runs 'pull --all-users --to global' on every session. File writes are idempotent (skipped when local is at-or-newer than remote). Disable via MEMOREE_AUTOPULL_DISABLED=1.",
   },
   {
-    cmd: "hivemind skillify push",
+    cmd: "memoree skillify push",
     args: "<skill-name>",
     desc: "upload a local skill to the org table (inverse of pull)",
     options: [
@@ -118,7 +118,7 @@ export const SKILLIFY_SPEC: SkillifySubcommand[] = [
     note: "the manual counterpart to mining — push a skill Claude wrote locally straight to the org table (append-only: re-pushing an existing skill lands a new version). Authorship/lineage is preserved; you're added as a contributor.",
   },
   {
-    cmd: "hivemind skillify unpull",
+    cmd: "memoree skillify unpull",
     desc: "remove every skill previously installed by pull",
     options: [
       { flag: "--user <email>",          desc: "remove only that author's pulls" },
@@ -127,27 +127,27 @@ export const SKILLIFY_SPEC: SkillifySubcommand[] = [
     ],
   },
   {
-    cmd: "hivemind skillify scope",
+    cmd: "memoree skillify scope",
     args: "<me|team|org>",
     desc: "sharing scope for newly mined skills",
   },
   {
-    cmd: "hivemind skillify install",
+    cmd: "memoree skillify install",
     args: "<project|global>",
     desc: "default install location for new skills",
   },
   {
-    cmd: "hivemind skillify promote",
+    cmd: "memoree skillify promote",
     args: "<skill-name>",
     desc: "move a project skill to the global location",
   },
   {
-    cmd: "hivemind skillify team add|remove|list",
+    cmd: "memoree skillify team add|remove|list",
     args: "<name>",
     desc: "manage team member list",
   },
   {
-    cmd: "hivemind skillify mine-local",
+    cmd: "memoree skillify mine-local",
     desc: "one-shot: mine skills from local sessions (no auth needed)",
     options: [
       { flag: "--n <num|all>",           desc: "how many sessions to mine (default: 8)" },
@@ -170,7 +170,7 @@ export function renderSkillifyCommands(): string {
 }
 
 /**
- * Render the block consumed by `hivemind --help` (src/cli/index.ts).
+ * Render the block consumed by `memoree --help` (src/cli/index.ts).
  * 2-column layout: command on the left, description on the right; options
  * folded inline as `Options: --x, --y, --z.`; optional `note` follows as a
  * wrapped paragraph at the same indent.
@@ -203,7 +203,7 @@ export function renderCliHelpBlock(): string {
 }
 
 /**
- * Render the block consumed by `hivemind skillify --help` (the `usage()`
+ * Render the block consumed by `memoree skillify --help` (the `usage()`
  * function in src/commands/skillify.ts). Indented per subcommand with each
  * option on its own indented sub-line.
  *
@@ -219,7 +219,7 @@ export function renderSubcommandUsageBlock(): string {
   for (const sub of SKILLIFY_SPEC) {
     const left = sub.args ? `${sub.cmd} ${sub.args}` : sub.cmd;
     // Same gap-protection as in renderCliHelpBlock — long entries (e.g.
-    // "hivemind skillify team add|remove|list <name>") must still have a
+    // "memoree skillify team add|remove|list <name>") must still have a
     // visible separation from their description.
     const padded = left.length >= CMD_COL_WIDTH ? `${left}  ` : left.padEnd(CMD_COL_WIDTH);
     lines.push(`${INDENT}${padded}${sub.desc}`);

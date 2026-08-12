@@ -10,9 +10,9 @@
 
 ## Overview
 
-This sub-feature replaces the most hostile part of running Hivemind: configuration. Today, changing how Hivemind behaves means leaving the editor and either remembering CLI subcommands (`hivemind embeddings enable`, `hivemind graph build`, `hivemind org switch <name>`) or, worse, hand-editing `~/.deeplake/config.json` and juggling environment variables like `HIVEMIND_EMBEDDINGS` (`src/user-config.ts:1-20,63-102`). This pane brings every common setting into a graphical panel inside Cursor. The developer flips a toggle; the extension writes the exact same canonical config the CLI writes, then re-runs the PRD-002 health check so the change is reflected honestly in the status bar.
+This sub-feature replaces the most hostile part of running Memoree: configuration. Today, changing how Memoree behaves means leaving the editor and either remembering CLI subcommands (`memoree embeddings enable`, `memoree graph build`, the removed organization switch command <name>`) or, worse, hand-editing `~/.memoree/config.json` and juggling environment variables like `MEMOREE_EMBEDDINGS` (`src/user-config.ts:1-20,63-102`). This pane brings every common setting into a graphical panel inside Cursor. The developer flips a toggle; the extension writes the exact same canonical config the CLI writes, then re-runs the PRD-002 health check so the change is reflected honestly in the status bar.
 
-The value is control without ceremony. A developer should be able to turn embeddings off on a laptop, rebuild the codebase graph after a big refactor, or switch from one client organization to another, all from a panel, all persisted to the one config the rest of Hivemind already trusts. No JSON, no environment variables, no memorized subcommands, and no risk that the editor and CLI disagree about the current configuration.
+The value is control without ceremony. A developer should be able to turn embeddings off on a laptop, rebuild the codebase graph after a big refactor, or switch from one client organization to another, all from a panel, all persisted to the one config the rest of Memoree already trusts. No JSON, no environment variables, no memorized subcommands, and no risk that the editor and CLI disagree about the current configuration.
 
 > **Graph visualization scope:** PRD-003 surfaces graph build status, counts, and refresh controls in Settings. The interactive force-directed graph explorer lives in the dashboard Graph tab and is specified by [`prd-004-cursor-graph-visualizer`](../prd-004-cursor-graph-visualizer/prd-004-cursor-graph-visualizer-index.md).
 
@@ -22,8 +22,8 @@ The value is control without ceremony. A developer should be able to turn embedd
 
 Configuration is where trust quietly erodes. Three friction points hurt developers today:
 
-1. **Embeddings are gated by a config flag with a legacy env-var migration.** The only persisted setting today is `embeddings.enabled`, seeded once from `HIVEMIND_EMBEDDINGS` and thereafter read from `~/.deeplake/config.json` (`src/user-config.ts:73-102`). A developer who wants embeddings off must either set an env var (read exactly once, then ignored) or edit JSON, and has no in-editor signal of the current state.
-2. **The codebase graph is invisible and CLI-bound.** The graph powers the dashboard's visualization and richer context, but it only exists if the developer knew to run `hivemind graph build` (`src/cli/index.ts:462-465`, surfaced as a hint in `src/commands/dashboard.ts:238-240`). There is no in-editor way to see whether a graph exists, how old it is, or to rebuild it.
+1. **Embeddings are gated by a config flag with a legacy env-var migration.** The only persisted setting today is `embeddings.enabled`, seeded once from `MEMOREE_EMBEDDINGS` and thereafter read from `~/.memoree/config.json` (`src/user-config.ts:73-102`). A developer who wants embeddings off must either set an env var (read exactly once, then ignored) or edit JSON, and has no in-editor signal of the current state.
+2. **The codebase graph is invisible and CLI-bound.** The graph powers the dashboard's visualization and richer context, but it only exists if the developer knew to run `memoree graph build` (`src/cli/index.ts:462-465`, surfaced as a hint in `src/commands/dashboard.ts:238-240`). There is no in-editor way to see whether a graph exists, how old it is, or to rebuild it.
 3. **Org / workspace switching is a CLI passthrough with a sharp cache edge.** `org switch` and `workspaces` exist only in the terminal (`src/cli/index.ts:486-490`), and switching org without invalidating the stats cache previously showed the *previous* org's numbers, the exact bug the cache scope-key was added to fix (`src/notifications/sources/org-stats.ts:80-100`). PRD-002b explicitly deferred org/workspace UX to a later stage; this is that stage.
 
 This pane makes each of these a visible, safe, one-click operation.
@@ -44,7 +44,7 @@ This pane makes each of these a visible, safe, one-click operation.
 - **Re-implementing the underlying operations.** Embeddings install/enable/disable, graph build, and org switch already exist in the CLI (`src/cli/index.ts:472-490`). This pane invokes them; it does not reimplement their logic.
 - **Authentication and login.** Logging in, secrets, and credential storage are PRD-002b. This pane assumes an authenticated identity and switches *between* orgs/workspaces; it does not create credentials.
 - **Prerequisite detection and hook wiring.** Whether CLIs exist and whether hooks are wired is PRD-002a. This pane triggers a re-check after changes but does not own detection.
-- **Editing arbitrary config keys.** Only the supported settings (embeddings, graph, org/workspace) are exposed. A raw JSON editor for `~/.deeplake/config.json` is out of scope.
+- **Editing arbitrary config keys.** Only the supported settings (embeddings, graph, org/workspace) are exposed. A raw JSON editor for `~/.memoree/config.json` is out of scope.
 - **Designing new config schema.** `UserConfig` currently holds only `embeddings.enabled` (`src/user-config.ts:16-20`); any new persisted setting is added through the existing reader/writer, not a new store.
 
 ---
@@ -56,9 +56,9 @@ Each control maps to an existing canonical operation and a known source of truth
 | Setting | Control | Reads current state from | Writes / invokes | Health impact |
 |---|---|---|---|---|
 | **Embeddings** | On/off toggle | `getEmbeddingsEnabled()` (`src/user-config.ts:73-94`) | `enableEmbeddings()` / `disableEmbeddings()` (light: flip flag, kill daemon) or `installEmbeddings()` (heavy: deps + symlinks) per current install state (`src/cli/index.ts:472-481`) | Capture/wiki/grep embed paths toggle; re-check D-dimensions that depend on the daemon. |
-| **Codebase graph** | Status line + "Build / Refresh" button | Snapshot resolver: `~/.hivemind/graphs/<repo-key>/latest-commit.txt` + snapshots (`src/dashboard/data.ts:141-209`) | `hivemind graph build` (`src/cli/index.ts:462-465`) | None on PRD-002 health directly; updates the dashboard graph empty-state and KPI context. |
-| **Active organization** | Dropdown / switcher | Current `creds.orgId` / `whoami` (`src/cli/index.ts:486-490`) | `hivemind org switch <name-or-id>` (auth passthrough) | Identity change; invalidate stats cache; re-run health to confirm workspace resolves. |
-| **Active workspace** | Dropdown | `creds.workspaceId`, `workspaces` list (`src/cli/index.ts:486-490`) | `hivemind workspace` selection (auth passthrough) | Same as org: identity change + cache invalidation. |
+| **Codebase graph** | Status line + "Build / Refresh" button | Snapshot resolver: `~/.memoree/graphs/<repo-key>/latest-commit.txt` + snapshots (`src/dashboard/data.ts:141-209`) | `memoree graph build` (`src/cli/index.ts:462-465`) | None on PRD-002 health directly; updates the dashboard graph empty-state and KPI context. |
+| **Active organization** | Dropdown / switcher | Current `creds.orgId` / `whoami` (`src/cli/index.ts:486-490`) | the removed organization switch command <name-or-id>` (auth passthrough) | Identity change; invalidate stats cache; re-run health to confirm workspace resolves. |
+| **Active workspace** | Dropdown | `creds.workspaceId`, `workspaces` list (`src/cli/index.ts:486-490`) | the removed workspace command selection (auth passthrough) | Same as org: identity change + cache invalidation. |
 
 ---
 
@@ -117,7 +117,7 @@ PRD-002b deliberately scoped org/workspace switching out and left an open questi
 |---|---|
 | AC-1 | Given the settings panel opens, when it renders, then each setting shows its true current state read from the canonical source (embeddings flag, graph snapshot presence/age, active org/workspace). |
 | AC-2 | Given the developer toggles embeddings, when the change is applied, then it is persisted via the canonical config writer (atomic temp-file rename) and no manual JSON or env-var edit is required. |
-| AC-3 | Given embeddings are toggled off, when the change applies, then the light disable path runs (flag flipped, daemon killed) consistent with `hivemind embeddings disable`, and the panel reflects the disabled state. |
+| AC-3 | Given embeddings are toggled off, when the change applies, then the light disable path runs (flag flipped, daemon killed) consistent with `memoree embeddings disable`, and the panel reflects the disabled state. |
 | AC-4 | Given no codebase graph exists for the repo, when the panel renders, then the graph status shows "not built" with a Build action; given a graph exists, it shows the snapshot age and a Refresh action. |
 | AC-5 | Given the developer triggers a graph build, when it runs, then the panel shows an in-progress state and a terminal success or failure result, never a frozen or silently-completed control. |
 | AC-6 | Given the developer switches organization, when the switch completes, then the credentials identity updates via the canonical path and the org-scoped stats cache for the prior identity is invalidated so the KPI pane does not show the old org's numbers. |
@@ -132,7 +132,7 @@ PRD-002b deliberately scoped org/workspace switching out and left an open questi
 - [ ] Should toggling embeddings from "never installed" auto-run the heavy `installEmbeddings()` (deps + symlinks) or only offer the light enable when already installed, and how do we represent the heavy install's duration in the Webview (`src/cli/index.ts:472-481`)?
 - [ ] Does the org/workspace switcher invoke the CLI as a child process (guaranteeing identical behavior) or call a shared module directly, given PRD-002b raised the same shared-module-vs-subprocess question for auth?
 - [ ] Where is graph "staleness" best defined for the Refresh prompt: snapshot commit vs current HEAD (`src/dashboard/data.ts:202-208` exposes `commitSha`), or snapshot mtime?
-- [ ] Should the panel expose a read-only "view raw config" affordance for the skeptic persona, or keep `~/.deeplake/config.json` entirely behind the graphical controls?
+- [ ] Should the panel expose a read-only "view raw config" affordance for the skeptic persona, or keep `~/.memoree/config.json` entirely behind the graphical controls?
 - [ ] When a graph build is triggered from the panel and the developer closes the Webview, should the build continue in the background and report on reopen?
 
 ---

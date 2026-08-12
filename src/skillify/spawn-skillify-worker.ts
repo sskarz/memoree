@@ -3,7 +3,7 @@
  *
  * The hook calls this when the per-project Stop counter crosses the
  * threshold. It writes a config JSON to tmpdir, spawns the worker,
- * and returns immediately. All heavy work (Deeplake fetch, model gate,
+ * and returns immediately. All heavy work (Memoree fetch, model gate,
  * skill write) happens in the detached child.
  */
 
@@ -46,7 +46,7 @@ export interface SkillifySpawnOptions {
 export function spawnSkillifyWorker(opts: SkillifySpawnOptions): void {
   const { config, cwd, projectKey, project, bundleDir, agent, scopeConfig, currentSessionId, reason } = opts;
 
-  const tmpDir = join(tmpdir(), `deeplake-skillify-${projectKey}-${Date.now()}`);
+  const tmpDir = join(tmpdir(), `memoree-skillify-${projectKey}-${Date.now()}`);
   // Worker handoffs contain provider metadata, but no credentials or database URL.
   mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
 
@@ -58,9 +58,7 @@ export function spawnSkillifyWorker(opts: SkillifySpawnOptions): void {
   // Keep the file private because it still carries local paths and project data.
   writeFileSync(configFile, JSON.stringify({
     storage: {
-      kind: config.storage?.kind ?? "deeplake",
-      orgId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.orgId : undefined,
-      workspaceId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.workspaceId : undefined,
+      kind: config.storage.kind,
     },
     sessionsTable: config.sessionsTableName,
     skillsTable: config.skillsTableName,
@@ -74,11 +72,11 @@ export function spawnSkillifyWorker(opts: SkillifySpawnOptions): void {
     install: scopeConfig.install,
     tmpDir,
     gateBin,
-    cursorModel: process.env.HIVEMIND_CURSOR_MODEL,
-    hermesProvider: process.env.HIVEMIND_HERMES_PROVIDER,
-    hermesModel: process.env.HIVEMIND_HERMES_MODEL,
-    piProvider: process.env.HIVEMIND_PI_PROVIDER,
-    piModel: process.env.HIVEMIND_PI_MODEL,
+    cursorModel: process.env.MEMOREE_CURSOR_MODEL,
+    hermesProvider: process.env.MEMOREE_HERMES_PROVIDER,
+    hermesModel: process.env.MEMOREE_HERMES_MODEL,
+    piProvider: process.env.MEMOREE_PI_PROVIDER,
+    piModel: process.env.MEMOREE_PI_MODEL,
     skillifyLog: SKILLIFY_LOG,
     currentSessionId,
   }), { mode: 0o600 });

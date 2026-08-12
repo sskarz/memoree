@@ -10,9 +10,9 @@ import { _resetUserConfigForTesting, _setConfigPathForTesting, readUserConfig, w
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "hivemind-storage-config-"));
+  root = mkdtempSync(join(tmpdir(), "memoree-storage-config-"));
   _setConfigPathForTesting(() => join(root, "config.json"));
-  for (const key of ["HIVEMIND_BACKEND", "HIVEMIND_SQLITE_PATH", "HIVEMIND_POSTGRES_URL", "HIVEMIND_POSTGRES_SCHEMA", "HIVEMIND_VECTOR_SCAN_LIMIT"]) {
+  for (const key of ["MEMOREE_BACKEND", "MEMOREE_SQLITE_PATH", "MEMOREE_POSTGRES_URL", "MEMOREE_POSTGRES_SCHEMA", "MEMOREE_VECTOR_SCAN_LIMIT"]) {
     delete process.env[key];
   }
 });
@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe("storage configuration", () => {
-  it("loads SQLite without Deeplake credentials", () => {
+  it("loads SQLite without Memoree credentials", () => {
     const dbPath = join(root, "local.sqlite3");
     writeUserConfig({ storage: { provider: "sqlite", sqlitePath: dbPath } });
     const config = loadStorageConfig();
@@ -33,15 +33,15 @@ describe("storage configuration", () => {
 
   it("applies environment precedence and validates scan limits", () => {
     writeUserConfig({ storage: { provider: "sqlite", sqlitePath: join(root, "stored.sqlite3") } });
-    process.env.HIVEMIND_SQLITE_PATH = join(root, "env.sqlite3");
-    process.env.HIVEMIND_VECTOR_SCAN_LIMIT = "37";
+    process.env.MEMOREE_SQLITE_PATH = join(root, "env.sqlite3");
+    process.env.MEMOREE_VECTOR_SCAN_LIMIT = "37";
     expect(loadStorageConfig()).toMatchObject({ kind: "sqlite", path: join(root, "env.sqlite3"), vectorScanLimit: 37 });
   });
 
   it("requires the PostgreSQL URL and never renders it", () => {
     writeUserConfig({ storage: { provider: "postgres", postgresSchema: "team_memory" } });
     expect(loadStorageConfig()).toBeNull();
-    process.env.HIVEMIND_POSTGRES_URL = "postgres://secret-user:secret-pass@example.test/db";
+    process.env.MEMOREE_POSTGRES_URL = "postgres://secret-user:secret-pass@example.test/db";
     expect(loadStorageConfig()).toMatchObject({ kind: "postgres", schema: "team_memory" });
     const status = renderBackendStatus();
     expect(status).toContain("configured via environment");
@@ -50,11 +50,11 @@ describe("storage configuration", () => {
   });
 
   it("rejects invalid provider and schema identifiers", () => {
-    process.env.HIVEMIND_BACKEND = "unknown";
-    expect(() => loadStorageConfig()).toThrow(/Invalid HIVEMIND_BACKEND/);
-    process.env.HIVEMIND_BACKEND = "postgres";
-    process.env.HIVEMIND_POSTGRES_URL = "postgres://example/db";
-    process.env.HIVEMIND_POSTGRES_SCHEMA = "bad;drop";
+    process.env.MEMOREE_BACKEND = "unknown";
+    expect(() => loadStorageConfig()).toThrow(/Invalid MEMOREE_BACKEND/);
+    process.env.MEMOREE_BACKEND = "postgres";
+    process.env.MEMOREE_POSTGRES_URL = "postgres://example/db";
+    process.env.MEMOREE_POSTGRES_SCHEMA = "bad;drop";
     expect(() => loadStorageConfig()).toThrow(/Invalid PostgreSQL schema/);
   });
 
@@ -70,86 +70,78 @@ describe("storage configuration", () => {
     expect(config?.kind).toBe("sqlite");
     const backend = createStorageBackend(config!);
     expect(await backend.listTables()).toEqual([
-      "codebase", "hivemind_docs", "hivemind_goals", "hivemind_kpis",
-      "hivemind_rules", "memory", "sessions", "skills",
+      "codebase", "memoree_docs", "memoree_goals", "memoree_kpis",
+      "memoree_rules", "memory", "sessions", "skills",
     ]);
     await backend.close();
   });
 
   it("does not select PostgreSQL when the environment URL is missing", async () => {
     await expect(runBackendCommand(["use", "postgres", "--schema", "team_memory"]))
-      .rejects.toThrow(/HIVEMIND_POSTGRES_URL/);
+      .rejects.toThrow(/MEMOREE_POSTGRES_URL/);
     expect(readUserConfig().storage).toBeUndefined();
   });
 
   it("renders default, SQLite, and PostgreSQL status without secrets", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    expect(renderBackendStatus()).toContain("Backend: deeplake\nSelected by: default");
+    expect(renderBackendStatus()).toContain("Backend: sqlite");
+    expect(renderBackendStatus()).toContain("Database: ~/.memoree/memoree.sqlite3");
     await expect(runBackendCommand(["status"])).resolves.toBe(0);
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("Connection: Deeplake credentials"));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Backend: sqlite"));
 
-    process.env.HIVEMIND_BACKEND = "sqlite";
-    process.env.HIVEMIND_SQLITE_PATH = join(homedir(), ".deeplake", "status.sqlite3");
-    expect(renderBackendStatus()).toContain("Database: ~/.deeplake/status.sqlite3");
-    expect(renderBackendStatus()).toContain("Selected by: environment");
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = join(homedir(), ".memoree", "status.sqlite3");
+    expect(renderBackendStatus()).toContain("Database: ~/.memoree/status.sqlite3");
 
-    process.env.HIVEMIND_BACKEND = "postgres";
-    delete process.env.HIVEMIND_POSTGRES_URL;
-    process.env.HIVEMIND_POSTGRES_SCHEMA = "status_schema";
+    process.env.MEMOREE_BACKEND = "postgres";
+    delete process.env.MEMOREE_POSTGRES_URL;
+    process.env.MEMOREE_POSTGRES_SCHEMA = "status_schema";
     expect(renderBackendStatus()).toContain("Schema: status_schema");
     expect(renderBackendStatus()).toContain("Connection: not configured");
   });
 
-  it("persists Deeplake selection and accepts equals-style SQLite paths", async () => {
+  it("persists SQLite selection and accepts equals-style paths", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    writeUserConfig({ storage: { provider: "sqlite", sqlitePath: join(root, "old.sqlite3") } });
-    await expect(runBackendCommand(["use", "deeplake"])).resolves.toBe(0);
-    expect(readUserConfig().storage).toEqual({ provider: "deeplake", sqlitePath: join(root, "old.sqlite3") });
-
     const path = join(root, "equals.sqlite3");
     await expect(runBackendCommand(["use", "sqlite", `--path=${path}`])).resolves.toBe(0);
     expect(readUserConfig().storage).toEqual({ provider: "sqlite", sqlitePath: path });
   });
 
   it("rejects invalid backend command shapes and PostgreSQL schemas", async () => {
-    await expect(runBackendCommand(["wat"])).rejects.toThrow("Usage: hivemind backend status");
-    await expect(runBackendCommand(["use"])).rejects.toThrow("Usage: hivemind backend use");
-    await expect(runBackendCommand(["use", "unknown"])).rejects.toThrow("Usage: hivemind backend use");
-    process.env.HIVEMIND_POSTGRES_URL = "postgresql://secret:password@example.invalid/db";
+    await expect(runBackendCommand(["wat"])).rejects.toThrow("Usage: memoree backend status");
+    await expect(runBackendCommand(["use"])).rejects.toThrow("Usage: memoree backend use");
+    await expect(runBackendCommand(["use", "unknown"])).rejects.toThrow("Usage: memoree backend use");
+    process.env.MEMOREE_POSTGRES_URL = "postgresql://secret:password@example.invalid/db";
     await expect(runBackendCommand(["use", "postgres", "--schema", "bad;drop"]))
       .rejects.toThrow("Invalid PostgreSQL schema");
     expect(readUserConfig().storage).toBeUndefined();
   });
 
   it("reports missing configuration from backend check", async () => {
-    process.env.HIVEMIND_BACKEND = "postgres";
-    await expect(runBackendCommand(["check"])).rejects.toThrow("PostgreSQL backend requires HIVEMIND_POSTGRES_URL");
+    process.env.MEMOREE_BACKEND = "postgres";
+    await expect(runBackendCommand(["check"])).rejects.toThrow("PostgreSQL backend requires MEMOREE_POSTGRES_URL");
   });
 
   it("uses persisted status values when environment overrides are absent", () => {
     const sqlitePath = join(root, "persisted.sqlite3");
     writeUserConfig({ storage: { provider: "sqlite", sqlitePath } });
-    expect(renderBackendStatus()).toContain("Selected by: user config");
     expect(renderBackendStatus()).toContain(`Database: ${sqlitePath}`);
 
     writeUserConfig({ storage: { provider: "postgres", postgresSchema: "persisted_schema" } });
     expect(renderBackendStatus()).toContain("Schema: persisted_schema");
   });
 
-  it("uses the default SQLite path and restores pre-existing provider environment", async () => {
+  it("uses the default SQLite path", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const previousHome = process.env.HOME;
     process.env.HOME = root;
-    process.env.HIVEMIND_BACKEND = "deeplake";
-    process.env.HIVEMIND_SQLITE_PATH = join(root, "previous.sqlite3");
     try {
       await expect(runBackendCommand(["use", "sqlite"])).resolves.toBe(0);
       expect(readUserConfig().storage).toEqual({
         provider: "sqlite",
-        sqlitePath: join(root, ".deeplake", "hivemind.sqlite3"),
+        sqlitePath: join(root, ".memoree", "memoree.sqlite3"),
       });
-      expect(process.env.HIVEMIND_BACKEND).toBe("deeplake");
-      expect(process.env.HIVEMIND_SQLITE_PATH).toBe(join(root, "previous.sqlite3"));
+      expect(process.env.MEMOREE_BACKEND).toBe("sqlite");
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
@@ -157,20 +149,9 @@ describe("storage configuration", () => {
   });
 
   it("surfaces provider query failures and still closes the backend", async () => {
-    process.env.HIVEMIND_BACKEND = "sqlite";
-    process.env.HIVEMIND_SQLITE_PATH = root;
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = root;
     await expect(runBackendCommand(["check"])).rejects.toThrow();
   });
 
-  it("reports missing Deeplake credentials during check", async () => {
-    const previousHome = process.env.HOME;
-    process.env.HOME = root;
-    process.env.HIVEMIND_BACKEND = "deeplake";
-    try {
-      await expect(runBackendCommand(["check"])).rejects.toThrow("Deeplake backend requires login credentials");
-    } finally {
-      if (previousHome === undefined) delete process.env.HOME;
-      else process.env.HOME = previousHome;
-    }
-  });
 });

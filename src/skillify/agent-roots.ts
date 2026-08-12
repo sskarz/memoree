@@ -10,12 +10,12 @@
  *   - codex installer creates `~/.agents/skills/` on first install,
  *     so existence of THAT path implies codex (or some agentskills.io
  *     consumer) has run.
- *   - hermes installer creates `~/.hermes/skills/hivemind-memory/`,
+ *   - hermes installer creates `~/.hermes/skills/memoree-memory/`,
  *     so its skills root exists post-install.
  *   - pi installer does NOT create `~/.pi/agent/skills/` — pi
  *     populates that lazily as the user installs individual skills.
- *     So a fresh pi+hivemind box would have `~/.pi/agent/extensions/`
- *     and `~/.pi/agent/hivemind/` but no `skills/`. Existence-based
+ *     So a fresh pi+memoree box would have `~/.pi/agent/extensions/`
+ *     and `~/.pi/agent/memoree/` but no `skills/`. Existence-based
  *     detection on the skills dir would silently skip pi for this
  *     user, leaving pi without any pulled skills until they happened
  *     to mkdir it themselves.

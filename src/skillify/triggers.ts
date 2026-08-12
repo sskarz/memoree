@@ -8,7 +8,7 @@
  *     regardless of counter (catches tail-of-session knowledge that the
  *     mid-session counter trigger would miss).
  *
- * Both are no-ops when cwd is empty or HIVEMIND_SKILLIFY_WORKER=1 (recursion
+ * Both are no-ops when cwd is empty or MEMOREE_SKILLIFY_WORKER=1 (recursion
  * guard). Both spawn the worker as a detached subprocess via
  * spawnSkillifyWorker; they never block the calling hook.
  */
@@ -40,7 +40,7 @@ export interface TriggerOptions {
  * (Stop, afterAgentResponse, post_llm_call, etc. depending on agent).
  */
 export function tryStopCounterTrigger(opts: TriggerOptions): void {
-  if (process.env.HIVEMIND_SKILLIFY_WORKER === "1") return;
+  if (process.env.MEMOREE_SKILLIFY_WORKER === "1") return;
   if (!opts.cwd) return;
 
   try {
@@ -82,7 +82,7 @@ export function tryStopCounterTrigger(opts: TriggerOptions): void {
  * doesn't fire reliably (e.g. claude -p one-shot).
  */
 export function forceSessionEndTrigger(opts: TriggerOptions): void {
-  if (process.env.HIVEMIND_SKILLIFY_WORKER === "1") return;
+  if (process.env.MEMOREE_SKILLIFY_WORKER === "1") return;
   if (!opts.cwd) return;
 
   try {

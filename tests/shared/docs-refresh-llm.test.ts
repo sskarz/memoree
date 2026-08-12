@@ -33,8 +33,8 @@ describe("resolveDocLlmSpec (per-agent LLM seam)", () => {
     expect(inv.options.input).toBe("PROMPT");
   });
 
-  it("HIVEMIND_DOCS_LLM_AGENT=codex → `codex exec … -` with the prompt on STDIN, LOW reasoning effort", () => {
-    const spec = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "codex" });
+  it("MEMOREE_DOCS_LLM_AGENT=codex → `codex exec … -` with the prompt on STDIN, LOW reasoning effort", () => {
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "codex" });
     expect(spec.bin).toBe("codex");
     const inv = spec.build("/usr/bin/codex", "PROMPT");
     // Cost pinning: reasoning effort is the account-safe knob (ChatGPT
@@ -46,23 +46,23 @@ describe("resolveDocLlmSpec (per-agent LLM seam)", () => {
     expect(inv.options.input).toBe("PROMPT");
   });
 
-  it("HIVEMIND_DOCS_CODEX_MODEL adds an explicit -m for API-key accounts", () => {
-    const spec = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "codex", HIVEMIND_DOCS_CODEX_MODEL: "gpt-cheap" });
+  it("MEMOREE_DOCS_CODEX_MODEL adds an explicit -m for API-key accounts", () => {
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "codex", MEMOREE_DOCS_CODEX_MODEL: "gpt-cheap" });
     const inv = spec.build("/usr/bin/codex", "PROMPT");
     expect(inv.args).toContain("-m");
     expect(inv.args[inv.args.indexOf("-m") + 1]).toBe("gpt-cheap");
     expect(inv.args[inv.args.length - 1]).toBe("-"); // stdin marker stays last
   });
 
-  it("HIVEMIND_DOCS_LLM_BIN (+FLAGS) → a fully custom CLI, prompt as the last arg", () => {
-    const spec = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_BIN: "my-llm", HIVEMIND_DOCS_LLM_FLAGS: "run,--json" });
+  it("MEMOREE_DOCS_LLM_BIN (+FLAGS) → a fully custom CLI, prompt as the last arg", () => {
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_BIN: "my-llm", MEMOREE_DOCS_LLM_FLAGS: "run,--json" });
     expect(spec.bin).toBe("my-llm");
     const inv = spec.build("my-llm", "PROMPT");
     expect(inv.args).toEqual(["run", "--json", "PROMPT"]);
   });
 
-  it("HIVEMIND_DOCS_LLM_STDIN=1 routes the custom CLI's prompt via stdin (E2BIG safety)", () => {
-    const spec = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_BIN: "my-llm", HIVEMIND_DOCS_LLM_FLAGS: "run", HIVEMIND_DOCS_LLM_STDIN: "1" });
+  it("MEMOREE_DOCS_LLM_STDIN=1 routes the custom CLI's prompt via stdin (E2BIG safety)", () => {
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_BIN: "my-llm", MEMOREE_DOCS_LLM_FLAGS: "run", MEMOREE_DOCS_LLM_STDIN: "1" });
     const inv = spec.build("my-llm", "PROMPT");
     expect(inv.args).toEqual(["run"]); // no prompt in argv
     expect(inv.options.input).toBe("PROMPT");
@@ -71,12 +71,12 @@ describe("resolveDocLlmSpec (per-agent LLM seam)", () => {
   it("pi and cursor specs mirror their production wiki workers (trailing prompt)", () => {
     // pi: NO provider/model defaults — it must use whatever the user logged
     // into (a forced provider broke a real OAuth login, verified live).
-    const pi = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "pi" });
+    const pi = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "pi" });
     expect(pi.build("/usr/bin/pi", "PROMPT").args).toEqual(["--print", "PROMPT"]);
-    const pinned = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "pi", HIVEMIND_PI_PROVIDER: "google", HIVEMIND_PI_MODEL: "gemini-2.5-flash" });
+    const pinned = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "pi", MEMOREE_PI_PROVIDER: "google", MEMOREE_PI_MODEL: "gemini-2.5-flash" });
     const inv = pinned.build("/usr/bin/pi", "PROMPT");
     expect(inv.args).toEqual(["--print", "--provider", "google", "--model", "gemini-2.5-flash", "PROMPT"]);
-    const cursor = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "cursor" });
+    const cursor = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "cursor" });
     const cinv = cursor.build("/usr/bin/cursor-agent", "PROMPT");
     expect(cinv.args).toEqual(["--print", "--model", "auto", "--force", "--output-format", "text", "PROMPT"]);
   });
@@ -89,12 +89,12 @@ describe("resolveDocLlmSpec (per-agent LLM seam)", () => {
   });
 
   it("the custom escape hatch beats a named agent when both are set", () => {
-    const spec = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_BIN: "x", HIVEMIND_DOCS_LLM_AGENT: "codex" });
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_BIN: "x", MEMOREE_DOCS_LLM_AGENT: "codex" });
     expect(spec.label).toBe("custom:x");
   });
 
   it("throws a helpful error on an unknown agent", () => {
-    expect(() => resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "gpt5" })).toThrow(/Unknown HIVEMIND_DOCS_LLM_AGENT="gpt5"/);
+    expect(() => resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "gpt5" })).toThrow(/Unknown MEMOREE_DOCS_LLM_AGENT="gpt5"/);
   });
 });
 

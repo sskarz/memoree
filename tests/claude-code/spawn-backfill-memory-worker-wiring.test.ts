@@ -23,12 +23,12 @@ vi.mock("../../src/skillify/local-source.js", () => ({
   detectInstalledAgents: vi.fn(() => [{ agent: "claude_code", sessionRoot: "/x", encodeCwd: () => "x" }]),
 }));
 vi.mock("../../src/skillify/spawn-mine-local-worker.js", () => ({
-  findHivemindLauncher: vi.fn(() => ({ kind: "bin", path: "/usr/bin/hivemind" })),
+  findMemoreeLauncher: vi.fn(() => ({ kind: "bin", path: "/usr/bin/memoree" })),
 }));
 
 import { maybeAutoBackfillMemory } from "../../src/skillify/spawn-backfill-memory-worker.js";
 import { detectInstalledAgents } from "../../src/skillify/local-source.js";
-import { findHivemindLauncher } from "../../src/skillify/spawn-mine-local-worker.js";
+import { findMemoreeLauncher } from "../../src/skillify/spawn-mine-local-worker.js";
 
 const LOCK_STALE = 31 * 60 * 1000;
 
@@ -43,7 +43,7 @@ beforeEach(() => {
   vi.mocked(mkdirSync).mockReset();
   vi.mocked(spawn).mockReset().mockReturnValue({ unref: vi.fn() } as unknown as ReturnType<typeof spawn>);
   vi.mocked(detectInstalledAgents).mockReset().mockReturnValue([{ agent: "claude_code", sessionRoot: "/x", encodeCwd: () => "x" }]);
-  vi.mocked(findHivemindLauncher).mockReset().mockReturnValue({ kind: "bin", path: "/usr/bin/hivemind" });
+  vi.mocked(findMemoreeLauncher).mockReset().mockReturnValue({ kind: "bin", path: "/usr/bin/memoree" });
 });
 
 describe("maybeAutoBackfillMemory wiring", () => {
@@ -54,7 +54,7 @@ describe("maybeAutoBackfillMemory wiring", () => {
     const [, args, options] = vi.mocked(spawn).mock.calls[0];
     expect(args).toEqual(["memory", "backfill"]);
     // The spawned process is marked as the lock owner so only it releases.
-    expect((options as { env: Record<string, string> }).env.HIVEMIND_BACKFILL_LOCK_OWNED).toBe("1");
+    expect((options as { env: Record<string, string> }).env.MEMOREE_BACKFILL_LOCK_OWNED).toBe("1");
   });
 
   it("skips when the manifest already exists (manifestExists closure)", () => {
@@ -76,9 +76,9 @@ describe("maybeAutoBackfillMemory wiring", () => {
     expect(maybeAutoBackfillMemory()).toEqual({ triggered: false, reason: "no-local-sessions" });
   });
 
-  it("skips when no hivemind launcher is found (hasLauncher closure → null)", () => {
-    vi.mocked(findHivemindLauncher).mockReturnValue(null);
-    expect(maybeAutoBackfillMemory()).toEqual({ triggered: false, reason: "no-hivemind-bin" });
+  it("skips when no memoree launcher is found (hasLauncher closure → null)", () => {
+    vi.mocked(findMemoreeLauncher).mockReturnValue(null);
+    expect(maybeAutoBackfillMemory()).toEqual({ triggered: false, reason: "no-memoree-bin" });
   });
 
   it("rolls back when acquireLock throws (openSync wx fails)", () => {
@@ -110,7 +110,7 @@ describe("maybeAutoBackfillMemory wiring", () => {
   });
 
   it("uses the node-script launcher form (node <cli.js> memory backfill)", () => {
-    vi.mocked(findHivemindLauncher).mockReturnValue({ kind: "node-script", path: "/bundle/cli.js" });
+    vi.mocked(findMemoreeLauncher).mockReturnValue({ kind: "node-script", path: "/bundle/cli.js" });
     const r = maybeAutoBackfillMemory();
     expect(r).toEqual({ triggered: true });
     const [cmd, args] = vi.mocked(spawn).mock.calls[0];
@@ -121,8 +121,8 @@ describe("maybeAutoBackfillMemory wiring", () => {
   it("returns spawn-failed if the launcher vanishes between the guard and realSpawn", () => {
     // hasLauncher() sees a launcher, but realSpawn()'s re-resolve returns null
     // → realSpawn returns false → spawn-failed (covers the defensive re-check).
-    vi.mocked(findHivemindLauncher)
-      .mockReturnValueOnce({ kind: "bin", path: "/usr/bin/hivemind" })
+    vi.mocked(findMemoreeLauncher)
+      .mockReturnValueOnce({ kind: "bin", path: "/usr/bin/memoree" })
       .mockReturnValueOnce(null);
     expect(maybeAutoBackfillMemory()).toEqual({ triggered: false, reason: "spawn-failed" });
     expect(spawn).not.toHaveBeenCalled();

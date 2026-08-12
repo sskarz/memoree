@@ -8,7 +8,7 @@ function makeSnap(nodes: Array<{ id: string; sourceFile: string }>): GraphSnapsh
   return {
     directed: true,
     multigraph: true,
-    graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: "abc1234", repo_key: "test" },
+    graph: { schema_version: 1, generator: "memoree-graph", commit_sha: "abc1234", repo_key: "test" },
     observation: {
       ts: "2026-06-03T00:00:00Z",
       branch: "main",

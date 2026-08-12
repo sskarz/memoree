@@ -76,7 +76,7 @@ export interface OnboardingResult {
   asked: boolean;
 }
 
-export const STATUS_HINT = "See sync status anytime with: hivemind docs list";
+export const STATUS_HINT = "See sync status anytime with: memoree docs list";
 
 /** Run the two-question consent flow. Fail-closed on every branch. */
 export async function runDocsOnboarding(args: OnboardingArgs): Promise<OnboardingResult> {
@@ -86,7 +86,7 @@ export async function runDocsOnboarding(args: OnboardingArgs): Promise<Onboardin
   if (!args.isGitRepo) {
     io.say(rootLine);
     io.say("Auto doc sync requires a git repository (it reacts to commits).");
-    io.say("Docs can still be generated manually with: hivemind docs wiki");
+    io.say("Docs can still be generated manually with: memoree docs wiki");
     return { generate: false, auto: false, asked: false };
   }
   if (!io.interactive) {
@@ -99,7 +99,7 @@ export async function runDocsOnboarding(args: OnboardingArgs): Promise<Onboardin
   const estimate = pages !== null ? `~${pages} pages, one-time LLM cost` : "one-time LLM cost";
   const genAnswer = await io.ask(`Generate wiki docs for this repo now? (${estimate}) [y/N] `);
   if (!YES.test(genAnswer.trim())) {
-    io.say("Skipped. Generate later with: hivemind docs wiki");
+    io.say("Skipped. Generate later with: memoree docs wiki");
     io.say(STATUS_HINT);
     return { generate: false, auto: false, asked: true };
   }
@@ -118,7 +118,7 @@ export async function runDocsOnboarding(args: OnboardingArgs): Promise<Onboardin
       )).trim().toLowerCase();
       const chosen = available.includes(raw) ? raw : available[0];
       setAgent(chosen);
-      io.say(`Docs will be authored by: ${chosen}. Change with: hivemind docs agent <name>`);
+      io.say(`Docs will be authored by: ${chosen}. Change with: memoree docs agent <name>`);
     }
   }
 
@@ -128,9 +128,9 @@ export async function runDocsOnboarding(args: OnboardingArgs): Promise<Onboardin
   const auto = YES.test(autoAnswer.trim());
   if (auto) {
     setAuto({ orgId: args.orgId, orgName: args.orgName, project: args.project, path: args.root, auto: true });
-    io.say(`Auto sync ON for this repo on org ${args.orgName ?? args.orgId}. Turn off with: hivemind docs auto off`);
+    io.say(`Auto sync ON for this repo on org ${args.orgName ?? args.orgId}. Turn off with: memoree docs auto off`);
   } else {
-    io.say("Manual mode: sync when you want with: hivemind docs sync");
+    io.say("Manual mode: sync when you want with: memoree docs sync");
   }
   io.say(STATUS_HINT);
   return { generate: true, auto, asked: true };

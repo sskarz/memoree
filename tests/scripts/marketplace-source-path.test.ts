@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Regression guard for the SSO/plugin-install failure where
-// `claude plugin install hivemind` died with:
+// `claude plugin install memoree` died with:
 //   "Subdirectory 'claude-code' not found in repository ... at the specified ref/s"
 //
 // Root cause: commit 0fdfe698 ("consolidate agent harnesses under harnesses/")

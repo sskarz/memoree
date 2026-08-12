@@ -5,14 +5,14 @@
  * THE BUG THIS FIXES (production: ~56% of summaries stuck at 'in progress',
  * ~75% with NULL embeddings):
  *
- * The memory table has NO unique constraint on `path` (see deeplake-schema.ts
+ * The memory table has NO unique constraint on `path` (see storage/schema.ts
  * MEMORY_COLUMNS — `path` is just `TEXT NOT NULL DEFAULT ''`). The original
  * createPlaceholder did:
  *
  *     SELECT path ... WHERE path = $p LIMIT 1   -- guard
  *     if (rows.length === 0) INSERT placeholder  -- create
  *
- * That SELECT-then-INSERT is a TOCTOU race. Deeplake reads are
+ * That SELECT-then-INSERT is a TOCTOU race. Memoree reads are
  * eventually-consistent, so a *second* SessionStart for the SAME session id
  * (a `--resume`, a `source: resume|clear` re-fire, or two near-simultaneous
  * SessionStart invocations) can read ZERO rows even though the wiki worker
@@ -42,10 +42,10 @@
 
 import { sqlStr } from "../../utils/sql.js";
 import { projectNameFromCwd } from "../../utils/project-name.js";
-import type { StorageDialect } from "../../deeplake-schema.js";
+import type { StorageDialect } from "../../storage/schema.js";
 import { escapedStringPrefix } from "../../storage/sql-dialect.js";
 
-/** Minimal query surface — matches DeeplakeApi.query / the worker `query` fn. */
+/** Minimal query surface — matches MemoreeApi.query / the worker `query` fn. */
 export type PlaceholderQueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
 
 export interface PlaceholderParams {
@@ -106,7 +106,7 @@ export function buildPlaceholderInsertSql(params: PlaceholderParams): { sql: str
   ].join("\n");
   const filename = `${sessionId}.md`;
   const sizeBytes = Buffer.byteLength(content, "utf-8");
-  const stringPrefix = escapedStringPrefix(params.dialect ?? "deeplake");
+  const stringPrefix = escapedStringPrefix(params.dialect ?? "postgres");
 
   // Single atomic statement: the row is created only when no row exists at this
   // path. Closes the SELECT-then-INSERT race that produced duplicate stubs

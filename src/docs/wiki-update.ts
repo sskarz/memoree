@@ -19,7 +19,7 @@
  *   - the model's patch blows the bounded-edit budget (a "patch" that
  *     rewrites the page is a regen wearing a trench coat).
  *
- * Writes go through `editDoc` → one UPDATE (the Deeplake coalescing rule).
+ * Writes go through `editDoc` → one UPDATE (the Memoree coalescing rule).
  */
 
 import { gateDocEdit } from "./gate.js";
@@ -210,7 +210,7 @@ export async function updateWikiPage(args: WikiUpdateArgs): Promise<WikiUpdateOu
     let res: { version: number };
     if (pageScope === targetScope) {
       // In-place patch of the row that already exists at this scope (main, or an
-      // existing branch overlay). One UPDATE — the Deeplake coalescing rule.
+      // existing branch overlay). One UPDATE — the Memoree coalescing rule.
       res = await editDoc(
         args.query,
         args.tableName,

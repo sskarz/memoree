@@ -12,7 +12,7 @@
 
 This sub-feature is the canvas. It takes the codebase-graph snapshot that already exists on disk and draws it as an interactive, force-directed node-link graph inside the Cursor dashboard Webview. It is the first thing a developer sees when they open the Graph view, and it is the surface every other PRD-004 capability layers on top of: PRD-004b's editor sync highlights nodes here, and PRD-004c's impact overlay colors a subset of these nodes.
 
-The value is comprehension. The codebase graph is the most information-dense artifact Hivemind produces (`src/graph/types.ts:23-41`), and until now a human could only experience it as text tables (`src/graph/render/`) or an external-browser HTML file (`src/dashboard/render.ts`). This pane turns it into a living picture the developer can pan, zoom, filter, and read at a glance, rendered from the exact same bytes the agent VFS reads, so the human view and the agent context are guaranteed to match. Nothing here re-extracts or re-computes the graph; it reads the snapshot and draws it.
+The value is comprehension. The codebase graph is the most information-dense artifact Memoree produces (`src/graph/types.ts:23-41`), and until now a human could only experience it as text tables (`src/graph/render/`) or an external-browser HTML file (`src/dashboard/render.ts`). This pane turns it into a living picture the developer can pan, zoom, filter, and read at a glance, rendered from the exact same bytes the agent VFS reads, so the human view and the agent context are guaranteed to match. Nothing here re-extracts or re-computes the graph; it reads the snapshot and draws it.
 
 ---
 
@@ -30,7 +30,7 @@ The graph also already knows its own shape well enough to render meaningfully: n
 - Encode node meaning visually: distinguish node `kind`, surface `exported` vs internal, and size or weight nodes by `fan_in` / `fan_out` so hubs and entrypoints stand out (`src/graph/types.ts:92-125`, `src/graph/node-metadata.ts:18-32`).
 - Encode edge meaning visually: distinguish `relation` types and show direction (caller to callee, importer to imported), consistent with the directed-multigraph contract (`src/graph/types.ts:23-41`).
 - Let the developer filter and focus the graph: by layer (`layerOf`, `src/graph/render/layers.ts:21-30`), by node kind, by edge relation, and by a text match on node id/label consistent with the VFS `find` semantics (`src/graph/vfs-handler.ts:322-360`).
-- Stay performant at the snapshot sizes Hivemind produces by applying level-of-detail or an intelligently filtered initial view above a node/edge threshold, instead of attempting to force-lay-out everything at once.
+- Stay performant at the snapshot sizes Memoree produces by applying level-of-detail or an intelligently filtered initial view above a node/edge threshold, instead of attempting to force-lay-out everything at once.
 - Render honest states for every non-happy path: no snapshot, a stale snapshot, an oversized graph, and a malformed snapshot each get a coherent, explained view, never a blank canvas or a crash.
 
 ## Non-Goals
@@ -38,7 +38,7 @@ The graph also already knows its own shape well enough to render meaningfully: n
 - **Loading or parsing strategy beyond the existing resolver.** This pane consumes `resolveSnapshot` output (`src/dashboard/data.ts:141-209`); it does not re-derive the snapshot location, re-validate the content hash, or re-extract source.
 - **Editor navigation.** Click-to-open and cursor-to-node highlighting are PRD-004b. This pane renders the graph and exposes node identity; it does not own editor interaction.
 - **Impact / blast-radius coloring.** Highlighting dependents of unstaged changes is PRD-004c. This pane provides the base rendering and a highlight API that PRD-004c drives.
-- **Triggering builds.** A "Build" or "Refresh" action routes to PRD-003b's settings manager (`prd-003b-settings-manager.md`); this pane does not invoke `hivemind graph build` itself.
+- **Triggering builds.** A "Build" or "Refresh" action routes to PRD-003b's settings manager (`prd-003b-settings-manager.md`); this pane does not invoke `memoree graph build` itself.
 - **Editing the graph or the code.** Nodes are read-only visual representations; the pane does not rename, delete, or move symbols.
 - **Inventing new graph metrics.** Node weighting uses the metadata already on the snapshot (`fan_in`, `fan_out`, `is_entrypoint`); this pane does not compute new centrality measures.
 
@@ -150,7 +150,7 @@ Every failure mode the data layer and VFS already handle gets a visual equivalen
 
 ## Open questions
 
-- [ ] Which force-layout library performs acceptably inside a Cursor Webview at Hivemind's snapshot sizes, and should 3D be offered as a toggle or deferred entirely?
+- [ ] Which force-layout library performs acceptably inside a Cursor Webview at Memoree's snapshot sizes, and should 3D be offered as a toggle or deferred entirely?
 - [ ] Should the default node granularity be symbol-level (every `GraphNode`), file-level (collapsed by `source_file`), or a collapsible hierarchy, given the snapshot supports both?
 - [ ] What exact node/edge count is the smooth-render threshold in a Webview, and is it fixed or adaptive to the machine?
 - [ ] When reducing an oversized graph, is "top-N by `fan_in`" or "layer-collapsed super-nodes" the more useful default initial view?

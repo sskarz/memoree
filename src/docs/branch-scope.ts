@@ -9,7 +9,7 @@
  * There is deliberately NO per-user dimension in the cloud scope. Private docs
  * (generated from code that is only in a local, unpushed commit) never enter
  * the shared table at all — they live in a local store. So the only scopes that
- * reach Deeplake are `main` and `b:<branch>`, and a pushed branch doc is shared
+ * reach Memoree are `main` and `b:<branch>`, and a pushed branch doc is shared
  * by the branch, not owned by a user (two teammates on the same branch push to
  * the same origin/<branch>, so the doc converges — last write wins).
  *

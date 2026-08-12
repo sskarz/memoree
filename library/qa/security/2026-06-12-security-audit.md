@@ -1,7 +1,7 @@
 # Security Audit Report
 
 **Date:** 2026-06-12
-**Branch:** hivemind-doc-reverse-document (worktree)
+**Branch:** memoree-doc-reverse-document (worktree)
 **Auditor:** security-guardian
 **Scope:** `library/knowledge/private/**/*.md` (22 markdown documentation files)
 **Stack note:** Documentation-only audit. No executable code in scope. CVE version checks and `npm audit` are not applicable to markdown files; OWASP and PII catalogs applied to documentation content instead.
@@ -35,7 +35,7 @@ legitimate first-party or well-known third-party services.
 | `auth/auth-architecture.md` | - | PASS |
 | `collaboration/team-skills-sharing.md` | - | PASS |
 | `data/codebase-graph.md` | - | PASS |
-| `data/deeplake-tables-schema.md` | - | PASS |
+| `data/memoree-tables-schema.md` | - | PASS |
 | `data/memory-virtual-filesystem.md` | - | PASS |
 | `frontend/cursor-extension-architecture.md` | - | PASS |
 | `infrastructure/monorepo-build-release.md` | - | PASS |
@@ -64,7 +64,7 @@ Patterns checked:
 - GitHub tokens (`ghp_`, `ghs_`)
 - Supabase anon/service keys (full JWT)
 - High-entropy base64 strings (>=32 chars, not labeled placeholder)
-- WorkOS / DeepLake API key values
+- WorkOS / Memoree API key values
 - Any `API_KEY=<value>` assignments with real-looking values
 
 One reviewed match in `security/credential-storage.md:72`:
@@ -86,8 +86,8 @@ Patterns checked:
 - `` eval $( `cmd` ) ``, `exec curl`
 
 The only chmod permissions mentioned in documentation are:
-- `0700` (`rwx------`) on `~/.deeplake/` - restrictive (owner only)
-- `0600` (`rw-------`) on `~/.deeplake/credentials.json` - restrictive (owner only)
+- `0700` (`rwx------`) on `~/.memoree/` - restrictive (owner only)
+- `0600` (`rw-------`) on `the removed cloud credentials file` - restrictive (owner only)
 
 These are security-positive patterns documenting correct least-privilege file permissions.
 
@@ -121,7 +121,7 @@ Patterns checked:
 All URLs found in the documentation:
 | URL | File | Assessment |
 |---|---|---|
-| `https://api.deeplake.ai` | `security/credential-storage.md`, `multi-tenant/org-workspace-model.md` | Legitimate - Activeloop/DeepLake production API |
+| `the removed hosted endpoint` | `security/credential-storage.md`, `multi-tenant/org-workspace-model.md` | Legitimate - sskarz/Memoree production API |
 
 No other external URLs were present in the 22 files.
 
@@ -130,7 +130,7 @@ No other external URLs were present in the 22 files.
 ## Observations (Informational - No Action Required)
 
 **OBS-1 [Low] - No keychain integration documented as a known tradeoff**
-`security/credential-storage.md` Section 6 explicitly acknowledges that `~/.deeplake/credentials.json` is not protected by an OS keychain. This is documented as a deliberate tradeoff (cross-platform compatibility). The mitigations (mode 0600, 365-day org-bound token, env-var override for CI) are clearly described. No change needed in documentation; the tradeoff is accurately stated.
+`security/credential-storage.md` Section 6 explicitly acknowledges that `the removed cloud credentials file` is not protected by an OS keychain. This is documented as a deliberate tradeoff (cross-platform compatibility). The mitigations (mode 0600, 365-day org-bound token, env-var override for CI) are clearly described. No change needed in documentation; the tradeoff is accurately stated.
 
 **OBS-2 [Low] - JWT decoded without verification (auth-architecture.md)**
 `auth-architecture.md` Section 4 documents that `decodeJwtPayload()` does not verify the JWT signature. The document accurately explains the rationale (routing only, not access control; server-side verification covers security). This is a correct description of a standard pattern. No change needed.

@@ -3,17 +3,17 @@
  *
  * Cursor 1.7+ docs: https://cursor.com/docs/agent/hooks
  *
- * When the agent runs a Shell command that targets `~/.deeplake/memory/`,
+ * When the agent runs a Shell command that targets `~/.memoree/memory/`,
  * we want to:
  *   - parse the bash command (grep / rg / egrep / fgrep)
- *   - run a single SQL fast-path query against the deeplake `memory` and
- *     `sessions` tables (via the same `searchDeeplakeTables` primitive that
+ *   - run a single SQL fast-path query against the memoree `memory` and
+ *     `sessions` tables (via the same `searchMemoreeTables` primitive that
  *     Claude Code, Codex, and OpenClaw use), and
  *   - return an `updated_input` that replaces the original command with
  *     `echo <result>` so Cursor still "runs" something but sees the
  *     pre-computed answer.
  *
- * Result: Cursor recall against `~/.deeplake/memory/` matches Claude Code's
+ * Result: Cursor recall against `~/.memoree/memory/` matches Claude Code's
  * accuracy and speed (one SQL query) instead of streaming many readdir/open
  * roundtrips through the virtual filesystem. Lifts Cursor from Tier 3 to
  * Tier 1 in the per-agent accuracy ladder.
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
   if (typeof command !== "string" || command.length === 0) return;
   if (!touchesMemory(command)) return; // not aimed at our mount — let Cursor run it
 
-  // Translate host paths (~/.deeplake/memory, $HOME/..., absolute) to the
+  // Translate host paths (~/.memoree/memory, $HOME/..., absolute) to the
   // virtual mount root "/" before parsing — same step Claude / Codex run.
   const rewritten = rewritePaths(command);
 
@@ -73,11 +73,11 @@ async function main(): Promise<void> {
   const graphBody = tryGraphRead(rewritten, input.cwd ?? process.cwd());
   if (graphBody !== null) {
     log(`graph vfs intercept: ${command.slice(0, 80)}`);
-    const echoCmd = `cat <<'__HIVEMIND_RESULT__'\n${graphBody}\n__HIVEMIND_RESULT__`;
+    const echoCmd = `cat <<'__MEMOREE_RESULT__'\n${graphBody}\n__MEMOREE_RESULT__`;
     process.stdout.write(JSON.stringify({
       permission: "allow",
       updated_input: { command: echoCmd },
-      agent_message: "[Hivemind graph]",
+      agent_message: "[Memoree graph]",
     }));
     return;
   }
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   // Docs VFS dispatch — a cat of /docs/* (browse or find/) answered from the
   // docs table, same rewrite trick as the graph dispatch above. Runs before the
   // grep parse so `cat /docs/find/x` (not a grep) isn't left to Cursor's host bash.
-  const docsTable = process.env["HIVEMIND_DOCS_TABLE"] ?? config.docsTableName;
+  const docsTable = process.env["MEMOREE_DOCS_TABLE"] ?? config.docsTableName;
   // Fail OPEN like the grep path below: a throw here would crash the hook
   // without a decision and let a memory-touching command reach the host shell.
   let docsBody: string | null = null;
@@ -105,11 +105,11 @@ async function main(): Promise<void> {
   }
   if (docsBody !== null) {
     log(`docs vfs intercept: ${command.slice(0, 80)}`);
-    const echoCmd = `cat <<'__HIVEMIND_RESULT__'\n${docsBody}\n__HIVEMIND_RESULT__`;
+    const echoCmd = `cat <<'__MEMOREE_RESULT__'\n${docsBody}\n__MEMOREE_RESULT__`;
     process.stdout.write(JSON.stringify({
       permission: "allow",
       updated_input: { command: echoCmd },
-      agent_message: "[Hivemind docs]",
+      agent_message: "[Memoree docs]",
     }));
     return;
   }
@@ -126,11 +126,11 @@ async function main(): Promise<void> {
     log(`intercepted ${command.slice(0, 80)} → ${result.length} chars from SQL fast-path`);
     // Replace the original Shell command with `echo <result>` so Cursor's
     // own bash runs a no-op-ish command and the agent sees our SQL answer.
-    const echoCmd = `cat <<'__HIVEMIND_RESULT__'\n${result}\n__HIVEMIND_RESULT__`;
+    const echoCmd = `cat <<'__MEMOREE_RESULT__'\n${result}\n__MEMOREE_RESULT__`;
     process.stdout.write(JSON.stringify({
       permission: "allow",
       updated_input: { command: echoCmd },
-      agent_message: `[Hivemind direct] ${grepParams.pattern}`,
+      agent_message: `[Memoree direct] ${grepParams.pattern}`,
     }));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

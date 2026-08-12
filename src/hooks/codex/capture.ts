@@ -38,7 +38,7 @@ import {
 } from "../summary-state.js";
 import { bundleDirFromImportMeta, spawnCodexWikiWorker, wikiLog } from "./spawn-wiki-worker.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
-import { isHivemindPluginEnabled } from "../../utils/plugin-state.js";
+import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 import { reactSkillOpt } from "../shared/skillopt-hook.js";
 const log = (msg: string) => _log("codex-capture", msg);
 
@@ -51,7 +51,7 @@ const PLUGIN_VERSION = getInstalledVersion(__bundleDir, ".codex-plugin") ?? "";
 
 // Self-heal the shared-deps symlink for this plugin version. Marketplace
 // auto-upgrades drop new versioned cache dirs without the symlink that
-// `hivemind embeddings install` originally created; this restores it on
+// `memoree embeddings install` originally created; this restores it on
 // first capture after each upgrade.
 if (!embeddingsDisabled()) {
   try { ensurePluginNodeModulesLink({ bundleDir: __bundleDir }); } catch { /* best-effort */ }
@@ -73,11 +73,11 @@ interface CodexHookInput {
   tool_response?: Record<string, unknown>;
 }
 
-const CAPTURE = process.env.HIVEMIND_CAPTURE !== "false";
+const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
 
 async function main(): Promise<void> {
   if (!CAPTURE) return;
-  if (!isHivemindPluginEnabled()) { log("plugin disabled, skipping capture"); return; }
+  if (!isMemoreePluginEnabled()) { log("plugin disabled, skipping capture"); return; }
   const input = await readStdin<CodexHookInput>();
   const config = resolveCaptureConfig(input.cwd ?? process.cwd(), log);
   if (!config) return;
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
   const jsonForSql = line.replace(/'/g, "''");
 
   // Best-effort embed: if the daemon is unavailable (no @huggingface/transformers
-  // or HIVEMIND_EMBEDDINGS=false), embed() returns null and the column lands NULL.
+  // or MEMOREE_EMBEDDINGS=false), embed() returns null and the column lands NULL.
   const embedding = embeddingsDisabled()
     ? null
     : await new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() }).embed(line, "document");
@@ -187,7 +187,7 @@ async function main(): Promise<void> {
 }
 
 function maybeTriggerPeriodicSummary(sessionId: string, cwd: string, config: Config): void {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   try {
     const state = bumpTotalCount(sessionId);

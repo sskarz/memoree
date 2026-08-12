@@ -1,5 +1,5 @@
 /**
- * Manifest of skills installed via `hivemind skillify pull`.
+ * Manifest of skills installed via `memoree skillify pull`.
  *
  * Why a manifest instead of just heuristics on directory names:
  * the `<name>--<author>/` convention used by `pull` is a legitimate
@@ -10,7 +10,7 @@
  * style. The manifest gives `unpull` an authoritative list of what
  * skillify actually wrote, so anything outside that list is left alone.
  *
- * File: ~/.deeplake/state/skillify/pulled.json
+ * File: ~/.memoree/state/skillify/pulled.json
  *
  * Atomicity: writes go to a sibling .tmp file and rename in place, so
  * a crash mid-write leaves either the pre-write state or the new state
@@ -73,9 +73,9 @@ function emptyManifest(): PulledManifest {
 }
 
 // Routed through `getStateDir()` so the pulled-skills manifest lives next
-// to the rest of skillify state (`HIVEMIND_STATE_DIR`-aware). Without
+// to the rest of skillify state (`MEMOREE_STATE_DIR`-aware). Without
 // this, tests that called `recordPull` / `unlinkSymlinks` would still
-// write `pulled.json` into the developer's real `~/.deeplake` while the
+// write `pulled.json` into the developer's real `~/.memoree` while the
 // lock and counter state landed in the tmp dir — inconsistent state
 // across the same directory tree.
 export function manifestPath(): string {

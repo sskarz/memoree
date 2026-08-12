@@ -1,14 +1,15 @@
-import { readFileSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
 import { homedir, userInfo } from "node:os";
+import { join, resolve } from "node:path";
 import { readUserConfig } from "./user-config.js";
 
-export type StorageProvider = "deeplake" | "sqlite" | "postgres";
+export type StorageProvider = "sqlite" | "postgres";
 
 export interface CommonStorageConfig {
   kind: StorageProvider;
   userName: string;
   workspaceId: string;
+  orgId: string;
+  orgName: string;
   tableName: string;
   sessionsTableName: string;
   skillsTableName: string;
@@ -21,73 +22,31 @@ export interface CommonStorageConfig {
   vectorScanLimit: number;
 }
 
-export interface DeeplakeStorageConfig extends CommonStorageConfig {
-  kind: "deeplake";
-  apiUrl: string;
-  token: string;
-  orgId: string;
-  orgName: string;
-}
-
 export interface SqliteStorageConfig extends CommonStorageConfig {
   kind: "sqlite";
   path: string;
-  orgId: "local";
-  orgName: "local";
 }
 
 export interface PostgresStorageConfig extends CommonStorageConfig {
   kind: "postgres";
   connectionUrl: string;
   schema: string;
-  orgId: "local";
-  orgName: "local";
 }
 
-export type StorageConfig = DeeplakeStorageConfig | SqliteStorageConfig | PostgresStorageConfig;
+export type StorageConfig = SqliteStorageConfig | PostgresStorageConfig;
 
-/**
- * Runtime configuration. Legacy Deeplake-shaped fields remain present so
- * older integrations and third-party harnesses continue to compile. New code
- * should use `storage`, whose discriminant is the provider kind.
- */
-export interface Config {
-  storage?: StorageConfig;
-  token: string;
-  orgId: string;
-  orgName: string;
-  userName: string;
-  workspaceId: string;
-  apiUrl: string;
-  tableName: string;
-  sessionsTableName: string;
-  skillsTableName: string;
-  rulesTableName: string;
-  goalsTableName: string;
-  kpisTableName: string;
-  docsTableName: string;
-  codebaseTableName: string;
-  memoryPath: string;
-  vectorScanLimit?: number;
+export interface Config extends CommonStorageConfig {
+  storage: StorageConfig;
 }
 
-interface Credentials {
-  token: string;
-  orgId: string;
-  orgName?: string;
-  userName?: string;
-  workspaceId?: string;
-  apiUrl?: string;
-}
-
-const PROVIDERS = new Set<StorageProvider>(["deeplake", "sqlite", "postgres"]);
+const PROVIDERS = new Set<StorageProvider>(["sqlite", "postgres"]);
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function providerFrom(raw: unknown): StorageProvider {
   const value = typeof raw === "string" ? raw.toLowerCase() : "";
+  if (!value) return "sqlite";
   if (!PROVIDERS.has(value as StorageProvider)) {
-    if (value) throw new Error(`Invalid HIVEMIND_BACKEND: ${String(raw)}`);
-    return "deeplake";
+    throw new Error(`Invalid MEMOREE_BACKEND: ${String(raw)}`);
   }
   return value as StorageProvider;
 }
@@ -98,108 +57,50 @@ function positiveInteger(raw: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function commonStorage(home: string, creds: Credentials | null): Omit<CommonStorageConfig, "kind"> {
+function commonStorage(home: string): Omit<CommonStorageConfig, "kind"> {
+  const persisted = readUserConfig();
   return {
-    userName: creds?.userName || userInfo().username || "unknown",
-    workspaceId: process.env.HIVEMIND_WORKSPACE_ID ?? creds?.workspaceId ?? "default",
-    tableName: process.env.HIVEMIND_TABLE ?? "memory",
-    sessionsTableName: process.env.HIVEMIND_SESSIONS_TABLE ?? "sessions",
-    skillsTableName: process.env.HIVEMIND_SKILLS_TABLE ?? "skills",
-    rulesTableName: process.env.HIVEMIND_RULES_TABLE ?? "hivemind_rules",
-    goalsTableName: process.env.HIVEMIND_GOALS_TABLE ?? "hivemind_goals",
-    kpisTableName: process.env.HIVEMIND_KPIS_TABLE ?? "hivemind_kpis",
-    docsTableName: process.env.HIVEMIND_DOCS_TABLE ?? "hivemind_docs",
-    codebaseTableName: process.env.HIVEMIND_CODEBASE_TABLE ?? "codebase",
-    memoryPath: process.env.HIVEMIND_MEMORY_PATH ?? join(home, ".deeplake", "memory"),
-    vectorScanLimit: positiveInteger(process.env.HIVEMIND_VECTOR_SCAN_LIMIT, 2000),
+    userName: process.env.MEMOREE_USER_NAME ?? persisted.userName ?? userInfo().username ?? "local",
+    workspaceId: process.env.MEMOREE_REPOSITORY_KEY ?? "default",
+    orgId: "local",
+    orgName: "local",
+    tableName: process.env.MEMOREE_TABLE ?? "memory",
+    sessionsTableName: process.env.MEMOREE_SESSIONS_TABLE ?? "sessions",
+    skillsTableName: process.env.MEMOREE_SKILLS_TABLE ?? "skills",
+    rulesTableName: process.env.MEMOREE_RULES_TABLE ?? "memoree_rules",
+    goalsTableName: process.env.MEMOREE_GOALS_TABLE ?? "memoree_goals",
+    kpisTableName: process.env.MEMOREE_KPIS_TABLE ?? "memoree_kpis",
+    docsTableName: process.env.MEMOREE_DOCS_TABLE ?? "memoree_docs",
+    codebaseTableName: process.env.MEMOREE_CODEBASE_TABLE ?? "codebase",
+    memoryPath: process.env.MEMOREE_MEMORY_PATH ?? join(home, ".memoree", "memory"),
+    vectorScanLimit: positiveInteger(process.env.MEMOREE_VECTOR_SCAN_LIMIT, 2000),
   };
 }
 
 export function loadStorageConfig(): StorageConfig | null {
   const home = homedir();
-  const credPath = join(home, ".deeplake", "credentials.json");
-  let creds: Credentials | null = null;
-  if (existsSync(credPath)) {
-    try {
-      creds = JSON.parse(readFileSync(credPath, "utf-8"));
-    } catch {
-      creds = null;
-    }
-  }
-
   const persisted = readUserConfig().storage;
-  const provider = providerFrom(process.env.HIVEMIND_BACKEND ?? persisted?.provider);
-  const common = commonStorage(home, creds);
+  const provider = providerFrom(process.env.MEMOREE_BACKEND ?? persisted?.provider);
+  const common = commonStorage(home);
 
   if (provider === "sqlite") {
-    const path = process.env.HIVEMIND_SQLITE_PATH ?? persisted?.sqlitePath ?? join(home, ".deeplake", "hivemind.sqlite3");
-    return { ...common, kind: "sqlite", path: resolve(path), orgId: "local", orgName: "local" };
+    const path = process.env.MEMOREE_SQLITE_PATH ?? persisted?.sqlitePath ?? join(home, ".memoree", "memoree.sqlite3");
+    return { ...common, kind: "sqlite", path: resolve(path) };
   }
 
-  if (provider === "postgres") {
-    const connectionUrl = process.env.HIVEMIND_POSTGRES_URL;
-    if (!connectionUrl) return null;
-    const schema = process.env.HIVEMIND_POSTGRES_SCHEMA ?? persisted?.postgresSchema ?? "hivemind";
-    if (!IDENTIFIER.test(schema)) throw new Error(`Invalid PostgreSQL schema: ${schema}`);
-    return { ...common, kind: "postgres", connectionUrl, schema, orgId: "local", orgName: "local" };
-  }
-
-  const token = process.env.HIVEMIND_TOKEN ?? creds?.token;
-  const orgId = process.env.HIVEMIND_ORG_ID ?? creds?.orgId;
-  if (!token || !orgId) return null;
-  return {
-    ...common,
-    kind: "deeplake",
-    token,
-    orgId,
-    orgName: creds?.orgName ?? orgId,
-    apiUrl: process.env.HIVEMIND_API_URL ?? creds?.apiUrl ?? "https://api.deeplake.ai",
-  };
+  const connectionUrl = process.env.MEMOREE_POSTGRES_URL;
+  if (!connectionUrl) return null;
+  const schema = process.env.MEMOREE_POSTGRES_SCHEMA ?? persisted?.postgresSchema ?? "memoree";
+  if (!IDENTIFIER.test(schema)) throw new Error(`Invalid PostgreSQL schema: ${schema}`);
+  return { ...common, kind: "postgres", connectionUrl, schema };
 }
 
 export function configFromStorage(storage: StorageConfig): Config {
-  return {
-    storage,
-    token: storage.kind === "deeplake" ? storage.token : "",
-    apiUrl: storage.kind === "deeplake" ? storage.apiUrl : "",
-    orgId: storage.orgId,
-    orgName: storage.orgName,
-    userName: storage.userName,
-    workspaceId: storage.workspaceId,
-    tableName: storage.tableName,
-    sessionsTableName: storage.sessionsTableName,
-    skillsTableName: storage.skillsTableName,
-    rulesTableName: storage.rulesTableName,
-    goalsTableName: storage.goalsTableName,
-    kpisTableName: storage.kpisTableName,
-    docsTableName: storage.docsTableName,
-    codebaseTableName: storage.codebaseTableName,
-    memoryPath: storage.memoryPath,
-    vectorScanLimit: storage.vectorScanLimit,
-  };
+  return { ...storage, storage };
 }
 
 export function storageFromConfig(config: Config): StorageConfig {
-  if (config.storage) return config.storage;
-  return {
-    kind: "deeplake",
-    token: config.token,
-    apiUrl: config.apiUrl,
-    orgId: config.orgId,
-    orgName: config.orgName,
-    userName: config.userName,
-    workspaceId: config.workspaceId,
-    tableName: config.tableName,
-    sessionsTableName: config.sessionsTableName,
-    skillsTableName: config.skillsTableName,
-    rulesTableName: config.rulesTableName,
-    goalsTableName: config.goalsTableName,
-    kpisTableName: config.kpisTableName,
-    docsTableName: config.docsTableName,
-    codebaseTableName: config.codebaseTableName,
-    memoryPath: config.memoryPath,
-    vectorScanLimit: config.vectorScanLimit ?? 2000,
-  };
+  return config.storage;
 }
 
 export function loadConfig(): Config | null {

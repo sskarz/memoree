@@ -4,7 +4,7 @@
  * Claude Cowork (Anthropic's desktop Local Agent Mode) has no hook lifecycle
  * like Claude Code — it only talks to us through the MCP server, and that
  * channel is read-only (search/read/index). So Cowork conversations would
- * never land in Deeplake on their own.
+ * never land in Memoree on their own.
  *
  * Cowork's Local Agent Mode runs a real Claude Code instance under the hood
  * and writes standard Claude-Code transcript JSONL to:
@@ -33,7 +33,6 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { loadCredentials } from "../commands/auth.js";
 import { loadConfig, type Config } from "../config.js";
 import { createStorageBackend } from "../storage/factory.js";
 import { claudeDesktopConfigDir } from "../cli/util.js";
@@ -54,11 +53,11 @@ export const COWORK_AGENT = "claude_cowork";
 /** `project` column value — lets Cowork rows be filtered without a JSON dig. */
 const COWORK_PROJECT = "claude_cowork";
 
-const DEEPLAKE_DIR = join(homedir(), ".deeplake");
-const STATE_PATH = join(DEEPLAKE_DIR, "cowork-ingest-state.json");
-const LOCK_PATH = join(DEEPLAKE_DIR, ".cowork-ingest.lock");
-const COWORK_QUEUE_DIR = join(DEEPLAKE_DIR, "queue-cowork");
-const NOTICE_MARKER = join(DEEPLAKE_DIR, ".cowork-data-notice-shown");
+const MEMOREE_DIR = join(homedir(), ".memoree");
+const STATE_PATH = join(MEMOREE_DIR, "cowork-ingest-state.json");
+const LOCK_PATH = join(MEMOREE_DIR, ".cowork-ingest.lock");
+const COWORK_QUEUE_DIR = join(MEMOREE_DIR, "queue-cowork");
+const NOTICE_MARKER = join(MEMOREE_DIR, ".cowork-data-notice-shown");
 const LOCK_STALE_MS = 60_000;
 // Refresh the held lock's mtime well inside LOCK_STALE_MS so a long ingest is
 // never mistaken for a dead run and stolen mid-flight by a second process.
@@ -68,22 +67,22 @@ const LOCK_HEARTBEAT_MS = 20_000;
 const SUMMARY_IDLE_MS = 5 * 60_000;
 
 const DATA_NOTICE =
-  "ℹ️ Hivemind data notice: this Cowork session is being saved to your team's shared Hivemind memory " +
+  "ℹ️ Memoree data notice: this Cowork session is being saved to your team's shared Memoree memory " +
   "(your prompts, the assistant's responses, and tool calls) so agents and teammates can recall it later. " +
-  "Everyone in your Deeplake workspace can read it. To turn capture off, set HIVEMIND_CAPTURE=false. " +
+  "Data stays in your selected SQL backend. PostgreSQL schemas may be shared. To turn capture off, set MEMOREE_CAPTURE=false. " +
   "(This notice is shown once.)";
 
 /**
  * One-time consent/data notice for Cowork. Cowork has no SessionStart banner,
- * so the only place we can surface this is the first hivemind tool result.
+ * so the only place we can surface this is the first memoree tool result.
  * Returns the notice text exactly once (guarded by a marker file), and only
  * when Cowork capture is actually active; "" otherwise.
  */
 export function coworkDataNoticeOnce(): string {
   try {
-    if (process.env.HIVEMIND_CAPTURE === "false") return "";
+    if (process.env.MEMOREE_CAPTURE === "false") return "";
     if (!existsSync(coworkSessionsRoot())) return ""; // not a Cowork host → nothing captured
-    mkdirSync(DEEPLAKE_DIR, { recursive: true });
+    mkdirSync(MEMOREE_DIR, { recursive: true });
     // Atomic create-exclusive: the first caller to win the `wx` open writes the
     // marker and returns the notice; a racing Cowork process gets EEXIST and
     // returns "". Replaces a check-then-write (existsSync + writeFileSync) that
@@ -164,7 +163,7 @@ function loadState(): IngestState {
 }
 
 function saveState(state: IngestState): void {
-  mkdirSync(DEEPLAKE_DIR, { recursive: true });
+  mkdirSync(MEMOREE_DIR, { recursive: true });
   writeFileSync(STATE_PATH, JSON.stringify(state));
 }
 
@@ -245,7 +244,7 @@ export function entriesForLine(line: TranscriptLine): Record<string, unknown>[] 
 }
 
 function tryAcquireLock(): (() => void) | null {
-  mkdirSync(DEEPLAKE_DIR, { recursive: true });
+  mkdirSync(MEMOREE_DIR, { recursive: true });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const fd = openSync(LOCK_PATH, "wx");
@@ -289,7 +288,7 @@ function tryAcquireLock(): (() => void) | null {
  * and has un-summarized content. The worker reads the session rows we already
  * wrote to the sessions table (keyed by sessionId) and uploads a summary to
  * the memory table — same path every other agent uses, so Cowork sessions
- * appear in hivemind_index / recall. Best-effort: a missing `claude` binary or
+ * appear in memoree_index / recall. Best-effort: a missing `claude` binary or
  * a spawn failure is logged and skipped (the raw session is still captured).
  */
 export type SpawnSummaryFn = (sessionId: string) => void;
@@ -302,7 +301,7 @@ export function summarizeIdleSessions(
 ): void {
   const bundleDir = bundleDirFromImportMeta(import.meta.url);
   // Default end-of-session work for a Cowork session: a wiki summary (so it
-  // shows up in hivemind_index) AND a skillify mining pass — exactly what the
+  // shows up in memoree_index) AND a skillify mining pass — exactly what the
   // claude_code SessionEnd hook does. Each is independent and best-effort.
   const doSpawn: SpawnSummaryFn =
     spawn ??
@@ -348,17 +347,13 @@ export function summarizeIdleSessions(
  * would corrupt the MCP stdio channel).
  */
 export async function ingestCoworkSessions(): Promise<{ ingested: number } | { skipped: string }> {
-  if (process.env.HIVEMIND_CAPTURE === "false") return { skipped: "capture-disabled" };
+  if (process.env.MEMOREE_CAPTURE === "false") return { skipped: "capture-disabled" };
 
   const root = coworkSessionsRoot();
   if (!existsSync(root)) return { skipped: "no-cowork-sessions" };
 
-  const creds = loadCredentials();
   const config = loadConfig();
   if (!config) return { skipped: "no-config" };
-  if ((config.storage?.kind ?? "deeplake") === "deeplake" && !creds?.token) {
-    return { skipped: "not-authenticated" };
-  }
 
   const release = tryAcquireLock();
   if (!release) return { skipped: "busy" };

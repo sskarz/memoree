@@ -30,9 +30,7 @@ import { createWorkerStorage, queryWorkerStorage } from "../worker-storage.js";
 const dlog = (msg: string) => _log("hermes-wiki-worker", msg);
 
 interface WorkerConfig {
-  storage?: { kind: "deeplake" | "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
-  apiUrl?: string;
-  token?: string;
+  storage?: { kind: "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
   orgId?: string;
   workspaceId: string;
   memoryTable: string;
@@ -269,7 +267,7 @@ async function main(): Promise<void> {
         // summary. The summary is written to a file, not read from stdout, so
         // we only need headroom to drain it.
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+        env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
       });
       execSucceeded = true;
       wlog("hermes -z exited (code 0)");
@@ -317,7 +315,7 @@ async function main(): Promise<void> {
           sessionId: cfg.sessionId,
           text,
           embedding,
-          dialect: cfg.storage?.kind ?? "deeplake",
+          dialect: cfg.storage?.kind ?? "sqlite",
           pluginVersion: cfg.pluginVersion ?? "",
         });
         wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);

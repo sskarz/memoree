@@ -98,19 +98,19 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: hivemind_test
+          POSTGRES_DB: memoree_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d hivemind_test"
+          --health-cmd "pg_isready -U postgres -d memoree_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      HIVEMIND_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/hivemind_test
+      MEMOREE_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/memoree_test
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -131,6 +131,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Reject legacy product names and removed interfaces
+        run: npm run check:legacy
+
       - name: Build (typecheck + emit bundle artefacts)
         # `build` runs `tsc && esbuild`, which is a strict superset of
         # `typecheck` (the bare `tsc --noEmit` we used to run here). It
@@ -142,6 +145,9 @@ jobs:
         # directly. Without this rebuild they fail with ENOENT (see PR #98
         # — first CI run after the openclaw skillify wiring landed).
         run: npm run build
+
+      - name: Audit generated artifacts for legacy names
+        run: npm run check:legacy
 
       - name: Audit openclaw bundle against ClawHub static-scan rules
         # PR-time gate mirroring release.yml's audit step. Catches a
@@ -480,7 +486,7 @@ jobs:
     # only surfaced on `main` when release.yaml booted Node 24.12.
     #
     # This job runs the same install + build on every Node major the
-    # `engines` field admits, with HIVEMIND_STRICT_POSTINSTALL=1 so the
+    # `engines` field admits, with MEMOREE_STRICT_POSTINSTALL=1 so the
     # ensure-tree-sitter.mjs heal turns "WARNING: bindings still
     # unavailable" into a hard `exit 1` instead of swallowing it. The
     # result: a Node-24-only install regression now fails this canary
@@ -507,9 +513,9 @@ jobs:
         node-version: [22, 24]
     env:
       # Opt the heal into strict mode for our own CI runs only.
-      # Downstream consumers of @deeplake/hivemind never see this flag,
+      # Downstream consumers of memoree never see this flag,
       # so their install stays non-fatal.
-      HIVEMIND_STRICT_POSTINSTALL: "1"
+      MEMOREE_STRICT_POSTINSTALL: "1"
     steps:
       - uses: actions/checkout@v6.0.2
         with:
@@ -523,7 +529,7 @@ jobs:
 
       - name: Install dependencies
         # If the postinstall heal cannot make tree-sitter loadable under
-        # this Node major, HIVEMIND_STRICT_POSTINSTALL=1 makes ensure-
+        # this Node major, MEMOREE_STRICT_POSTINSTALL=1 makes ensure-
         # tree-sitter.mjs exit 1 here, failing the job at the earliest
         # possible step (instead of swallowing the warning and failing
         # later in tsc with a confusing "Cannot find module" error).

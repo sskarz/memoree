@@ -7,7 +7,7 @@
  *   2. Cattura il diff via `git show HEAD --no-color` (cap a N kB).
  *   3. Spawna l'LLM nativo dell'agent in background (`claude -p` per
  *      claude-code, `codex exec` per codex) con un prompt che gli dice
- *      di leggere `~/.deeplake/memory/goals/*.json`, filtrare ai goal
+ *      di leggere `~/.memoree/memory/goals/*.json`, filtrare ai goal
  *      dell'utente attivi, e bumpare qualunque KPI il diff abbia
  *      avanzato. Tutto detached, fire-and-forget.
  *   4. L'LLM scrive il file aggiornato → VFS → tabella memory →
@@ -17,13 +17,13 @@
  * gira due volte sullo stesso sha, il bump è doppio. L'utente lo
  * correggerà a mano editando il file.
  *
- * Env var `HIVEMIND_AUTO_KPI_FROM_COMMITS=false` disattiva globalmente.
+ * Env var `MEMOREE_AUTO_KPI_FROM_COMMITS=false` disattiva globalmente.
  */
 
 import { spawn } from "node:child_process";
 import { execSync } from "node:child_process";
 
-const ENV_DISABLE = "HIVEMIND_AUTO_KPI_FROM_COMMITS";
+const ENV_DISABLE = "MEMOREE_AUTO_KPI_FROM_COMMITS";
 const DIFF_MAX_CHARS = 16_000; // cap for prompt size; bigger diffs get truncated with a marker
 
 const GIT_COMMIT_RE = /^\s*git\s+commit\b/;
@@ -38,7 +38,7 @@ export interface CommitExtractInput {
 export interface CommitExtractOptions {
   /** Agent identifier — picks the LLM CLI to spawn. */
   agent: "claude-code" | "codex" | "cursor" | "hermes" | string;
-  /** user_email of the current Hivemind user. Used to scope goals. */
+  /** user_email of the current Memoree user. Used to scope goals. */
   currentUser: string;
   /** Optional explicit cwd (defaults to process.cwd()). */
   cwd?: string;
@@ -169,10 +169,10 @@ function buildPrompt(args: { currentUser: string; diff: string }): string {
   return [
     `A git commit just landed. Update any KPI advanced by this commit for goals owned by ${user}.`,
     "",
-    "Storage layout (Deeplake VFS, both opened and in-progress goals are eligible):",
-    `  ~/.deeplake/memory/goal/${user}/opened/<goal_id>.md          ← active goals`,
-    `  ~/.deeplake/memory/goal/${user}/in_progress/<goal_id>.md     ← in-progress goals`,
-    `  ~/.deeplake/memory/kpi/<goal_id>/<kpi_id>.md                  ← KPI files for that goal`,
+    "Storage layout (Memoree VFS, both opened and in-progress goals are eligible):",
+    `  ~/.memoree/memory/goal/${user}/opened/<goal_id>.md          ← active goals`,
+    `  ~/.memoree/memory/goal/${user}/in_progress/<goal_id>.md     ← in-progress goals`,
+    `  ~/.memoree/memory/kpi/<goal_id>/<kpi_id>.md                  ← KPI files for that goal`,
     "",
     "Each KPI file is plain markdown with mandatory key:value lines:",
     "  <KPI name>",
@@ -181,11 +181,11 @@ function buildPrompt(args: { currentUser: string; diff: string }): string {
     "  - unit: <string>",
     "",
     "Steps (sub-agent, run silently, no user-visible output):",
-    `1. ls ~/.deeplake/memory/goal/${user}/opened/ and ~/.deeplake/memory/goal/${user}/in_progress/. Collect every <goal_id>.md.`,
-    "2. For each goal_id, ls ~/.deeplake/memory/kpi/<goal_id>/ and read each KPI body.",
+    `1. ls ~/.memoree/memory/goal/${user}/opened/ and ~/.memoree/memory/goal/${user}/in_progress/. Collect every <goal_id>.md.`,
+    "2. For each goal_id, ls ~/.memoree/memory/kpi/<goal_id>/ and read each KPI body.",
     "3. Judge ONLY from clear, direct evidence in the diff whether the commit advanced any KPI. Be conservative — if unsure, do NOTHING for that KPI.",
     "4. If a KPI should be bumped: use the Edit tool on the matching kpi file to increment the `current:` line. DO NOT modify target, unit, name, or any other line. DO NOT change the path or the goal_id.",
-    "5. The VFS persists every write as a version-bump in hivemind_kpis. Multiple bumps across multiple KPIs are fine — just keep each Edit surgical.",
+    "5. The VFS persists every write as a version-bump in memoree_kpis. Multiple bumps across multiple KPIs are fine — just keep each Edit surgical.",
     "",
     "Constraints:",
     "- Do NOT create new goals or new KPI files.",

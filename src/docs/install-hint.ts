@@ -1,12 +1,12 @@
 /**
- * Docs onboarding shown once, on the FIRST `hivemind install`.
+ * Docs onboarding shown once, on the FIRST `memoree install`.
  *
- * `hivemind install` runs on a TTY, so this is the honest place to TELL the
+ * `memoree install` runs on a TTY, so this is the honest place to TELL the
  * user the docs feature exists and, crucially, how to turn it ON and OFF.
  * Both directions in one block so the user is never stuck: enabling and
  * disabling are one command each, and status is discoverable.
  *
- * Shown once: a sentinel file (`~/.deeplake/.docs-hint-shown`) is written the
+ * Shown once: a sentinel file (`~/.memoree/.docs-hint-shown`) is written the
  * first time the block prints, so re-running install stays quiet. The sentinel
  * is best-effort — if the write fails the worst case is the hint shows again,
  * never a broken install.
@@ -20,15 +20,15 @@ import { dirname, join, resolve } from "node:path";
 export function docsInstallLines(): string[] {
   return [
     "Docs (optional): keep per-file and per-subsystem documentation in sync with your code on every commit.",
-    "  Enable in a repo:  hivemind docs sync    (one-time consent; opt into per-commit auto-sync when asked)",
-    "  Turn it off later: hivemind docs auto off",
-    "  Check status:      hivemind docs list",
+    "  Enable in a repo:  memoree docs sync    (one-time consent; opt into per-commit auto-sync when asked)",
+    "  Turn it off later: memoree docs auto off",
+    "  Check status:      memoree docs list",
   ];
 }
 
 /**
- * Should `hivemind install` actively PROMPT the docs consent flow (the same
- * one `hivemind docs sync` runs) instead of just printing the hint? Only when
+ * Should `memoree install` actively PROMPT the docs consent flow (the same
+ * one `memoree docs sync` runs) instead of just printing the hint? Only when
  * we can ask a human (TTY), we are inside a git repo (docs are per-repo), we
  * are signed in (the consent writes to the org registry), and the resolved git
  * root is NOT the user's home directory. The home guard matters because a
@@ -59,7 +59,7 @@ export function shouldPromptDocsSetup(opts: {
 
 /** Sentinel marking that the install docs hint has been shown once. */
 export function docsHintSentinelPath(): string {
-  return process.env.HIVEMIND_DOCS_HINT_FILE ?? join(homedir(), ".deeplake", ".docs-hint-shown");
+  return process.env.MEMOREE_DOCS_HINT_FILE ?? join(homedir(), ".memoree", ".docs-hint-shown");
 }
 
 /** Has the install docs hint already been shown on this machine? */

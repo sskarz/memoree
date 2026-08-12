@@ -1,8 +1,8 @@
 /**
- * SessionStart auto-pull of skills from the org's `skills` Deeplake table.
+ * SessionStart auto-pull of skills from the org's `skills` Memoree table.
  *
  * Why: teammates mine reusable skills constantly via the skillify worker. Without
- * an auto-pull, every user has to remember to run `hivemind skillify pull
+ * an auto-pull, every user has to remember to run `memoree skillify pull
  * --all-users --to global` themselves. This module wires the pull into every
  * agent's SessionStart hook so freshly-mined skills become available without
  * manual intervention.
@@ -16,13 +16,13 @@
  *     a teammate who mines a new skill at 10:01 is visible to anyone who opens
  *     a session at 10:02, not anyone who opens at 10:32 (the old 30-min window).
  *   - Bounded by a 5-second timeout (overridable in tests via `timeoutMs`). A
- *     slow Deeplake never freezes SessionStart past that.
+ *     slow Memoree never freezes SessionStart past that.
  *   - All failures swallowed — SessionStart must succeed regardless.
- *   - Hard opt-out via `HIVEMIND_AUTOPULL_DISABLED=1`.
+ *   - Hard opt-out via `MEMOREE_AUTOPULL_DISABLED=1`.
  *   - Not-logged-in is a silent skip (no nag).
  *
  * Scope: install=global, users=[] (all-users), force=false. The result is
- * exactly equivalent to `hivemind skillify pull --all-users --to global`.
+ * exactly equivalent to `memoree skillify pull --all-users --to global`.
  */
 
 import { type Config } from "../config.js";
@@ -76,8 +76,8 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  */
 export async function autoPullSkills(deps: AutoPullDeps = {}): Promise<AutoPullResult> {
   // Hard opt-out: env flag short-circuits before any disk / config read.
-  if (process.env.HIVEMIND_AUTOPULL_DISABLED === "1") {
-    log("disabled via HIVEMIND_AUTOPULL_DISABLED=1");
+  if (process.env.MEMOREE_AUTOPULL_DISABLED === "1") {
+    log("disabled via MEMOREE_AUTOPULL_DISABLED=1");
     return { pulled: 0, skipped: true, reason: "disabled" };
   }
 
@@ -92,14 +92,14 @@ export async function autoPullSkills(deps: AutoPullDeps = {}): Promise<AutoPullR
   catch (e: any) { log(`legacy-cap migration failed (swallowed): ${e?.message ?? e}`); }
 
   // Not logged in → silent skip (no nag).
-  // Real callers get the routed config (nearest `.hivemind` for the session
+  // Real callers get the routed config (nearest `.memoree` for the session
   // cwd); tests inject their own loadConfigFn. No inline default fn so the
   // real path stays a plain call, not an extra uncovered closure.
   const config = deps.loadConfigFn
     ? deps.loadConfigFn()
     : loadRoutedConfig(deps.cwd ?? process.cwd());
   if (!config) {
-    log("skipped: not logged in");
+    log("skipped: storage unavailable");
     return { pulled: 0, skipped: true, reason: "not-logged-in" };
   }
 

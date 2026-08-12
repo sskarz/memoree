@@ -2,10 +2,24 @@ import { build } from "esbuild";
 import { chmodSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 
 const esmPackageJson = '{"type":"module"}\n';
-const hivemindVersion = JSON.parse(readFileSync("package.json", "utf-8")).version;
+const memoreeVersion = JSON.parse(readFileSync("package.json", "utf-8")).version;
 const openclawVersion = JSON.parse(readFileSync("harnesses/openclaw/package.json", "utf-8")).version;
 const openclawSkillBody = readFileSync("harnesses/openclaw/skills/SKILL.md", "utf-8");
-const openclawGraphSkillBody = readFileSync("harnesses/openclaw/skills/hivemind-graph/SKILL.md", "utf-8");
+const openclawGraphSkillBody = readFileSync("harnesses/openclaw/skills/memoree-graph/SKILL.md", "utf-8");
+
+// Every output directory previously accumulated content-hashed chunks and
+// bundles for removed entry points. Recreate them on every build so packaged
+// artifacts can never retain stale product names or dead cloud code.
+for (const dir of [
+  "bundle",
+  "harnesses/claude-code/bundle",
+  "harnesses/codex/bundle",
+  "harnesses/cursor/bundle",
+  "harnesses/hermes/bundle",
+  "harnesses/pi/bundle",
+  "harnesses/openclaw/dist",
+  "mcp/bundle",
+]) rmSync(dir, { recursive: true, force: true });
 
 // tree-sitter + language grammars ship native .node prebuilds esbuild can't
 // bundle; they're always external and resolved from node_modules at runtime.
@@ -68,7 +82,7 @@ async function buildGraphOnStop(outdir) {
       ...treeSitterExternals,
     ],
     define: {
-      __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
+      __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
     },
   });
   chmodSync(`${outdir}/graph-on-stop.js`, 0o755);
@@ -78,7 +92,6 @@ async function buildGraphOnStop(outdir) {
 const ccHooks = [
   { entry: "dist/src/hooks/session-start.js", out: "session-start" },
   { entry: "dist/src/hooks/session-start-setup.js", out: "session-start-setup" },
-  { entry: "dist/src/hooks/session-notifications.js", out: "session-notifications" },
   { entry: "dist/src/hooks/capture.js", out: "capture" },
   { entry: "dist/src/hooks/recall.js", out: "recall" },
   { entry: "dist/src/hooks/pre-tool-use.js", out: "pre-tool-use" },
@@ -108,18 +121,14 @@ const ccHooks = [
 ];
 
 const ccShell = [
-  { entry: "dist/src/shell/deeplake-shell.js", out: "shell/deeplake-shell" },
-];
-
-const ccCommands = [
-  { entry: "dist/src/commands/auth-login.js", out: "commands/auth-login" },
+  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
 ];
 
 const ccEmbed = [
   { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
 ];
 
-const ccAll = [...ccHooks, ...ccShell, ...ccCommands, ...ccEmbed];
+const ccAll = [...ccHooks, ...ccShell, ...ccEmbed];
 
 await build({
   entryPoints: Object.fromEntries(ccAll.map(h => [h.out, h.entry])),
@@ -149,7 +158,7 @@ await build({
     "tree-sitter-cpp",
   ],
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
   },
 });
 
@@ -180,18 +189,14 @@ const codexHooks = [
 ];
 
 const codexShell = [
-  { entry: "dist/src/shell/deeplake-shell.js", out: "shell/deeplake-shell" },
-];
-
-const codexCommands = [
-  { entry: "dist/src/commands/auth-login.js", out: "commands/auth-login" },
+  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
 ];
 
 const codexEmbed = [
   { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
 ];
 
-const codexAll = [...codexHooks, ...codexShell, ...codexCommands, ...codexEmbed];
+const codexAll = [...codexHooks, ...codexShell, ...codexEmbed];
 
 await build({
   entryPoints: Object.fromEntries(codexAll.map(h => [h.out, h.entry])),
@@ -220,7 +225,7 @@ await build({
     "tree-sitter-cpp",
   ],
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
   },
 });
 
@@ -262,18 +267,14 @@ const hermesHooks = [
 ];
 
 const cursorShell = [
-  { entry: "dist/src/shell/deeplake-shell.js", out: "shell/deeplake-shell" },
-];
-
-const cursorCommands = [
-  { entry: "dist/src/commands/auth-login.js", out: "commands/auth-login" },
+  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
 ];
 
 const cursorEmbed = [
   { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
 ];
 
-const cursorAll = [...cursorHooks, ...cursorShell, ...cursorCommands, ...cursorEmbed];
+const cursorAll = [...cursorHooks, ...cursorShell, ...cursorEmbed];
 
 await build({
   entryPoints: Object.fromEntries(cursorAll.map(h => [h.out, h.entry])),
@@ -302,7 +303,7 @@ await build({
     "tree-sitter-cpp",
   ],
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
   },
 });
 
@@ -314,15 +315,12 @@ writeFileSync("harnesses/cursor/bundle/package.json", esmPackageJson);
 // Hermes Agent bundle (auto-capture via on_session_start / pre_llm_call /
 // post_tool_call / post_llm_call / on_session_end).
 const hermesShell = [
-  { entry: "dist/src/shell/deeplake-shell.js", out: "shell/deeplake-shell" },
-];
-const hermesCommands = [
-  { entry: "dist/src/commands/auth-login.js", out: "commands/auth-login" },
+  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
 ];
 const hermesEmbed = [
   { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
 ];
-const hermesAll = [...hermesHooks, ...hermesShell, ...hermesCommands, ...hermesEmbed];
+const hermesAll = [...hermesHooks, ...hermesShell, ...hermesEmbed];
 
 await build({
   entryPoints: Object.fromEntries(hermesAll.map(h => [h.out, h.entry])),
@@ -351,7 +349,7 @@ await build({
     "tree-sitter-cpp",
   ],
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
   },
 });
 
@@ -361,9 +359,9 @@ for (const h of hermesAll) {
 
 // Pi (badlogic/pi-mono) — ships a wiki-worker bundle, a skillify-worker
 // bundle, and an autopull-worker bundle. The pi extension itself is raw .ts
-// at harnesses/pi/extension-source/hivemind.ts; we don't bundle it because pi's
+// at harnesses/pi/extension-source/memoree.ts; we don't bundle it because pi's
 // runtime compiles + loads the .ts file directly. Embed daemon reuses the
-// canonical ~/.hivemind/embed-deps/embed-daemon.js — no per-pi embed
+// canonical ~/.memoree/embed-deps/embed-daemon.js — no per-pi embed
 // bundle needed. Skillify worker is the same shared module used by
 // CC/Codex/Cursor/Hermes; pi spawns it from session_shutdown.
 // Autopull worker is the same maybeAutoPull() the other agents call
@@ -393,7 +391,7 @@ await build({
     "sharp",
   ],
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
   },
 });
 for (const h of piWorker) {
@@ -419,11 +417,10 @@ for (const outdir of [
 }
 
 // OpenClaw plugin bundle. The shared CC/Codex source modules reference a
-// handful of HIVEMIND_* env vars for dev-only overrides. Those env paths are
-// never taken in the openclaw runtime (the plugin loads config from
-// pluginApi.pluginConfig + ~/.deeplake/credentials.json), so we replace them
-// with `undefined` at build time to avoid shipping dead env-read code in the
-// plugin bundle.
+// handful of MEMOREE_* env vars for dev-only overrides. Those env paths are
+// never taken in the openclaw runtime (the plugin loads local settings from
+// pluginApi.pluginConfig), so we replace them with `undefined` at build time
+// to avoid shipping dead env-read code in the plugin bundle.
 await build({
   entryPoints: { index: "harnesses/openclaw/src/index.ts" },
   bundle: true,
@@ -433,104 +430,92 @@ await build({
   format: "esm",
   outdir: "harnesses/openclaw/dist",
   external: ["node:*", "pg"],
-  // Guarantee `globalThis.__hivemind_tuning__` exists as an object before any
+  // Guarantee `globalThis.__memoree_tuning__` exists as an object before any
   // bundled module's lazy env reads execute. esbuild's `define` rewrites
-  // `process.env.HIVEMIND_X` → `globalThis.__hivemind_tuning__.HIVEMIND_X`
+  // `process.env.MEMOREE_X` → `globalThis.__memoree_tuning__.MEMOREE_X`
   // (no optional chaining — esbuild rejects it as a define value). The
   // openclaw plugin's `applyOpenclawTuning()` replaces this object with the
-  // user's `plugins.entries.hivemind.config.tuning` values in register();
+  // user's `plugins.entries.memoree.config.tuning` values in register();
   // until then, reads against the empty object resolve to `undefined` and
   // the call-site `??` fallback applies.
-  banner: { js: "globalThis.__hivemind_tuning__ ??= {};" },
+  banner: { js: "globalThis.__memoree_tuning__ ??= {};" },
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(openclawVersion),
-    __HIVEMIND_SKILL__: JSON.stringify(openclawSkillBody),
-    __HIVEMIND_GRAPH_SKILL__: JSON.stringify(openclawGraphSkillBody),
-    // ----- Credentials / identity: openclaw-managed via the auth flow -----
-    // These are owned by the openclaw plugin's login + plugin-config paths,
-    // not by user-tunable env vars. Inline to `undefined` so any rogue
-    // `process.env.X` read in shared code can't accidentally leak or be
-    // injected. Keep these `undefined` — do NOT migrate them to the tuning
-    // dispatch.
-    "process.env.HIVEMIND_TOKEN": "undefined",
-    "process.env.HIVEMIND_ORG_ID": "undefined",
-    "process.env.HIVEMIND_WORKSPACE_ID": "undefined",
-    "process.env.HIVEMIND_API_URL": "undefined",
-    "process.env.HIVEMIND_TABLE": "undefined",
-    "process.env.HIVEMIND_CODEBASE_TABLE": "undefined",
-    "process.env.HIVEMIND_SESSIONS_TABLE": "undefined",
-    "process.env.HIVEMIND_MEMORY_PATH": "undefined",
-    "process.env.HIVEMIND_CAPTURE": "undefined",
-    "process.env.HIVEMIND_BACKEND": "undefined",
-    "process.env.HIVEMIND_SQLITE_PATH": "undefined",
-    "process.env.HIVEMIND_POSTGRES_URL": "undefined",
-    "process.env.HIVEMIND_POSTGRES_SCHEMA": "undefined",
-    "process.env.HIVEMIND_VECTOR_SCAN_LIMIT": "undefined",
-    "process.env.HIVEMIND_CONFIG_PATH": "undefined",
-    "process.env.HIVEMIND_SKILLS_TABLE": "undefined",
-    "process.env.HIVEMIND_RULES_TABLE": "undefined",
-    "process.env.HIVEMIND_GOALS_TABLE": "undefined",
-    "process.env.HIVEMIND_KPIS_TABLE": "undefined",
+    __MEMOREE_VERSION__: JSON.stringify(openclawVersion),
+    __MEMOREE_SKILL__: JSON.stringify(openclawSkillBody),
+    __MEMOREE_GRAPH_SKILL__: JSON.stringify(openclawGraphSkillBody),
+    // Storage selection is controlled by the plugin configuration rather
+    // than arbitrary environment values in this packaged runtime.
+    "process.env.MEMOREE_TABLE": "undefined",
+    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
+    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
+    "process.env.MEMOREE_MEMORY_PATH": "undefined",
+    "process.env.MEMOREE_CAPTURE": "undefined",
+    "process.env.MEMOREE_BACKEND": "undefined",
+    "process.env.MEMOREE_SQLITE_PATH": "undefined",
+    "process.env.MEMOREE_POSTGRES_URL": "undefined",
+    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
+    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
+    "process.env.MEMOREE_CONFIG_PATH": "undefined",
+    "process.env.MEMOREE_SKILLS_TABLE": "undefined",
+    "process.env.MEMOREE_RULES_TABLE": "undefined",
+    "process.env.MEMOREE_GOALS_TABLE": "undefined",
+    "process.env.MEMOREE_KPIS_TABLE": "undefined",
     // ----- User-tunable knobs: routed through a globalThis dispatch -----
-    // Every read of `process.env.HIVEMIND_X` in transitively-bundled code is
-    // rewritten by esbuild to `globalThis.__hivemind_tuning__.HIVEMIND_X`.
+    // Every read of `process.env.MEMOREE_X` in transitively-bundled code is
+    // rewritten by esbuild to `globalThis.__memoree_tuning__.MEMOREE_X`.
     // The openclaw plugin's `register()` populates that object from
     // `pluginApi.pluginConfig.tuning` (i.e. what the user wrote under
-    // `plugins.entries.hivemind.config.tuning` in `openclaw.json`). So the
+    // `plugins.entries.memoree.config.tuning` in `openclaw.json`). So the
     // bundle has zero `process.env.X` substrings (ClawHub scan passes), AND
     // the user can still tune at runtime by editing openclaw.json + restart.
     // CodeRabbit + @efenocchi on #170 pushed back on the previous
     // inline-to-undefined approach because it removed the env-override
     // surface entirely. This restores it via a different mechanism.
-    "process.env.HIVEMIND_DEBUG": "globalThis.__hivemind_tuning__.HIVEMIND_DEBUG",
-    "process.env.HIVEMIND_TRACE_SQL": "globalThis.__hivemind_tuning__.HIVEMIND_TRACE_SQL",
-    "process.env.HIVEMIND_QUERY_TIMEOUT_MS": "globalThis.__hivemind_tuning__.HIVEMIND_QUERY_TIMEOUT_MS",
-    "process.env.HIVEMIND_DOCS_MIN_PERIOD_MS": "globalThis.__hivemind_tuning__.HIVEMIND_DOCS_MIN_PERIOD_MS",
-    "process.env.HIVEMIND_INDEX_MARKER_TTL_MS": "globalThis.__hivemind_tuning__.HIVEMIND_INDEX_MARKER_TTL_MS",
-    "process.env.HIVEMIND_INDEX_MARKER_DIR": "globalThis.__hivemind_tuning__.HIVEMIND_INDEX_MARKER_DIR",
-    "process.env.HIVEMIND_SEMANTIC_LIMIT": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_LIMIT",
-    "process.env.HIVEMIND_HYBRID_LEXICAL_LIMIT": "globalThis.__hivemind_tuning__.HIVEMIND_HYBRID_LEXICAL_LIMIT",
-    "process.env.HIVEMIND_GREP_LIKE": "globalThis.__hivemind_tuning__.HIVEMIND_GREP_LIKE",
-    "process.env.HIVEMIND_SEMANTIC_SEARCH": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_SEARCH",
-    "process.env.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS",
-    "process.env.HIVEMIND_SEMANTIC_EMIT_ALL": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_EMIT_ALL",
-    "process.env.HIVEMIND_DOCS_AUTO_FILE": "undefined",
-    "process.env.HIVEMIND_DOCS_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_DOCS_TABLE",
-    // `HIVEMIND_STATE_DIR` is the test-isolation override that points
-    // `~/.deeplake/state/skillify` at a `mkdtempSync()` dir. OpenClaw has
+    "process.env.MEMOREE_DEBUG": "globalThis.__memoree_tuning__.MEMOREE_DEBUG",
+    "process.env.MEMOREE_TRACE_SQL": "globalThis.__memoree_tuning__.MEMOREE_TRACE_SQL",
+    "process.env.MEMOREE_QUERY_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_QUERY_TIMEOUT_MS",
+    "process.env.MEMOREE_DOCS_MIN_PERIOD_MS": "globalThis.__memoree_tuning__.MEMOREE_DOCS_MIN_PERIOD_MS",
+    "process.env.MEMOREE_INDEX_MARKER_TTL_MS": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_TTL_MS",
+    "process.env.MEMOREE_INDEX_MARKER_DIR": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_DIR",
+    "process.env.MEMOREE_SEMANTIC_LIMIT": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_LIMIT",
+    "process.env.MEMOREE_HYBRID_LEXICAL_LIMIT": "globalThis.__memoree_tuning__.MEMOREE_HYBRID_LEXICAL_LIMIT",
+    "process.env.MEMOREE_GREP_LIKE": "globalThis.__memoree_tuning__.MEMOREE_GREP_LIKE",
+    "process.env.MEMOREE_SEMANTIC_SEARCH": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_SEARCH",
+    "process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS",
+    "process.env.MEMOREE_SEMANTIC_EMIT_ALL": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMIT_ALL",
+    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
+    "process.env.MEMOREE_DOCS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_DOCS_TABLE",
+    // `MEMOREE_STATE_DIR` is the test-isolation override that points
+    // `~/.memoree/state/skillify` at a `mkdtempSync()` dir. OpenClaw has
     // no testing surface and no reason to redirect state, so it always
     // resolves to `undefined` at runtime — the call-site `??
     // homedir()/...` fallback produces the production path. The rewrite
     // matters mainly to keep the ClawHub `env-harvesting` scanner happy:
-    // a literal `process.env.HIVEMIND_STATE_DIR` substring in the same
+    // a literal `process.env.MEMOREE_STATE_DIR` substring in the same
     // file as a network send trips the critical rule even though the
     // value is just a directory path.
-    "process.env.HIVEMIND_STATE_DIR": "globalThis.__hivemind_tuning__.HIVEMIND_STATE_DIR",
-    "process.env.HIVEMIND_BACKEND": "undefined",
-    "process.env.HIVEMIND_SQLITE_PATH": "undefined",
-    "process.env.HIVEMIND_POSTGRES_URL": "undefined",
-    "process.env.HIVEMIND_POSTGRES_SCHEMA": "undefined",
-    "process.env.HIVEMIND_VECTOR_SCAN_LIMIT": "undefined",
-    "process.env.HIVEMIND_CONFIG_PATH": "undefined",
-    "process.env.HIVEMIND_TOKEN": "undefined",
-    "process.env.HIVEMIND_ORG_ID": "undefined",
-    "process.env.HIVEMIND_WORKSPACE_ID": "undefined",
-    "process.env.HIVEMIND_API_URL": "undefined",
-    "process.env.HIVEMIND_TABLE": "undefined",
-    "process.env.HIVEMIND_SESSIONS_TABLE": "undefined",
-    "process.env.HIVEMIND_SKILLS_TABLE": "undefined",
-    "process.env.HIVEMIND_RULES_TABLE": "undefined",
-    "process.env.HIVEMIND_GOALS_TABLE": "undefined",
-    "process.env.HIVEMIND_KPIS_TABLE": "undefined",
-    "process.env.HIVEMIND_CODEBASE_TABLE": "undefined",
-    "process.env.HIVEMIND_MEMORY_PATH": "undefined",
-    "process.env.HIVEMIND_GRAPH_CWD": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_CWD",
-    "process.env.HIVEMIND_GRAPH_ON_STOP": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_ON_STOP",
-    "process.env.HIVEMIND_GRAPH_PULL": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_PULL",
+    "process.env.MEMOREE_STATE_DIR": "globalThis.__memoree_tuning__.MEMOREE_STATE_DIR",
+    "process.env.MEMOREE_BACKEND": "undefined",
+    "process.env.MEMOREE_SQLITE_PATH": "undefined",
+    "process.env.MEMOREE_POSTGRES_URL": "undefined",
+    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
+    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
+    "process.env.MEMOREE_CONFIG_PATH": "undefined",
+    "process.env.MEMOREE_TABLE": "undefined",
+    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
+    "process.env.MEMOREE_SKILLS_TABLE": "undefined",
+    "process.env.MEMOREE_RULES_TABLE": "undefined",
+    "process.env.MEMOREE_GOALS_TABLE": "undefined",
+    "process.env.MEMOREE_KPIS_TABLE": "undefined",
+    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
+    "process.env.MEMOREE_MEMORY_PATH": "undefined",
+    "process.env.MEMOREE_GRAPH_CWD": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_CWD",
+    "process.env.MEMOREE_GRAPH_ON_STOP": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_ON_STOP",
+    "process.env.MEMOREE_GRAPH_PULL": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PULL",
   },
   plugins: [{
     // Dead-code elimination for transitively bundled CC/Codex-only features.
-    // harnesses/openclaw/src/index.ts imports shared modules from ../../../src/ (DeeplakeApi,
+    // harnesses/openclaw/src/index.ts imports shared modules from ../../../src/ (MemoreeApi,
     // grep-core, virtual-table-query, auth device-flow). Several of those
     // modules also host CC-specific helpers that shell out with execSync —
     // opening the browser for SSO, nudging claude-plugin-update, spawning the
@@ -565,7 +550,7 @@ writeFileSync("harnesses/openclaw/dist/package.json", esmPackageJson);
 //      worker's modules entangled with the gateway's chunk graph.
 // Lands at harnesses/openclaw/dist/skillify-worker.js — install-openclaw.ts already
 // copies the entire dist/ recursively, so it ships to
-// ~/.openclaw/extensions/hivemind/dist/skillify-worker.js with no other change.
+// ~/.openclaw/extensions/memoree/dist/skillify-worker.js with no other change.
 await build({
   entryPoints: { "skillify-worker": "dist/src/skillify/skillify-worker.js" },
   bundle: true,
@@ -577,11 +562,11 @@ await build({
   // the rationale. The worker entry itself overwrites this with the
   // tuning passed in via the config JSON before any shared module's
   // lazy env read fires.
-  banner: { js: "globalThis.__hivemind_tuning__ ??= {};" },
+  banner: { js: "globalThis.__memoree_tuning__ ??= {};" },
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
-    // Every `process.env.HIVEMIND_X` read in transitively-bundled code is
-    // rewritten by esbuild to `globalThis.__hivemind_tuning__.HIVEMIND_X`.
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
+    // Every `process.env.MEMOREE_X` read in transitively-bundled code is
+    // rewritten by esbuild to `globalThis.__memoree_tuning__.MEMOREE_X`.
     // The worker entry (src/skillify/skillify-worker.ts) populates that
     // object from its config JSON before any shared code path runs (the
     // openclaw plugin writes the user's `pluginConfig.tuning` into the
@@ -590,63 +575,59 @@ await build({
     //     passes per the env-harvesting rule)
     //   - user-tunable knobs (timeouts, debug, skillify cadence, agent
     //     models, etc.) still take effect at runtime via openclaw.json's
-    //     `plugins.entries.hivemind.config.tuning` section
-    //   - HIVEMIND_SKILLIFY_WORKER=1 is set by the worker entry so the
+    //     `plugins.entries.memoree.config.tuning` section
+    //   - MEMOREE_SKILLIFY_WORKER=1 is set by the worker entry so the
     //     recursion guard inside trigger code short-circuits correctly
     //
     // CodeRabbit + @efenocchi pushed back on the prior inline-to-undefined
     // version because it silently removed every env-override surface. This
     // restores them via a build-time-friendly dispatch.
     //
-    // The list below MUST cover every `process.env.HIVEMIND_*` that may be
+    // The list below MUST cover every `process.env.MEMOREE_*` that may be
     // transitively imported into the worker bundle. Source of truth:
-    //   grep -rn "process\.env\.HIVEMIND_" src/skillify src/shell \
-    //       src/deeplake-api.ts src/utils src/hooks/virtual-table-query.ts
-    "process.env.HIVEMIND_DEBUG": "globalThis.__hivemind_tuning__.HIVEMIND_DEBUG",
-    "process.env.HIVEMIND_TRACE_SQL": "globalThis.__hivemind_tuning__.HIVEMIND_TRACE_SQL",
-    "process.env.HIVEMIND_QUERY_TIMEOUT_MS": "globalThis.__hivemind_tuning__.HIVEMIND_QUERY_TIMEOUT_MS",
-    "process.env.HIVEMIND_DOCS_MIN_PERIOD_MS": "globalThis.__hivemind_tuning__.HIVEMIND_DOCS_MIN_PERIOD_MS",
-    "process.env.HIVEMIND_SEMANTIC_LIMIT": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_LIMIT",
-    "process.env.HIVEMIND_SEMANTIC_SEARCH": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_SEARCH",
-    "process.env.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS",
-    "process.env.HIVEMIND_SEMANTIC_EMIT_ALL": "globalThis.__hivemind_tuning__.HIVEMIND_SEMANTIC_EMIT_ALL",
-    "process.env.HIVEMIND_DOCS_AUTO_FILE": "undefined",
-    "process.env.HIVEMIND_INDEX_MARKER_TTL_MS": "globalThis.__hivemind_tuning__.HIVEMIND_INDEX_MARKER_TTL_MS",
-    "process.env.HIVEMIND_INDEX_MARKER_DIR": "globalThis.__hivemind_tuning__.HIVEMIND_INDEX_MARKER_DIR",
-    "process.env.HIVEMIND_CURSOR_MODEL": "globalThis.__hivemind_tuning__.HIVEMIND_CURSOR_MODEL",
-    "process.env.HIVEMIND_HERMES_PROVIDER": "globalThis.__hivemind_tuning__.HIVEMIND_HERMES_PROVIDER",
-    "process.env.HIVEMIND_HERMES_MODEL": "globalThis.__hivemind_tuning__.HIVEMIND_HERMES_MODEL",
-    "process.env.HIVEMIND_PI_PROVIDER": "globalThis.__hivemind_tuning__.HIVEMIND_PI_PROVIDER",
-    "process.env.HIVEMIND_PI_MODEL": "globalThis.__hivemind_tuning__.HIVEMIND_PI_MODEL",
-    "process.env.HIVEMIND_SKILLIFY_WORKER": "globalThis.__hivemind_tuning__.HIVEMIND_SKILLIFY_WORKER",
-    "process.env.HIVEMIND_DOCS_AUTO_FILE": "undefined",
-    "process.env.HIVEMIND_DOCS_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_DOCS_TABLE",
-    "process.env.HIVEMIND_SKILLIFY_EVERY_N_TURNS": "globalThis.__hivemind_tuning__.HIVEMIND_SKILLIFY_EVERY_N_TURNS",
-    "process.env.HIVEMIND_AUTOPULL_DISABLED": "globalThis.__hivemind_tuning__.HIVEMIND_AUTOPULL_DISABLED",
-    "process.env.HIVEMIND_BACKEND": "undefined",
-    "process.env.HIVEMIND_SQLITE_PATH": "undefined",
-    "process.env.HIVEMIND_POSTGRES_URL": "undefined",
-    "process.env.HIVEMIND_POSTGRES_SCHEMA": "undefined",
-    "process.env.HIVEMIND_VECTOR_SCAN_LIMIT": "undefined",
-    "process.env.HIVEMIND_CONFIG_PATH": "undefined",
-    "process.env.HIVEMIND_TOKEN": "undefined",
-    "process.env.HIVEMIND_ORG_ID": "undefined",
-    "process.env.HIVEMIND_WORKSPACE_ID": "undefined",
-    "process.env.HIVEMIND_API_URL": "undefined",
-    "process.env.HIVEMIND_TABLE": "undefined",
-    "process.env.HIVEMIND_SESSIONS_TABLE": "undefined",
-    "process.env.HIVEMIND_SKILLS_TABLE": "undefined",
-    "process.env.HIVEMIND_RULES_TABLE": "undefined",
-    "process.env.HIVEMIND_GOALS_TABLE": "undefined",
-    "process.env.HIVEMIND_KPIS_TABLE": "undefined",
-    "process.env.HIVEMIND_CODEBASE_TABLE": "undefined",
-    "process.env.HIVEMIND_MEMORY_PATH": "undefined",
+    //   grep -rn "process\.env\.MEMOREE_" src/skillify src/shell \
+    //       src/memoree-api.ts src/utils src/hooks/virtual-table-query.ts
+    "process.env.MEMOREE_DEBUG": "globalThis.__memoree_tuning__.MEMOREE_DEBUG",
+    "process.env.MEMOREE_TRACE_SQL": "globalThis.__memoree_tuning__.MEMOREE_TRACE_SQL",
+    "process.env.MEMOREE_QUERY_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_QUERY_TIMEOUT_MS",
+    "process.env.MEMOREE_DOCS_MIN_PERIOD_MS": "globalThis.__memoree_tuning__.MEMOREE_DOCS_MIN_PERIOD_MS",
+    "process.env.MEMOREE_SEMANTIC_LIMIT": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_LIMIT",
+    "process.env.MEMOREE_SEMANTIC_SEARCH": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_SEARCH",
+    "process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS",
+    "process.env.MEMOREE_SEMANTIC_EMIT_ALL": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMIT_ALL",
+    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
+    "process.env.MEMOREE_INDEX_MARKER_TTL_MS": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_TTL_MS",
+    "process.env.MEMOREE_INDEX_MARKER_DIR": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_DIR",
+    "process.env.MEMOREE_CURSOR_MODEL": "globalThis.__memoree_tuning__.MEMOREE_CURSOR_MODEL",
+    "process.env.MEMOREE_HERMES_PROVIDER": "globalThis.__memoree_tuning__.MEMOREE_HERMES_PROVIDER",
+    "process.env.MEMOREE_HERMES_MODEL": "globalThis.__memoree_tuning__.MEMOREE_HERMES_MODEL",
+    "process.env.MEMOREE_PI_PROVIDER": "globalThis.__memoree_tuning__.MEMOREE_PI_PROVIDER",
+    "process.env.MEMOREE_PI_MODEL": "globalThis.__memoree_tuning__.MEMOREE_PI_MODEL",
+    "process.env.MEMOREE_SKILLIFY_WORKER": "globalThis.__memoree_tuning__.MEMOREE_SKILLIFY_WORKER",
+    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
+    "process.env.MEMOREE_DOCS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_DOCS_TABLE",
+    "process.env.MEMOREE_SKILLIFY_EVERY_N_TURNS": "globalThis.__memoree_tuning__.MEMOREE_SKILLIFY_EVERY_N_TURNS",
+    "process.env.MEMOREE_AUTOPULL_DISABLED": "globalThis.__memoree_tuning__.MEMOREE_AUTOPULL_DISABLED",
+    "process.env.MEMOREE_BACKEND": "undefined",
+    "process.env.MEMOREE_SQLITE_PATH": "undefined",
+    "process.env.MEMOREE_POSTGRES_URL": "undefined",
+    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
+    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
+    "process.env.MEMOREE_CONFIG_PATH": "undefined",
+    "process.env.MEMOREE_TABLE": "undefined",
+    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
+    "process.env.MEMOREE_SKILLS_TABLE": "undefined",
+    "process.env.MEMOREE_RULES_TABLE": "undefined",
+    "process.env.MEMOREE_GOALS_TABLE": "undefined",
+    "process.env.MEMOREE_KPIS_TABLE": "undefined",
+    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
+    "process.env.MEMOREE_MEMORY_PATH": "undefined",
     // Skillify state-dir test-isolation override. OpenClaw never needs
     // to redirect state, so this rewrites to `undefined` at runtime and
     // the call-site fallback produces the homedir-based production path.
     // The rewrite primarily satisfies the ClawHub `env-harvesting`
     // scanner — see the matching entry in the main openclaw build above.
-    "process.env.HIVEMIND_STATE_DIR": "globalThis.__hivemind_tuning__.HIVEMIND_STATE_DIR",
+    "process.env.MEMOREE_STATE_DIR": "globalThis.__memoree_tuning__.MEMOREE_STATE_DIR",
   },
 });
 chmodSync("harnesses/openclaw/dist/skillify-worker.js", 0o755);
@@ -676,60 +657,56 @@ const openclawGraphWorkerExternals = [
 ];
 
 const openclawGraphWorkerDefine = {
-  banner: { js: "globalThis.__hivemind_tuning__ ??= {};" },
+  banner: { js: "globalThis.__memoree_tuning__ ??= {};" },
   define: {
-    __HIVEMIND_VERSION__: JSON.stringify(hivemindVersion),
-    "process.env.HIVEMIND_DEBUG": "globalThis.__hivemind_tuning__.HIVEMIND_DEBUG",
-    "process.env.HIVEMIND_TRACE_SQL": "globalThis.__hivemind_tuning__.HIVEMIND_TRACE_SQL",
-    "process.env.HIVEMIND_QUERY_TIMEOUT_MS": "globalThis.__hivemind_tuning__.HIVEMIND_QUERY_TIMEOUT_MS",
-    "process.env.HIVEMIND_DOCS_MIN_PERIOD_MS": "globalThis.__hivemind_tuning__.HIVEMIND_DOCS_MIN_PERIOD_MS",
-    "process.env.HIVEMIND_GRAPH_ON_STOP": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_ON_STOP",
-    "process.env.HIVEMIND_GRAPH_TICK_INTERVAL_MS": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_TICK_INTERVAL_MS",
-    "process.env.HIVEMIND_GRAPH_PULL": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_PULL",
-    "process.env.HIVEMIND_GRAPH_PULL_TIMEOUT_MS": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_PULL_TIMEOUT_MS",
-    "process.env.HIVEMIND_DOCS_AUTO_FILE": "undefined",
-    "process.env.HIVEMIND_DOCS_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_DOCS_TABLE",
-    // Transitively imported via DeeplakeApi -> index-marker-store.ts. Without
-    // these two rewrites the bundle keeps literal `process.env.HIVEMIND_INDEX_MARKER_*`
+    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
+    "process.env.MEMOREE_DEBUG": "globalThis.__memoree_tuning__.MEMOREE_DEBUG",
+    "process.env.MEMOREE_TRACE_SQL": "globalThis.__memoree_tuning__.MEMOREE_TRACE_SQL",
+    "process.env.MEMOREE_QUERY_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_QUERY_TIMEOUT_MS",
+    "process.env.MEMOREE_DOCS_MIN_PERIOD_MS": "globalThis.__memoree_tuning__.MEMOREE_DOCS_MIN_PERIOD_MS",
+    "process.env.MEMOREE_GRAPH_ON_STOP": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_ON_STOP",
+    "process.env.MEMOREE_GRAPH_TICK_INTERVAL_MS": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_TICK_INTERVAL_MS",
+    "process.env.MEMOREE_GRAPH_PULL": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PULL",
+    "process.env.MEMOREE_GRAPH_PULL_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PULL_TIMEOUT_MS",
+    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
+    "process.env.MEMOREE_DOCS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_DOCS_TABLE",
+    // Transitively imported via MemoreeApi -> index-marker-store.ts. Without
+    // these two rewrites the bundle keeps literal `process.env.MEMOREE_INDEX_MARKER_*`
     // reads alongside fetch() and trips ClawHub's env-harvesting critical rule.
-    "process.env.HIVEMIND_INDEX_MARKER_TTL_MS": "globalThis.__hivemind_tuning__.HIVEMIND_INDEX_MARKER_TTL_MS",
-    "process.env.HIVEMIND_INDEX_MARKER_DIR": "globalThis.__hivemind_tuning__.HIVEMIND_INDEX_MARKER_DIR",
+    "process.env.MEMOREE_INDEX_MARKER_TTL_MS": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_TTL_MS",
+    "process.env.MEMOREE_INDEX_MARKER_DIR": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_DIR",
     // Table/path resolvers transitively pulled in via the shared config +
-    // deeplake-api modules. Each is a literal process.env read co-located with
+    // memoree-api modules. Each is a literal process.env read co-located with
     // fetch() in the bundle, so all must be rewritten to clear env-harvesting.
-    "process.env.HIVEMIND_SKILLS_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_SKILLS_TABLE",
-    "process.env.HIVEMIND_RULES_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_RULES_TABLE",
-    "process.env.HIVEMIND_GOALS_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_GOALS_TABLE",
-    "process.env.HIVEMIND_KPIS_TABLE": "globalThis.__hivemind_tuning__.HIVEMIND_KPIS_TABLE",
-    "process.env.HIVEMIND_MEMORY_PATH": "globalThis.__hivemind_tuning__.HIVEMIND_MEMORY_PATH",
-    "process.env.HIVEMIND_GRAPH_PUSH": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPH_PUSH",
-    "process.env.HIVEMIND_GRAPHS_HOME": "globalThis.__hivemind_tuning__.HIVEMIND_GRAPHS_HOME",
+    "process.env.MEMOREE_SKILLS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_SKILLS_TABLE",
+    "process.env.MEMOREE_RULES_TABLE": "globalThis.__memoree_tuning__.MEMOREE_RULES_TABLE",
+    "process.env.MEMOREE_GOALS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_GOALS_TABLE",
+    "process.env.MEMOREE_KPIS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_KPIS_TABLE",
+    "process.env.MEMOREE_MEMORY_PATH": "globalThis.__memoree_tuning__.MEMOREE_MEMORY_PATH",
+    "process.env.MEMOREE_GRAPH_PUSH": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PUSH",
+    "process.env.MEMOREE_GRAPHS_HOME": "globalThis.__memoree_tuning__.MEMOREE_GRAPHS_HOME",
     // APPDATA is read only by a Claude-desktop config-path resolver that is
     // dead code in the openclaw runtime; rewrite to undefined so the literal
     // process.env read leaves the bundle (the `?? fallback` keeps it safe).
     "process.env.APPDATA": "undefined",
-    "process.env.HIVEMIND_TOKEN": "undefined",
-    "process.env.HIVEMIND_ORG_ID": "undefined",
-    "process.env.HIVEMIND_WORKSPACE_ID": "undefined",
-    "process.env.HIVEMIND_API_URL": "undefined",
-    "process.env.HIVEMIND_TABLE": "undefined",
-    "process.env.HIVEMIND_CODEBASE_TABLE": "undefined",
-    "process.env.HIVEMIND_SESSIONS_TABLE": "undefined",
-    "process.env.HIVEMIND_STATE_DIR": "globalThis.__hivemind_tuning__.HIVEMIND_STATE_DIR",
+    "process.env.MEMOREE_TABLE": "undefined",
+    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
+    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
+    "process.env.MEMOREE_STATE_DIR": "globalThis.__memoree_tuning__.MEMOREE_STATE_DIR",
     // Config-path resolver (src/user-config.ts). Pulled into the graph-on-stop
     // bundle via graph-on-stop.ts's lazy `import("../commands/graph.js")` →
     // config.js → user-config.ts: the dynamic import defeats the tree-shaking
     // that previously dropped it under the old static import, so the literal
-    // `process.env.HIVEMIND_CONFIG_PATH` read now sits alongside fetch() and
+    // `process.env.MEMOREE_CONFIG_PATH` read now sits alongside fetch() and
     // trips ClawHub's env-harvesting critical. openclaw has no reason to
     // redirect the config path, so rewrite to undefined — the call site's
-    // `?? homedir()/.deeplake/config.json` fallback yields the correct path.
-    "process.env.HIVEMIND_CONFIG_PATH": "undefined",
-    "process.env.HIVEMIND_BACKEND": "undefined",
-    "process.env.HIVEMIND_SQLITE_PATH": "undefined",
-    "process.env.HIVEMIND_POSTGRES_URL": "undefined",
-    "process.env.HIVEMIND_POSTGRES_SCHEMA": "undefined",
-    "process.env.HIVEMIND_VECTOR_SCAN_LIMIT": "undefined",
+    // `?? homedir()/.memoree/config.json` fallback yields the correct path.
+    "process.env.MEMOREE_CONFIG_PATH": "undefined",
+    "process.env.MEMOREE_BACKEND": "undefined",
+    "process.env.MEMOREE_SQLITE_PATH": "undefined",
+    "process.env.MEMOREE_POSTGRES_URL": "undefined",
+    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
+    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
   },
 };
 
@@ -754,7 +731,7 @@ const openclawGraphWorkerDefine = {
 // pattern already used in harnesses/openclaw/src/graph-lifecycle.ts and keeps
 // the shared src/ modules untouched.
 const deliteralizeChildProcessPlugin = {
-  name: "hivemind-deliteralize-child-process",
+  name: "memoree-deliteralize-child-process",
   setup(build) {
     const { outdir, entryPoints } = build.initialOptions;
     build.onEnd(() => {
@@ -820,8 +797,8 @@ await build({
 });
 chmodSync("harnesses/openclaw/dist/graph-pull-worker.js", 0o755);
 
-// Hivemind MCP server (stdio). Reused by Cline / Roo / Kilo / any MCP-aware
-// agent. Lives at ~/.hivemind/mcp/server.js after install.
+// Memoree MCP server (stdio). Reused by Cline / Roo / Kilo / any MCP-aware
+// agent. Lives at ~/.memoree/mcp/server.js after install.
 await build({
   entryPoints: { server: "dist/src/mcp/server.js" },
   bundle: true,
@@ -837,7 +814,7 @@ chmodSync("mcp/bundle/server.js", 0o755);
 // wiki-worker + skillify-worker ship alongside the server so the Cowork
 // ingester can spawn them for idle Cowork sessions (Cowork has no SessionEnd
 // hook). install copies the whole mcp/bundle dir, so shipping them here is
-// enough to deliver them at ~/.hivemind/mcp/. NO banner: these sources already
+// enough to deliver them at ~/.memoree/mcp/. NO banner: these sources already
 // start with their own `#!/usr/bin/env node`, and a banner would double it
 // (a second shebang on line 2 is a SyntaxError).
 await build({
@@ -855,7 +832,7 @@ chmodSync("mcp/bundle/wiki-worker.js", 0o755);
 chmodSync("mcp/bundle/skillify-worker.js", 0o755);
 writeFileSync("mcp/bundle/package.json", esmPackageJson);
 
-// Unified CLI (`npx hivemind install` … single entrypoint for all assistants)
+// Unified CLI (`npx memoree install` … single entrypoint for all assistants)
 await build({
   entryPoints: { cli: "dist/src/cli/index.js" },
   bundle: true,
@@ -864,7 +841,7 @@ await build({
   // external `import "tree-sitter"` (an optionalDependency that fails to
   // build on some platforms, e.g. Node 24 / arm64) OUT of the top of
   // bundle/cli.js. Without splitting, esbuild hoists that external import
-  // to the entry file and every `hivemind` command — including `install` —
+  // to the entry file and every `memoree` command — including `install` —
   // crashes with ERR_MODULE_NOT_FOUND when the addon is absent.
   splitting: true,
   platform: "node",
@@ -901,8 +878,8 @@ await build({
 }
 chmodSync("bundle/cli.js", 0o755);
 
-// Standalone embed daemon bundle. `hivemind embeddings install` deposits
-// this at ~/.hivemind/embed-deps/embed-daemon.js so every agent (including
+// Standalone embed daemon bundle. `memoree embeddings install` deposits
+// this at ~/.memoree/embed-deps/embed-daemon.js so every agent (including
 // pi, which can't ship per-agent bundles) spawns the same canonical
 // daemon. Externals match the per-agent daemon bundles — the daemon
 // resolves them from its sibling node_modules (the shared deps dir).

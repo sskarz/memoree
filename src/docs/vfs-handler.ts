@@ -1,11 +1,11 @@
 /**
  * Virtual filesystem handler for the docs index under
- * ~/.deeplake/memory/docs/ — the same intercept pattern as the graph mount
+ * ~/.memoree/memory/docs/ — the same intercept pattern as the graph mount
  * (src/graph/vfs-handler.ts), but a SEPARATE surface from the session-memory
  * index so browsing docs never pollutes memory retrieval.
  *
  * Unlike the graph handler (sync, reads a local snapshot), docs live in the
- * Deeplake table, so this handler is ASYNC and takes a `query` seam. It stays
+ * Memoree table, so this handler is ASYNC and takes a `query` seam. It stays
  * cheap by construction: directory levels read metadata only (`listDocMeta`,
  * no content), and one-line summaries are fetched only for the files directly
  * in the viewed directory (`listDocsByIds`).
@@ -28,14 +28,14 @@ import { parseFilesIndex, WIKI_DOC_PREFIX } from "./wiki-generate.js";
 import { readPrivateDoc } from "./private-store.js";
 import { MAIN_SCOPE, type GitRunner } from "./branch-scope.js";
 import type { DocEmbedder } from "./embed.js";
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "../storage/schema.js";
 
 export type DocsVfsResult =
   | { kind: "ok"; body: string }
   | { kind: "not-found"; message: string };
 
 export interface DocsVfsOptions {
-  /** SQL dialect used by the query seam. Defaults to Deeplake for compatibility. */
+  /** SQL dialect used by the query seam. Defaults to Memoree for compatibility. */
   dialect?: StorageDialect;
   /** Query embedder (kind='query') for semantic `find/`. Absent → lexical only. */
   embedQuery?: DocEmbedder;

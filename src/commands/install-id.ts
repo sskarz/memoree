@@ -1,12 +1,12 @@
 /**
- * Machine-stable install ID for hivemind CLI device flow.
+ * Machine-stable install ID for memoree CLI device flow.
  *
- * Persisted to ~/.deeplake/install-id on first use. Sent as the
- * X-Hivemind-Install-Id header on /auth/device/code and /auth/device/token
- * so the deeplake-api backend uses it as the anonymous PostHog distinct_id
+ * Persisted to ~/.memoree/install-id on first use. Sent as the
+ * X-Memoree-Install-Id header on /auth/device/code and /auth/device/token
+ * so the memoree-api backend uses it as the anonymous PostHog distinct_id
  * (instead of hashing the per-attempt OAuth device_code).
  *
- * Why this exists: without a stable ID, every `hivemind install` retry from
+ * Why this exists: without a stable ID, every `memoree install` retry from
  * the same machine creates a new anonymous Person in PostHog. One real user
  * × N retries = N orphan Persons, only one of which gets aliased to their
  * Auth0 identity at completion. The other N-1 inflate funnel denominators
@@ -30,7 +30,7 @@ import { randomUUID } from "node:crypto";
 // as auth-creds.ts; see that file for the rationale (CI branch-coverage
 // flake from vi.resetModules + dynamic re-import).
 function configDir(): string {
-  return join(homedir(), ".deeplake");
+  return join(homedir(), ".memoree");
 }
 function installIDPath(): string {
   return join(configDir(), "install-id");
@@ -71,12 +71,12 @@ export function getOrCreateInstallID(): string {
 }
 
 /**
- * Returns `{ "X-Hivemind-Install-Id": "<uuid>" }` for spreading into a
+ * Returns `{ "X-Memoree-Install-Id": "<uuid>" }` for spreading into a
  * headers object, or `{}` when the install ID can't be obtained. Callers
- * use it the same way as `deeplakeClientHeader()`.
+ * use it the same way as `memoreeClientHeader()`.
  */
-export function hivemindInstallIDHeader(): Record<string, string> {
+export function memoreeInstallIDHeader(): Record<string, string> {
   const id = getOrCreateInstallID();
   if (!id) return {};
-  return { "X-Hivemind-Install-Id": id };
+  return { "X-Memoree-Install-Id": id };
 }

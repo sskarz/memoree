@@ -6,15 +6,15 @@ import { join } from "node:path";
 
 /**
  * CodeRabbit P1: install tests must not depend on a globally-installed
- * `hivemind` binary (CI fails otherwise — `which hivemind` returns
+ * `memoree` binary (CI fails otherwise — `which memoree` returns
  * nothing). Stub it by prepending a tempdir to PATH with an executable
- * `hivemind` shim that just echoes its argv (the install path never
+ * `memoree` shim that just echoes its argv (the install path never
  * runs it — it only resolves the absolute path via `which`).
  */
-function withFakeHivemindOnPath(): { restore: () => void; binDir: string } {
-  const binDir = mkdtempSync(join(tmpdir(), "fake-hivemind-bin-"));
-  const shim = join(binDir, "hivemind");
-  writeFileSync(shim, "#!/bin/sh\necho fake hivemind\n");
+function withFakeMemoreeOnPath(): { restore: () => void; binDir: string } {
+  const binDir = mkdtempSync(join(tmpdir(), "fake-memoree-bin-"));
+  const shim = join(binDir, "memoree");
+  writeFileSync(shim, "#!/bin/sh\necho fake memoree\n");
   chmodSync(shim, 0o755);
   const prev = process.env.PATH ?? "";
   process.env.PATH = `${binDir}:${prev}`;
@@ -73,11 +73,11 @@ describe("git-hook-install — discovery", () => {
 
 describe("git-hook-install — install/uninstall lifecycle", () => {
   let dir: string;
-  let pathStub: ReturnType<typeof withFakeHivemindOnPath>;
+  let pathStub: ReturnType<typeof withFakeMemoreeOnPath>;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "hook-life-"));
     initGitRepo(dir);
-    pathStub = withFakeHivemindOnPath();
+    pathStub = withFakeMemoreeOnPath();
   });
   afterEach(() => {
     pathStub.restore();
@@ -96,7 +96,7 @@ describe("git-hook-install — install/uninstall lifecycle", () => {
     expect(content).toContain(HOOK_BEGIN_MARKER);
     expect(content).toContain(HOOK_END_MARKER);
     expect(content).toContain("#!/bin/sh");
-    // Hook embeds an absolute path to hivemind in single quotes — codex P1 fix
+    // Hook embeds an absolute path to memoree in single quotes — codex P1 fix
     expect(content).toMatch(/'\S+' graph build --trigger post-commit/);
     // executable bit on POSIX; on Windows this is moot but mode is still set
     const mode = statSync(r.path).mode & 0o777;
@@ -150,7 +150,7 @@ describe("git-hook-install — install/uninstall lifecycle", () => {
     const path = postCommitHookPath(dir)!;
     // Write a hook where our block is sandwiched between user lines.
     const before = "#!/bin/sh\necho 'user prelude'\n";
-    const ours = buildHookFile("/usr/local/bin/hivemind").split("\n").slice(1).join("\n"); // drop the shebang
+    const ours = buildHookFile("/usr/local/bin/memoree").split("\n").slice(1).join("\n"); // drop the shebang
     const after = "\necho 'user postlude'\n";
     writeFileSync(path, before + ours + after);
     const r = uninstallPostCommitHook(dir);
@@ -168,7 +168,7 @@ describe("git-hook-install — install/uninstall lifecycle", () => {
     writeFileSync(path, "#!/bin/sh\necho not ours\n");
     const r = uninstallPostCommitHook(dir);
     expect(r.kind).toBe("not-ours");
-    if (r.kind === "not-ours") expect(r.hint).toContain("not managed by hivemind");
+    if (r.kind === "not-ours") expect(r.hint).toContain("not managed by memoree");
     // file untouched
     expect(readFileSync(path, "utf8")).toContain("not ours");
   });
@@ -198,24 +198,24 @@ describe("git-hook-install — install/uninstall lifecycle", () => {
 
 describe("git-hook-install — helpers", () => {
   it("containsOurMarkers true when both markers present", () => {
-    expect(containsOurMarkers(buildHookFile("/usr/local/bin/hivemind"))).toBe(true);
+    expect(containsOurMarkers(buildHookFile("/usr/local/bin/memoree"))).toBe(true);
   });
   it("containsOurMarkers false when only one marker present", () => {
     expect(containsOurMarkers("#!/bin/sh\n" + HOOK_BEGIN_MARKER + "\n")).toBe(false);
     expect(containsOurMarkers("#!/bin/sh\n" + HOOK_END_MARKER + "\n")).toBe(false);
   });
-  it("buildHookFile embeds the resolved hivemind path", () => {
-    const body = buildHookFile("/opt/hivemind/bin/hivemind");
-    expect(body).toContain("'/opt/hivemind/bin/hivemind' graph build --trigger post-commit");
+  it("buildHookFile embeds the resolved memoree path", () => {
+    const body = buildHookFile("/opt/memoree/bin/memoree");
+    expect(body).toContain("'/opt/memoree/bin/memoree' graph build --trigger post-commit");
   });
   it("buildHookFile single-quotes a path containing spaces", () => {
-    const body = buildHookFile("/Users/Mario Rossi/bin/hivemind");
+    const body = buildHookFile("/Users/Mario Rossi/bin/memoree");
     // Shell single-quote wrapping
-    expect(body).toContain("'/Users/Mario Rossi/bin/hivemind'");
+    expect(body).toContain("'/Users/Mario Rossi/bin/memoree'");
   });
   it("buildHookFile includes mkdir -p safety line (codex P1 fix)", () => {
-    const body = buildHookFile("/usr/local/bin/hivemind");
-    expect(body).toContain('mkdir -p "$HOME/.hivemind"');
+    const body = buildHookFile("/usr/local/bin/memoree");
+    expect(body).toContain('mkdir -p "$HOME/.memoree"');
   });
 });
 
@@ -253,8 +253,8 @@ describe("git-hook-install — codex P1 followups", () => {
     ].join("\n");
     const ours = [
       HOOK_BEGIN_MARKER,
-      "mkdir -p \"$HOME/.hivemind\" 2>/dev/null || true",
-      "nohup '/usr/bin/hivemind' graph build --trigger post-commit &",
+      "mkdir -p \"$HOME/.memoree\" 2>/dev/null || true",
+      "nohup '/usr/bin/memoree' graph build --trigger post-commit &",
       HOOK_END_MARKER,
     ].join("\n");
     const userAfter = "\n\necho after\n";

@@ -9,7 +9,7 @@ import { resolve } from "node:path";
  * level. This file is a complementary guard that inspects the SHIPPED
  * bundles so the invariant survives bundler/import regressions too: the
  * compiled output must never contain a standalone UPDATE that sets only
- * the description column, because Deeplake drops one of two rapid
+ * the description column, because Memoree drops one of two rapid
  * UPDATEs on the same row.
  */
 

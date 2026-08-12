@@ -17,25 +17,25 @@ import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
 /** Sentinel markers — used to find and replace ONLY the lines we own. */
-export const HOOK_BEGIN_MARKER = "# HIVEMIND_GRAPH_HOOK_BEGIN — managed by `hivemind graph init`";
-export const HOOK_END_MARKER = "# HIVEMIND_GRAPH_HOOK_END";
+export const HOOK_BEGIN_MARKER = "# MEMOREE_GRAPH_HOOK_BEGIN — managed by `memoree graph init`";
+export const HOOK_END_MARKER = "# MEMOREE_GRAPH_HOOK_END";
 
 const SHEBANG = "#!/bin/sh";
 
 /**
- * Build the hook body. `hivemindPath` is the absolute path to the hivemind
+ * Build the hook body. `memoreePath` is the absolute path to the memoree
  * binary resolved at install time — captured so the hook keeps working
  * even when the user's PATH at commit time differs (GUI git clients like
  * GitHub Desktop / Sourcetree commonly run with a reduced PATH).
  */
-function hookBodyLines(hivemindPath: string): string[] {
+function hookBodyLines(memoreePath: string): string[] {
   return [
     "# Async-detached so commits never wait. Threshold-gate + cache make",
-    "# typical re-runs ~85ms. Logs go to ~/.hivemind/post-commit.log",
-    "# mkdir is robust against first-run: $HOME/.hivemind may not exist yet,",
+    "# typical re-runs ~85ms. Logs go to ~/.memoree/post-commit.log",
+    "# mkdir is robust against first-run: $HOME/.memoree may not exist yet,",
     "# in which case the > redirect would fail and the build would never start.",
-    'mkdir -p "$HOME/.hivemind" 2>/dev/null || true',
-    `nohup ${quoteForShell(hivemindPath)} graph build --trigger post-commit >> "$HOME/.hivemind/post-commit.log" 2>&1 &`,
+    'mkdir -p "$HOME/.memoree" 2>/dev/null || true',
+    `nohup ${quoteForShell(memoreePath)} graph build --trigger post-commit >> "$HOME/.memoree/post-commit.log" 2>&1 &`,
   ];
 }
 
@@ -134,7 +134,7 @@ export function postCommitHookPath(cwd: string): string | null {
  *   3. File exists, no markers → refuse unless `force` is true; with force,
  *      overwrite the whole file (the user opted in).
  *
- * The hook embeds the absolute path to the hivemind binary (resolved at
+ * The hook embeds the absolute path to the memoree binary (resolved at
  * install time) so it keeps working under PATH-restricted environments
  * (GUI git clients, cron, system Git wrappers).
  */
@@ -145,7 +145,7 @@ export function installPostCommitHook(cwd: string, opts: InstallOptions = {}): I
   }
 
   // CodeRabbit P1: check the idempotent "already-ours" path BEFORE the
-  // binary lookup. A restricted shell where `which hivemind` returns
+  // binary lookup. A restricted shell where `which memoree` returns
   // nothing must NOT downgrade a no-op reinstall of OUR own hook to
   // "foreign-hook" — the contract is "re-running on an already-installed
   // hook is a no-op". PATH discovery only matters when we're about to
@@ -160,24 +160,24 @@ export function installPostCommitHook(cwd: string, opts: InstallOptions = {}): I
       return {
         kind: "foreign-hook",
         path,
-        hint: `existing hook at ${path} is not managed by hivemind; pass --force to overwrite, or merge our block manually (between '${HOOK_BEGIN_MARKER}' and '${HOOK_END_MARKER}')`,
+        hint: `existing hook at ${path} is not managed by memoree; pass --force to overwrite, or merge our block manually (between '${HOOK_BEGIN_MARKER}' and '${HOOK_END_MARKER}')`,
       };
     }
     // force=true → fall through to write
   }
 
-  // Only now (we're committed to writing) do we need a hivemind binary path.
-  const hivemindPath = resolveHivemindPath();
-  if (hivemindPath === null) {
+  // Only now (we're committed to writing) do we need a memoree binary path.
+  const memoreePath = resolveMemoreePath();
+  if (memoreePath === null) {
     return {
       kind: "foreign-hook",
       path,
-      hint: "hivemind binary not found on PATH. Install hivemind globally (`npm install -g @deeplake/hivemind`) before running `hivemind graph init`, so the hook can find a stable absolute path to call.",
+      hint: "memoree binary not found on PATH. Install memoree globally (`npm install -g memoree`) before running `memoree graph init`, so the hook can find a stable absolute path to call.",
     };
   }
 
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, buildHookFile(hivemindPath), { mode: 0o755 });
+  writeFileSync(path, buildHookFile(memoreePath), { mode: 0o755 });
   // chmod +x — writeFileSync's mode is honored on most systems but
   // not universally; re-chmod to be safe.
   try {
@@ -191,9 +191,9 @@ export function installPostCommitHook(cwd: string, opts: InstallOptions = {}): I
 }
 
 /**
- * Resolve the absolute path to the hivemind binary at install time. We try,
+ * Resolve the absolute path to the memoree binary at install time. We try,
  * in order:
- *   1. `which hivemind` — what the user's interactive shell would resolve
+ *   1. `which memoree` — what the user's interactive shell would resolve
  *   2. process.execPath fallback — only used if we're being executed via
  *      `node /path/to/cli.js` directly (which is what happens when running
  *      the bundled CLI in dev). We can't infer the production install path
@@ -201,8 +201,8 @@ export function installPostCommitHook(cwd: string, opts: InstallOptions = {}): I
  *
  * Returns null when neither source produces a working absolute path.
  */
-function resolveHivemindPath(): string | null {
-  // `which hivemind` gives us whatever the user's shell PATH would have
+function resolveMemoreePath(): string | null {
+  // `which memoree` gives us whatever the user's shell PATH would have
   // resolved interactively. CodeRabbit P1 dropped the previous `command
   // -v` fallback — `command` is a shell builtin, NOT a binary on PATH,
   // so `execFileSync("command", ["-v", ...])` always throws ENOENT and
@@ -210,13 +210,13 @@ function resolveHivemindPath(): string | null {
   // (busybox without it, etc.), we report not-found and the caller
   // surfaces the install hint.
   try {
-    const out = execFileSync("which", ["hivemind"], {
+    const out = execFileSync("which", ["memoree"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    if (out !== "" && out.includes("hivemind")) return out.split("\n")[0]!.trim();
+    if (out !== "" && out.includes("memoree")) return out.split("\n")[0]!.trim();
   } catch {
-    // which not found, or `hivemind` not on PATH
+    // which not found, or `memoree` not on PATH
   }
   return null;
 }
@@ -242,7 +242,7 @@ export function uninstallPostCommitHook(cwd: string): UninstallStatus {
     return {
       kind: "not-ours",
       path,
-      hint: `existing hook at ${path} is not managed by hivemind; remove it manually if you want it gone`,
+      hint: `existing hook at ${path} is not managed by memoree; remove it manually if you want it gone`,
     };
   }
   const stripped = stripOurBlock(content);
@@ -286,12 +286,12 @@ function stripOurBlock(content: string): string {
 }
 
 /** Compose the full post-commit file content (shebang + our managed block). */
-export function buildHookFile(hivemindPath: string): string {
+export function buildHookFile(memoreePath: string): string {
   return [
     SHEBANG,
     "",
     HOOK_BEGIN_MARKER,
-    ...hookBodyLines(hivemindPath),
+    ...hookBodyLines(memoreePath),
     HOOK_END_MARKER,
     "",
   ].join("\n");

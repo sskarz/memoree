@@ -5,8 +5,8 @@ import { getVersion } from "./version.js";
 import {
   upsertMarkedBlock,
   stripMarkedBlock,
-  HIVEMIND_BLOCK_START,
-  HIVEMIND_BLOCK_END,
+  MEMOREE_BLOCK_START,
+  MEMOREE_BLOCK_END,
 } from "./agents-md.js";
 
 // pi (badlogic/pi-mono `packages/coding-agent`) integration — Tier 1.
@@ -15,18 +15,18 @@ import {
 // `pi-mono/packages/coding-agent/src/core/extensions/types.ts` with 25+
 // lifecycle events including session_start, input, tool_call, tool_result,
 // message_end, and session_shutdown. Our extension subscribes to those for
-// auto-capture and registers hivemind_search / hivemind_read / hivemind_index
+// auto-capture and registers memoree_search / memoree_read / memoree_index
 // as first-class pi tools (since pi has no MCP — see pi README).
 //
 // Surfaces installed:
 //   1. ~/.pi/agent/AGENTS.md — global context (BEGIN/END marker upsert).
-//      pi auto-loads AGENTS.md every turn, so the hivemind block is the
+//      pi auto-loads AGENTS.md every turn, so the memoree block is the
 //      sole guidance surface — no per-agent SKILL.md drop. Pi loads skills
 //      from both ~/.pi/agent/skills/ AND ~/.agents/skills/ (the shared
 //      agentskills.io location), so dropping a per-agent skill collides
-//      with the codex installer's ~/.agents/skills/hivemind-memory symlink.
-//   2. ~/.pi/agent/extensions/hivemind.ts — TS extension for autocapture +
-//      first-class hivemind_search / hivemind_read / hivemind_index tools.
+//      with the codex installer's ~/.agents/skills/memoree-memory symlink.
+//   2. ~/.pi/agent/extensions/memoree.ts — TS extension for autocapture +
+//      first-class memoree_search / memoree_read / memoree_index tools.
 //
 // The extension is shipped as raw .ts; pi's runtime loader compiles it on
 // load (uses tsx-style on-the-fly compilation). Self-contained — uses only
@@ -34,16 +34,16 @@ import {
 
 const PI_AGENT_DIR = join(HOME, ".pi", "agent");
 const AGENTS_MD = join(PI_AGENT_DIR, "AGENTS.md");
-const LEGACY_SKILL_DIR = join(PI_AGENT_DIR, "skills", "hivemind-memory");
+const LEGACY_SKILL_DIR = join(PI_AGENT_DIR, "skills", "memoree-memory");
 const EXTENSIONS_DIR = join(PI_AGENT_DIR, "extensions");
-const EXTENSION_PATH = join(EXTENSIONS_DIR, "hivemind.ts");
-const VERSION_DIR = join(PI_AGENT_DIR, ".hivemind");
+const EXTENSION_PATH = join(EXTENSIONS_DIR, "memoree.ts");
+const VERSION_DIR = join(PI_AGENT_DIR, ".memoree");
 // Pi's session_shutdown handler spawns this bundled wiki-worker (which
 // itself shells `pi --print`) to generate the AI summary + embed it via
 // the canonical daemon. CC/codex/cursor/hermes ship their wiki-worker
 // inside their per-agent bundles; pi has no per-agent bundle so we
 // install it as a separate file alongside.
-const WIKI_WORKER_DIR = join(PI_AGENT_DIR, "hivemind");
+const WIKI_WORKER_DIR = join(PI_AGENT_DIR, "memoree");
 const WIKI_WORKER_PATH = join(WIKI_WORKER_DIR, "wiki-worker.js");
 // Skillify worker bundle, spawned by pi extension on session_shutdown to mine
 // reusable Claude skills from the just-finished session. Sibling of
@@ -59,29 +59,29 @@ const AUTOPULL_WORKER_PATH = join(WIKI_WORKER_DIR, "autopull-worker.js");
 // can't import the raw-.ts trigger so it shells this bundle. Sibling of the others.
 const SKILLOPT_WORKER_PATH = join(WIKI_WORKER_DIR, "skillopt-worker.js");
 
-const HIVEMIND_BLOCK_BODY = `${HIVEMIND_BLOCK_START}
-## Hivemind Memory
+const MEMOREE_BLOCK_BODY = `${MEMOREE_BLOCK_START}
+## Memoree Memory
 
-You have access to global org memory at \`~/.deeplake/memory/\`. Always check both
-your local context AND Hivemind memory when the user asks you to recall, look up,
+You have access to global org memory at \`~/.memoree/memory/\`. Always check both
+your local context AND Memoree memory when the user asks you to recall, look up,
 or remember anything.
 
-- Three hivemind tools are registered: \`hivemind_search\`, \`hivemind_read\`, \`hivemind_index\`. **Prefer these** — one call returns ranked hits in a single SQL query.
+- Three memoree tools are registered: \`memoree_search\`, \`memoree_read\`, \`memoree_index\`. **Prefer these** — one call returns ranked hits in a single SQL query.
 - Fall back to direct filesystem if the tools fail:
-- Start with \`~/.deeplake/memory/index.md\` (table of all sessions)
-- Then read specific summaries at \`~/.deeplake/memory/summaries/<user>/<session>.md\`
-- Only fall back to raw \`~/.deeplake/memory/sessions/<user>/*.jsonl\` if summaries don't have enough detail
-- Search: use \`grep\` (NOT \`rg\`/ripgrep — \`rg\` is not always installed). Example: \`grep -ri "keyword" ~/.deeplake/memory/\`
+- Start with \`~/.memoree/memory/index.md\` (table of all sessions)
+- Then read specific summaries at \`~/.memoree/memory/summaries/<user>/<session>.md\`
+- Only fall back to raw \`~/.memoree/memory/sessions/<user>/*.jsonl\` if summaries don't have enough detail
+- Search: use \`grep\` (NOT \`rg\`/ripgrep — \`rg\` is not always installed). Example: \`grep -ri "keyword" ~/.memoree/memory/\`
 
 Use only bash builtins (cat, ls, grep, jq, head, tail, sed, awk, wc, sort, find) to read this filesystem —
 rg/ripgrep, node, python, curl are not available there.
-${HIVEMIND_BLOCK_END}`;
+${MEMOREE_BLOCK_END}`;
 
-export function upsertHivemindBlock(existing: string | null): string {
-  return upsertMarkedBlock(existing, HIVEMIND_BLOCK_BODY);
+export function upsertMemoreeBlock(existing: string | null): string {
+  return upsertMarkedBlock(existing, MEMOREE_BLOCK_BODY);
 }
 
-export function stripHivemindBlock(existing: string): string {
+export function stripMemoreeBlock(existing: string): string {
   return stripMarkedBlock(existing);
 }
 
@@ -95,15 +95,15 @@ export function installPi(): void {
     rmSync(LEGACY_SKILL_DIR, { recursive: true, force: true });
   }
 
-  // 1. AGENTS.md hivemind block (idempotent upsert). Pi auto-loads this every turn.
+  // 1. AGENTS.md memoree block (idempotent upsert). Pi auto-loads this every turn.
   const prior = existsSync(AGENTS_MD) ? readFileSync(AGENTS_MD, "utf-8") : null;
-  const next = upsertHivemindBlock(prior);
+  const next = upsertMemoreeBlock(prior);
   writeFileSync(AGENTS_MD, next);
 
-  // 2. Extension — autocapture + first-class hivemind tools.
-  const srcExtension = join(pkgRoot(), "harnesses", "pi", "extension-source", "hivemind.ts");
+  // 2. Extension — autocapture + first-class memoree tools.
+  const srcExtension = join(pkgRoot(), "harnesses", "pi", "extension-source", "memoree.ts");
   if (!existsSync(srcExtension)) {
-    throw new Error(`pi extension source missing at ${srcExtension}. Reinstall the @deeplake/hivemind package.`);
+    throw new Error(`pi extension source missing at ${srcExtension}. Reinstall the memoree package.`);
   }
   ensureDir(EXTENSIONS_DIR);
   copyFileSync(srcExtension, EXTENSION_PATH);
@@ -175,13 +175,13 @@ export function uninstallPi(): void {
   }
   if (existsSync(AGENTS_MD)) {
     const prior = readFileSync(AGENTS_MD, "utf-8");
-    const stripped = stripHivemindBlock(prior);
+    const stripped = stripMemoreeBlock(prior);
     if (stripped.trim().length === 0) {
       rmSync(AGENTS_MD, { force: true });
       log(`  pi             removed empty ${AGENTS_MD}`);
     } else {
       writeFileSync(AGENTS_MD, stripped);
-      log(`  pi             stripped hivemind block from ${AGENTS_MD}`);
+      log(`  pi             stripped memoree block from ${AGENTS_MD}`);
     }
   }
   if (existsSync(VERSION_DIR)) {

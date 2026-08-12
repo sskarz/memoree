@@ -6,12 +6,12 @@ import { spawnGraphPullWorker } from "../../../src/graph/spawn-pull-worker.js";
 describe("spawnGraphPullWorker", () => {
   let prev: string | undefined;
   beforeEach(() => {
-    prev = process.env.HIVEMIND_GRAPH_PULL;
-    delete process.env.HIVEMIND_GRAPH_PULL;
+    prev = process.env.MEMOREE_GRAPH_PULL;
+    delete process.env.MEMOREE_GRAPH_PULL;
   });
   afterEach(() => {
-    if (prev === undefined) delete process.env.HIVEMIND_GRAPH_PULL;
-    else process.env.HIVEMIND_GRAPH_PULL = prev;
+    if (prev === undefined) delete process.env.MEMOREE_GRAPH_PULL;
+    else process.env.MEMOREE_GRAPH_PULL = prev;
   });
 
   /**
@@ -71,8 +71,8 @@ describe("spawnGraphPullWorker", () => {
     expect(unref).toHaveBeenCalledTimes(1);
   });
 
-  it("HIVEMIND_GRAPH_PULL=0 → does NOT spawn (avoids wasted process for env-disabled state)", () => {
-    process.env.HIVEMIND_GRAPH_PULL = "0";
+  it("MEMOREE_GRAPH_PULL=0 → does NOT spawn (avoids wasted process for env-disabled state)", () => {
+    process.env.MEMOREE_GRAPH_PULL = "0";
     const { calls, spy } = fakeSpawn();
     spawnGraphPullWorker("/cwd", "/bundle", { spawn: spy });
     // `calls.length === 0` IS the "never invoked" assertion — our fake

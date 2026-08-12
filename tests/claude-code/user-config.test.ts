@@ -14,18 +14,18 @@ import {
 let dir: string;
 let configPath: string;
 
-const originalEnv = process.env.HIVEMIND_EMBEDDINGS;
+const originalEnv = process.env.MEMOREE_EMBEDDINGS;
 
 function restoreEnv(): void {
-  if (originalEnv === undefined) delete process.env.HIVEMIND_EMBEDDINGS;
-  else process.env.HIVEMIND_EMBEDDINGS = originalEnv;
+  if (originalEnv === undefined) delete process.env.MEMOREE_EMBEDDINGS;
+  else process.env.MEMOREE_EMBEDDINGS = originalEnv;
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "hivemind-user-config-"));
+  dir = mkdtempSync(join(tmpdir(), "memoree-user-config-"));
   configPath = join(dir, "config.json");
   _setConfigPathForTesting(() => configPath);
-  delete process.env.HIVEMIND_EMBEDDINGS;
+  delete process.env.MEMOREE_EMBEDDINGS;
 });
 
 afterEach(() => {
@@ -115,41 +115,36 @@ describe("writeUserConfig", () => {
   });
 });
 
-describe("getEmbeddingsEnabled — migration from HIVEMIND_EMBEDDINGS", () => {
-  it("writes enabled:false and returns false when env is unset on first run", () => {
-    delete process.env.HIVEMIND_EMBEDDINGS;
-    expect(getEmbeddingsEnabled()).toBe(false);
-    const written = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(written).toEqual({ embeddings: { enabled: false } });
-  });
-
-  it("writes enabled:false and returns false when env is 'false' on first run", () => {
-    process.env.HIVEMIND_EMBEDDINGS = "false";
-    expect(getEmbeddingsEnabled()).toBe(false);
-    const written = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(written).toEqual({ embeddings: { enabled: false } });
-  });
-
-  it("writes enabled:true and returns true when env is 'true' on first run", () => {
-    process.env.HIVEMIND_EMBEDDINGS = "true";
+describe("getEmbeddingsEnabled", () => {
+  it("defaults to enabled without mutating config", () => {
+    delete process.env.MEMOREE_EMBEDDINGS;
     expect(getEmbeddingsEnabled()).toBe(true);
-    const written = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(written).toEqual({ embeddings: { enabled: true } });
+    expect(existsSync(configPath)).toBe(false);
+  });
+
+  it("returns false when env is 'false'", () => {
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    expect(getEmbeddingsEnabled()).toBe(false);
+  });
+
+  it("returns true when env is 'true'", () => {
+    process.env.MEMOREE_EMBEDDINGS = "true";
+    expect(getEmbeddingsEnabled()).toBe(true);
   });
 
   it("writes enabled:true on any non-'false' truthy env (lenient migration)", () => {
-    process.env.HIVEMIND_EMBEDDINGS = "1";
+    process.env.MEMOREE_EMBEDDINGS = "1";
     expect(getEmbeddingsEnabled()).toBe(true);
   });
 
-  it("does NOT re-read the env var once a value is persisted", () => {
-    process.env.HIVEMIND_EMBEDDINGS = "false";
-    expect(getEmbeddingsEnabled()).toBe(false); // migration runs
-    // Flip the env: should be ignored on subsequent reads.
-    process.env.HIVEMIND_EMBEDDINGS = "true";
+  it("uses persisted configuration ahead of the environment", () => {
+    setEmbeddingsEnabled(false);
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    expect(getEmbeddingsEnabled()).toBe(false);
+    process.env.MEMOREE_EMBEDDINGS = "true";
     _resetUserConfigForTesting();
     _setConfigPathForTesting(() => configPath);
-    expect(getEmbeddingsEnabled()).toBe(false); // reads from persisted config
+    expect(getEmbeddingsEnabled()).toBe(false);
   });
 
   it("returns the persisted value when config already has embeddings.enabled set", () => {
@@ -157,13 +152,13 @@ describe("getEmbeddingsEnabled — migration from HIVEMIND_EMBEDDINGS", () => {
     _resetUserConfigForTesting();
     _setConfigPathForTesting(() => configPath);
     // Env says false; persisted value should win.
-    process.env.HIVEMIND_EMBEDDINGS = "false";
+    process.env.MEMOREE_EMBEDDINGS = "false";
     expect(getEmbeddingsEnabled()).toBe(true);
   });
 
-  it("setEmbeddingsEnabled overrides a prior migration value (last write wins)", () => {
-    delete process.env.HIVEMIND_EMBEDDINGS;
-    expect(getEmbeddingsEnabled()).toBe(false); // migration → false
+  it("setEmbeddingsEnabled overrides the default", () => {
+    setEmbeddingsEnabled(false);
+    expect(getEmbeddingsEnabled()).toBe(false);
     setEmbeddingsEnabled(true);
     expect(getEmbeddingsEnabled()).toBe(true);
     const written = JSON.parse(readFileSync(configPath, "utf-8"));

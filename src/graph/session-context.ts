@@ -30,7 +30,7 @@
  *   - "AST-based" — call/import/reference edges; NOT semantic similarity.
  *     The semantic layer is a deliberate v1.2 follow-up.
  *   - "may be stale" — the graph is rebuilt at most once per
- *     HIVEMIND_GRAPH_TICK_INTERVAL_MS (default 10 min) so it can lag
+ *     MEMOREE_GRAPH_TICK_INTERVAL_MS (default 10 min) so it can lag
  *     uncommitted in-flight edits. The age line lets Claude judge.
  *
  * Returns null when:
@@ -146,18 +146,18 @@ export function graphContextLine(cwd: string, deps: GraphContextDeps = {}): stri
     "  omits instance-method calls (obj.method()), nested/inner functions, and",
     "  dynamic dispatch — so confirm every claim against the file before stating it.",
     "",
-    "  Query via the Hivemind memory mount (intercepted — use `cat`, not `ls`):",
-    "    cat ~/.deeplake/memory/graph/query/<pattern>   ← start here",
+    "  Query via the Memoree memory mount (intercepted — use `cat`, not `ls`):",
+    "    cat ~/.memoree/memory/graph/query/<pattern>   ← start here",
     "        search + 1-hop expand (callers, callees, imports). AND: query/<a>+<b>.",
-    "    cat ~/.deeplake/memory/graph/find/<pattern>     substring search → handles",
-    "    cat ~/.deeplake/memory/graph/show/<handle-or-pattern>   node + 1-hop neighbors",
-    "    cat ~/.deeplake/memory/graph/neighborhood/<file>        symbols + cross-file links",
+    "    cat ~/.memoree/memory/graph/find/<pattern>     substring search → handles",
+    "    cat ~/.memoree/memory/graph/show/<handle-or-pattern>   node + 1-hop neighbors",
+    "    cat ~/.memoree/memory/graph/neighborhood/<file>        symbols + cross-file links",
     "    Also: index.md · layers · tour · path/<from>/<to>",
     "",
     "  PER-FILE DOCS (natural-language, kept fresh on commits — if generated):",
-    "    cat ~/.deeplake/memory/docs/find/<query>   semantic + keyword search over the",
+    "    cat ~/.memoree/memory/docs/find/<query>   semantic + keyword search over the",
     "        docs — use for \"where is X handled / how does Y work\"; returns ranked files.",
-    "    cat ~/.deeplake/memory/docs/<path>.md       the doc for one source file.",
+    "    cat ~/.memoree/memory/docs/<path>.md       the doc for one source file.",
     "    Empty result just means no docs match (or none generated yet) — fall back to graph.",
     "",
     "  Then READ the files the graph points you to — don't answer from the graph",

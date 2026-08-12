@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { log as _log } from "../utils/debug.js";
 
 const log = (msg: string) => _log("query-cache", msg);
-const DEFAULT_CACHE_ROOT = join(homedir(), ".deeplake", "query-cache");
+const DEFAULT_CACHE_ROOT = join(homedir(), ".memoree", "query-cache");
 const INDEX_CACHE_FILE = "index.md";
 
 interface QueryCacheDeps {

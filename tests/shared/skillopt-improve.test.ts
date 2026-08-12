@@ -109,7 +109,7 @@ describe("improveSkillIfFailed", () => {
   it("not an org skill (bare/plugin) → not judged", async () => {
     const { query } = makeQuery();
     expect(await improveSkillIfFailed(base(query, { skillRef: "bare" }))).toMatchObject({ judged: false });
-    expect(await improveSkillIfFailed(base(query, { skillRef: "hivemind:memory" }))).toMatchObject({ judged: false });
+    expect(await improveSkillIfFailed(base(query, { skillRef: "memoree:memory" }))).toMatchObject({ judged: false });
   });
 
   it("invocation not in the session → not judged", async () => {
@@ -132,12 +132,12 @@ describe("improveSkillIfFailed", () => {
     expect(inserts).toHaveLength(0);
   });
 
-  // Deeplake insert→read visibility lag (expected latency, not a defect): the invocation row is
+  // Memoree insert→read visibility lag (expected latency, not a defect): the invocation row is
   // written by a SEPARATE process (capture.js) and lands on a short visibility lag, so a worker
   // that fires on a fast reaction reads stale and finds nothing. The window-retry (K=3) only helps
   // if the user keeps typing; a single fast/final reaction would silently no-op. So the worker
   // must retry-with-backoff itself.
-  it("retries findInvocation when the row hasn't propagated yet (Deeplake lag) → then judges + improves", async () => {
+  it("retries findInvocation when the row hasn't propagated yet (Memoree lag) → then judges + improves", async () => {
     let sessionsCalls = 0;
     const inserts: string[] = [];
     const query = vi.fn(async (sql: string) => {

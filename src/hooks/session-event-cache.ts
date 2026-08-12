@@ -38,12 +38,12 @@ const dlog = (msg: string) => _log("session-event-cache", msg);
 const CACHE_DIR = join(homedir(), ".claude", "hooks", "session-cache");
 
 /**
- * Master opt-out. Set HIVEMIND_SESSION_EVENT_CACHE=0 (or "false") to disable
+ * Master opt-out. Set MEMOREE_SESSION_EVENT_CACHE=0 (or "false") to disable
  * both the append (capture side) and the read (worker side), forcing the
  * wiki-worker back onto the DB `SELECT` for every trigger.
  */
 export function sessionEventCacheDisabled(): boolean {
-  const v = process.env.HIVEMIND_SESSION_EVENT_CACHE;
+  const v = process.env.MEMOREE_SESSION_EVENT_CACHE;
   return v === "0" || v === "false";
 }
 

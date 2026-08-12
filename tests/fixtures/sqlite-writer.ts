@@ -6,10 +6,10 @@ const names = {
   memory: "memory",
   sessions: "sessions",
   skills: "skills",
-  rules: "hivemind_rules",
-  goals: "hivemind_goals",
-  kpis: "hivemind_kpis",
-  docs: "hivemind_docs",
+  rules: "memoree_rules",
+  goals: "memoree_goals",
+  kpis: "memoree_kpis",
+  docs: "memoree_docs",
   codebase: "codebase",
 };
 

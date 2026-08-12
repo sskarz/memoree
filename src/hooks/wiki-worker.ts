@@ -26,9 +26,7 @@ import { embedSummaryWithWarmup } from "../embeddings/embed-summary.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
 
 interface WorkerConfig {
-  storage?: { kind: "deeplake" | "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
-  apiUrl?: string;
-  token?: string;
+  storage?: { kind: "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
   orgId?: string;
   workspaceId: string;
   memoryTable: string;
@@ -66,7 +64,7 @@ function esc(s: string): string {
     .replace(/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
 }
 
-// The capture hooks INSERT session events asynchronously, and Deeplake reads
+// The capture hooks INSERT session events asynchronously, and Memoree reads
 // are eventually-consistent. Under concurrency (many SDK / `claude -p` sessions
 // ending at once) those rows can lag behind SessionEnd, so the worker can read
 // zero events for a session that does have them. Retry with linear backoff
@@ -82,8 +80,8 @@ function parseNonNegativeInt(raw: string | undefined, fallback: number): number 
   const n = Number.parseInt(raw ?? "", 10);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
-const EVENT_FETCH_RETRIES = parseNonNegativeInt(process.env.HIVEMIND_WIKI_EVENT_RETRIES, 5);
-const EVENT_FETCH_BACKOFF_MS = parseNonNegativeInt(process.env.HIVEMIND_WIKI_EVENT_BACKOFF_MS, 1500);
+const EVENT_FETCH_RETRIES = parseNonNegativeInt(process.env.MEMOREE_WIKI_EVENT_RETRIES, 5);
+const EVENT_FETCH_BACKOFF_MS = parseNonNegativeInt(process.env.MEMOREE_WIKI_EVENT_BACKOFF_MS, 1500);
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 const storageBackend = createWorkerStorage(cfg, wlog);
@@ -127,7 +125,7 @@ async function main(): Promise<void> {
       );
       return { rows: r.reverse(), total };
     };
-    // Retry on an empty result: the async capture writes (or Deeplake read
+    // Retry on an empty result: the async capture writes (or Memoree read
     // consistency) may simply be lagging behind SessionEnd under load.
     const dbFetchWithRetry = async (): Promise<{ rows: Record<string, unknown>[]; total: number }> => {
       let f = await dbFetch();
@@ -298,7 +296,7 @@ async function main(): Promise<void> {
         // summary. The summary is written to a file, not read from stdout, so
         // we only need headroom to drain it.
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+        env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
       });
       execSucceeded = true;
       wlog("claude -p exited (code 0)");
@@ -346,7 +344,7 @@ async function main(): Promise<void> {
           sessionId: cfg.sessionId,
           text,
           embedding,
-          dialect: cfg.storage?.kind ?? "deeplake",
+          dialect: cfg.storage?.kind ?? "sqlite",
           pluginVersion: cfg.pluginVersion ?? "",
         });
         wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);
@@ -371,7 +369,7 @@ async function main(): Promise<void> {
     try {
       releaseLock(cfg.sessionId);
     } catch (releaseErr: any) {
-      // Gated on HIVEMIND_DEBUG — we don't want a release failure at
+      // Gated on MEMOREE_DEBUG — we don't want a release failure at
       // worker shutdown to pollute the wiki log every run.
       dlog(`releaseLock failed in finally for ${cfg.sessionId}: ${releaseErr.message}`);
     }

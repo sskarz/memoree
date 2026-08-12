@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Hivemind install verifier — sanity-checks each of the 9 agent integrations.
+# Memoree install verifier — sanity-checks each of the 9 agent integrations.
 #
-# Run this after `npx -y @deeplake/hivemind install`. It checks file
+# Run this after `npx -y memoree install`. It checks file
 # placement, config schema, dry-invokes hook scripts, and exercises the
 # MCP server against its initialize handshake. Doesn't require any agent
 # to actually be running — just verifies our installer's footprint.
@@ -11,7 +11,7 @@
 #
 # Usage:
 #   bash scripts/verify-install.sh
-#   curl -sSL https://raw.githubusercontent.com/activeloopai/hivemind/main/scripts/verify-install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/sskarz/memoree/main/scripts/verify-install.sh | bash
 
 set -u
 
@@ -43,15 +43,15 @@ require_jq
 section "Claude Code"
 if [ -d "$HOME/.claude" ]; then
   if command -v claude >/dev/null 2>&1; then
-    if claude plugin list 2>/dev/null | grep -q "hivemind@hivemind"; then
-      ok "claude plugin list shows hivemind@hivemind"
+    if claude plugin list 2>/dev/null | grep -q "memoree@memoree"; then
+      ok "claude plugin list shows memoree@memoree"
       if claude plugin list 2>/dev/null | grep -q "✔ enabled"; then
         ok "plugin enabled"
       else
-        bad "plugin not enabled" "run: claude plugin enable hivemind@hivemind"
+        bad "plugin not enabled" "run: claude plugin enable memoree@memoree"
       fi
     else
-      bad "claude plugin list does not show hivemind@hivemind" "rerun: hivemind claude install"
+      bad "claude plugin list does not show memoree@memoree" "rerun: memoree claude install"
     fi
   else
     bad "claude CLI not found on PATH" "Claude Code is not installed correctly"
@@ -72,9 +72,9 @@ if [ -d "$HOME/.codex" ]; then
       bad "$HOOKS missing SessionStart"
     fi
   else
-    bad "$HOOKS not found" "rerun: hivemind codex install"
+    bad "$HOOKS not found" "rerun: memoree codex install"
   fi
-  if [ -x "$HOME/.codex/hivemind/bundle/session-start.js" ]; then
+  if [ -x "$HOME/.codex/memoree/bundle/session-start.js" ]; then
     ok "session-start.js executable"
   else
     bad "session-start.js missing or not executable"
@@ -84,10 +84,10 @@ else
 fi
 
 # ───────────────────────────────────────────────────────────────────────
-# OpenClaw — ~/.openclaw/extensions/hivemind/
+# OpenClaw — ~/.openclaw/extensions/memoree/
 section "OpenClaw"
 if [ -d "$HOME/.openclaw" ]; then
-  EXT="$HOME/.openclaw/extensions/hivemind"
+  EXT="$HOME/.openclaw/extensions/memoree"
   if [ -f "$EXT/openclaw.plugin.json" ]; then
     ok "openclaw.plugin.json present"
     if jq -e '.contracts.tools' "$EXT/openclaw.plugin.json" >/dev/null 2>&1; then
@@ -96,7 +96,7 @@ if [ -d "$HOME/.openclaw" ]; then
       bad "manifest missing contracts.tools (stale install)"
     fi
   else
-    bad "$EXT/openclaw.plugin.json not found" "rerun: hivemind claw install"
+    bad "$EXT/openclaw.plugin.json not found" "rerun: memoree claw install"
   fi
   [ -f "$EXT/dist/index.js" ] && ok "dist/index.js present" || bad "dist/index.js not found"
 else
@@ -113,18 +113,18 @@ if [ -d "$HOME/.cursor" ]; then
       if jq -e ".hooks.$ev[0].command" "$HOOKS" >/dev/null 2>&1; then
         ok "hooks.$ev wired"
       else
-        bad "hooks.$ev missing" "rerun: hivemind cursor install"
+        bad "hooks.$ev missing" "rerun: memoree cursor install"
       fi
     done
     # Dry-invoke session-start.js
     payload='{"hook_event_name":"sessionStart","session_id":"verify","conversation_id":"verify","workspace_roots":["/tmp"]}'
-    if echo "$payload" | timeout 5 node "$HOME/.cursor/hivemind/bundle/session-start.js" 2>/dev/null | jq -e '.additional_context' >/dev/null 2>&1; then
+    if echo "$payload" | timeout 5 node "$HOME/.cursor/memoree/bundle/session-start.js" 2>/dev/null | jq -e '.additional_context' >/dev/null 2>&1; then
       ok "session-start.js produces valid additional_context JSON"
     else
       bad "session-start.js dry-invoke did not return additional_context"
     fi
   else
-    bad "$HOOKS not found" "rerun: hivemind cursor install"
+    bad "$HOOKS not found" "rerun: memoree cursor install"
   fi
 else
   skip "Cursor" "no ~/.cursor"
@@ -134,16 +134,16 @@ fi
 # Hermes Agent — skill drop
 section "Hermes Agent"
 if [ -d "$HOME/.hermes" ]; then
-  SKILL="$HOME/.hermes/skills/hivemind-memory/SKILL.md"
+  SKILL="$HOME/.hermes/skills/memoree-memory/SKILL.md"
   if [ -f "$SKILL" ]; then
     ok "SKILL.md present at $SKILL"
-    if grep -q "Hivemind Memory" "$SKILL"; then
+    if grep -q "Memoree Memory" "$SKILL"; then
       ok "skill content looks right"
     else
-      bad "skill content missing 'Hivemind Memory' header"
+      bad "skill content missing 'Memoree Memory' header"
     fi
   else
-    bad "$SKILL not found" "rerun: hivemind hermes install"
+    bad "$SKILL not found" "rerun: memoree hermes install"
   fi
 else
   skip "Hermes Agent" "no ~/.hermes"
@@ -154,25 +154,25 @@ fi
 # No per-agent SKILL.md: pi reads skills from both ~/.pi/agent/skills/ AND
 # ~/.agents/skills/ (the agentskills.io shared dir), so dropping a local
 # skill would collide with the codex installer's shared symlink. AGENTS.md
-# (auto-loaded every turn) plus the registered hivemind tools cover the
+# (auto-loaded every turn) plus the registered memoree tools cover the
 # action surface; see install-pi.ts for the rationale.
 section "pi"
 if [ -d "$HOME/.pi" ]; then
   AGENTS="$HOME/.pi/agent/AGENTS.md"
-  if [ -f "$AGENTS" ] && grep -q "BEGIN hivemind-memory" "$AGENTS"; then
-    ok "AGENTS.md has BEGIN hivemind-memory marker"
+  if [ -f "$AGENTS" ] && grep -q "BEGIN memoree-memory" "$AGENTS"; then
+    ok "AGENTS.md has BEGIN memoree-memory marker"
   else
-    bad "AGENTS.md missing hivemind block" "rerun: hivemind pi install"
+    bad "AGENTS.md missing memoree block" "rerun: memoree pi install"
   fi
-  EXT="$HOME/.pi/agent/extensions/hivemind.ts"
+  EXT="$HOME/.pi/agent/extensions/memoree.ts"
   if [ -f "$EXT" ]; then
     ok "extension installed at $EXT"
     # Sanity-check that key surfaces are wired in the installed extension.
-    if grep -q "registerTool" "$EXT" && grep -q "hivemind_search" "$EXT" && \
-       grep -q "hivemind_read" "$EXT" && grep -q "hivemind_index" "$EXT"; then
-      ok "extension registers hivemind_search / hivemind_read / hivemind_index"
+    if grep -q "registerTool" "$EXT" && grep -q "memoree_search" "$EXT" && \
+       grep -q "memoree_read" "$EXT" && grep -q "memoree_index" "$EXT"; then
+      ok "extension registers memoree_search / memoree_read / memoree_index"
     else
-      bad "extension missing one or more hivemind_* tool registrations"
+      bad "extension missing one or more memoree_* tool registrations"
     fi
     if grep -q 'pi.on("tool_result"' "$EXT" && grep -q 'pi.on("input"' "$EXT"; then
       ok "extension subscribes to input + tool_result for autocapture"
@@ -180,7 +180,7 @@ if [ -d "$HOME/.pi" ]; then
       bad "extension missing input/tool_result subscriptions"
     fi
   else
-    bad "$EXT not found" "rerun: hivemind pi install"
+    bad "$EXT not found" "rerun: memoree pi install"
   fi
 else
   skip "pi" "no ~/.pi"
@@ -188,22 +188,22 @@ fi
 
 # ───────────────────────────────────────────────────────────────────────
 # MCP server (used by Hermes; reused by any future MCP-aware client).
-section "Hivemind MCP server"
-SERVER="$HOME/.hivemind/mcp/server.js"
+section "Memoree MCP server"
+SERVER="$HOME/.memoree/mcp/server.js"
 if [ -f "$SERVER" ]; then
   ok "server.js installed at $SERVER"
-  # Initialize + tools/list handshake. Expect "hivemind_search" in response.
+  # Initialize + tools/list handshake. Expect "memoree_search" in response.
   init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"verify","version":"1.0"}}}'
   inited='{"jsonrpc":"2.0","method":"notifications/initialized"}'
   list='{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
   resp=$( ( printf '%s\n%s\n%s\n' "$init" "$inited" "$list"; sleep 1 ) | timeout 8 node "$SERVER" 2>/dev/null )
-  if echo "$resp" | grep -q '"hivemind_search"'; then
-    ok "tools/list returns hivemind_search / hivemind_read / hivemind_index"
+  if echo "$resp" | grep -q '"memoree_search"'; then
+    ok "tools/list returns memoree_search / memoree_read / memoree_index"
   else
-    bad "MCP server did not list expected tools" "check ~/.deeplake/credentials.json"
+    bad "MCP server did not list expected tools" "run: memoree doctor"
   fi
 else
-  skip "MCP server" "no ~/.hivemind/mcp/server.js (no MCP-aware agent installed yet)"
+  skip "MCP server" "no ~/.memoree/mcp/server.js (no MCP-aware agent installed yet)"
 fi
 
 # ───────────────────────────────────────────────────────────────────────

@@ -1,11 +1,11 @@
 import type { Config, StorageConfig } from "../config.js";
-import { DeeplakeApi, type WriteRow } from "../deeplake-api.js";
 import type {
   BackendTableNames,
   ExecuteResult,
   QueryRow,
   SqlValue,
   StorageBackend,
+  WriteRow,
 } from "./backend.js";
 
 function tableNames(config: StorageConfig): BackendTableNames {
@@ -22,30 +22,8 @@ function tableNames(config: StorageConfig): BackendTableNames {
 }
 
 function asStorageConfig(config: Config | StorageConfig): StorageConfig {
-  if ("kind" in config) return config;
-  if (config.storage) return config.storage;
-  // Keep accepting the original Deeplake-shaped Config. Besides preserving the
-  // public API, this avoids forcing integrations that mock Config to learn
-  // about the new storage helpers.
-  return {
-    kind: "deeplake",
-    token: config.token,
-    apiUrl: config.apiUrl,
-    orgId: config.orgId,
-    orgName: config.orgName,
-    userName: config.userName,
-    workspaceId: config.workspaceId,
-    tableName: config.tableName,
-    sessionsTableName: config.sessionsTableName,
-    skillsTableName: config.skillsTableName,
-    rulesTableName: config.rulesTableName,
-    goalsTableName: config.goalsTableName,
-    kpisTableName: config.kpisTableName,
-    docsTableName: config.docsTableName,
-    codebaseTableName: config.codebaseTableName,
-    memoryPath: config.memoryPath,
-    vectorScanLimit: config.vectorScanLimit ?? 2000,
-  };
+  if ("storage" in config) return config.storage;
+  return config;
 }
 
 class LazySqliteBackend implements StorageBackend {
@@ -184,16 +162,6 @@ class LazyPostgresBackend implements StorageBackend {
 export function createStorageBackend(config: Config | StorageConfig, tableOverride?: string): StorageBackend {
   const storage = asStorageConfig(config);
   const activeTable = tableOverride ?? storage.tableName;
-  const names = tableNames(storage);
-
   if (storage.kind === "sqlite") return new LazySqliteBackend(storage, activeTable);
-  if (storage.kind === "postgres") return new LazyPostgresBackend(storage, activeTable);
-  return new DeeplakeApi(
-    storage.token,
-    storage.apiUrl,
-    storage.orgId,
-    storage.workspaceId,
-    activeTable,
-    names,
-  );
+  return new LazyPostgresBackend(storage, activeTable);
 }

@@ -10,9 +10,9 @@
 
 ## Overview
 
-This sub-feature closes the loop. Hivemind's whole purpose is to turn the work of one session into reusable memory for the next, and the most concrete artifact of that is the **session summary**: a markdown document the wiki worker generates at session end and uploads to the shared memory table (`src/hooks/cursor/wiki-worker.ts:190-219`). Every summary ends with a curated `## Next Steps` block, a contract so important it is byte-locked across all agent variants in test (`tests/claude-code/wiki-next-steps-contract.test.ts:11-19`). Today those summaries live in remote storage and the developer never sees them in the editor, and those Next Steps, the most actionable thing the brain produces, evaporate instead of becoming the developer's next task.
+This sub-feature closes the loop. Memoree's whole purpose is to turn the work of one session into reusable memory for the next, and the most concrete artifact of that is the **session summary**: a markdown document the wiki worker generates at session end and uploads to the shared memory table (`src/hooks/cursor/wiki-worker.ts:190-219`). Every summary ends with a curated `## Next Steps` block, a contract so important it is byte-locked across all agent variants in test (`tests/claude-code/wiki-next-steps-contract.test.ts:11-19`). Today those summaries live in remote storage and the developer never sees them in the editor, and those Next Steps, the most actionable thing the brain produces, evaporate instead of becoming the developer's next task.
 
-This pane brings summaries into Cursor. The developer picks a session (from the recent-sessions list in PRD-003a), reads its summary rendered in-editor, and converts any "Next Step" into a real Hivemind goal or a Cursor task with one click. The value is a brain that does not just remember, but actively hands the developer their next move.
+This pane brings summaries into Cursor. The developer picks a session (from the recent-sessions list in PRD-003a), reads its summary rendered in-editor, and converts any "Next Step" into a real Memoree goal or a Cursor task with one click. The value is a brain that does not just remember, but actively hands the developer their next move.
 
 ---
 
@@ -22,7 +22,7 @@ The summary is the payoff of the entire capture pipeline, and right now it is in
 
 1. **Invisible.** Summaries are uploaded to `/summaries/<userName>/<sessionId>.md` in the memory table (`src/hooks/cursor/wiki-worker.ts:194-219`) and surfaced only indirectly, in the SessionStart brief or the resume brief. A developer who wants to read what their last session accomplished has no in-editor reader.
 2. **Inert Next Steps.** Each summary ends with a deliberately-formatted `## Next Steps` section. The contract test exists precisely because these next steps feed downstream surfaces and must stay byte-stable (`tests/claude-code/wiki-next-steps-contract.test.ts:11-19,96`). Yet there is no path for a developer to act on a Next Step beyond reading it; it does not become a goal or a task.
-3. **A disconnected goals system.** Hivemind already has a goals concept, open goals are read and surfaced in the SessionStart banner (`src/notifications/sources/open-goals.ts:42-85`) and managed via `hivemind goal` (`src/cli/index.ts:447-450`). The Next Steps in a summary are exactly the raw material for goals, but nothing connects the two.
+3. **A disconnected goals system.** Memoree already has a goals concept, open goals are read and surfaced in the SessionStart banner (`src/notifications/sources/open-goals.ts:42-85`) and managed via `memoree goal` (`src/cli/index.ts:447-450`). The Next Steps in a summary are exactly the raw material for goals, but nothing connects the two.
 
 This pane connects reading to acting: summary in, goal or task out.
 
@@ -32,7 +32,7 @@ This pane connects reading to acting: summary in, goal or task out.
 
 - Render a selected session's summary markdown inside the Cursor dashboard Webview, including its `## Next Steps` block, with no external browser.
 - Parse the `## Next Steps` section reliably (honoring its locked contract format) and present each next step as an actionable item.
-- Let the developer convert a Next Step into a Hivemind goal (via the canonical goals path) or a Cursor task, with one click per item.
+- Let the developer convert a Next Step into a Memoree goal (via the canonical goals path) or a Cursor task, with one click per item.
 - Reflect a newly created goal back in the dashboard (the KPI/goals surfaces) so the loop is visibly closed.
 - Handle the realities of summaries gracefully: a session with no summary yet (the silent-failure case PRD-002 guards against), a summary with an empty Next Steps section, and an unreachable memory table all render honest states.
 
@@ -40,7 +40,7 @@ This pane connects reading to acting: summary in, goal or task out.
 
 - **Generating or editing summaries.** Summary generation is the wiki worker's job (`src/hooks/cursor/wiki-worker.ts`); this pane reads, it does not author or mutate stored summaries.
 - **A full memory browser or search.** Browsing the entire memory corpus or free-text search across summaries is a later stage. This pane opens a specific session's summary handed to it by PRD-003a.
-- **Goal management UI.** Editing, closing, or reprioritizing goals is the goals system's concern (`hivemind goal`). This pane only *creates* goals/tasks from Next Steps and links out.
+- **Goal management UI.** Editing, closing, or reprioritizing goals is the goals system's concern (`memoree goal`). This pane only *creates* goals/tasks from Next Steps and links out.
 - **Re-running summarization for a session.** Triggering a re-summary or backfill is out of scope; this pane reflects what the worker has already produced.
 - **Cross-agent summary aggregation.** This pane is Cursor-scoped and reads Cursor session summaries; multi-agent summary unification is not part of this stage.
 
@@ -59,7 +59,7 @@ flowchart TD
   hasSteps -->|"No"| noSteps["Show summary; note 'no next steps captured'"]
   hasSteps -->|"Yes"| steps["List each Next Step as an actionable item"]
   steps --> act{"Developer acts on a step"}
-  act -->|"Make goal"| goal["Create Hivemind goal (canonical goal path)"]
+  act -->|"Make goal"| goal["Create Memoree goal (canonical goal path)"]
   act -->|"Make Cursor task"| task["Create Cursor task (if available)"]
   goal --> reflect["Dashboard reflects new open goal"]
   task --> reflect
@@ -84,7 +84,7 @@ The `## Next Steps` block is not free-form text; it is a locked contract, and th
 
 - **Stable marker.** The section begins with the literal `## Next Steps` heading; the contract test extracts the body from that marker to the next section (`tests/claude-code/wiki-next-steps-contract.test.ts:41-54`).
 - **Byte-identical across agents.** The block is required to be byte-identical across all five agent copies (`tests/claude-code/wiki-next-steps-contract.test.ts:96`), so a single parser works for Cursor and every other agent's summaries.
-- **Parse defensively.** Each line item becomes an actionable entry. The parser must tolerate an empty or absent section (the contract allows a "no next steps" consequence) and never crash on a malformed summary, matching Hivemind's fail-soft posture everywhere else.
+- **Parse defensively.** Each line item becomes an actionable entry. The parser must tolerate an empty or absent section (the contract allows a "no next steps" consequence) and never crash on a malformed summary, matching Memoree's fail-soft posture everywhere else.
 
 > Because the format is contract-locked and tested, the parser can be strict about the marker and lenient about the contents, the safest combination.
 
@@ -96,7 +96,7 @@ Two promotion targets, one click each.
 
 | Action | What it creates | Delegates to | Result reflected in |
 |---|---|---|---|
-| **Make a goal** | A Hivemind goal whose label is the Next Step text | The canonical goal path (`hivemind goal`, `src/cli/index.ts:447-450`); goals are read back by `listOpenGoals` (`src/notifications/sources/open-goals.ts:60-65`) | The dashboard's open-goals surface and the SessionStart banner. |
+| **Make a goal** | A Memoree goal whose label is the Next Step text | The canonical goal path (`memoree goal`, `src/cli/index.ts:447-450`); goals are read back by `listOpenGoals` (`src/notifications/sources/open-goals.ts:60-65`) | The dashboard's open-goals surface and the SessionStart banner. |
 | **Make a Cursor task** | A task in Cursor's task system, if a first-party API is available | Cursor task API (open question); falls back to "Make a goal" when unavailable | Cursor's task surface. |
 
 Requirements:
@@ -124,7 +124,7 @@ Requirements:
 |---|---|
 | AC-1 | Given a session with an uploaded summary, when the developer opens it in the viewer, then the summary markdown renders in-editor with headings, lists, and code blocks intact. |
 | AC-2 | Given a summary with a populated `## Next Steps` section, when the viewer renders, then each next step appears as a distinct, actionable item parsed from the contract-locked block. |
-| AC-3 | Given a Next Step, when the developer chooses "Make a goal," then a Hivemind goal is created via the canonical goal path and appears in the dashboard's open-goals surface. |
+| AC-3 | Given a Next Step, when the developer chooses "Make a goal," then a Memoree goal is created via the canonical goal path and appears in the dashboard's open-goals surface. |
 | AC-4 | Given a Next Step and an available Cursor task API, when the developer chooses "Make a Cursor task," then a Cursor task is created; given no such API, the viewer offers "Make a goal" instead and does not fail. |
 | AC-5 | Given a session that has no summary, when the viewer opens it, then it shows an honest "no summary yet" state, and if PRD-002 health is degraded due to a logged-out `cursor-agent`, it links that cause. |
 | AC-6 | Given a summary whose Next Steps section is empty or absent, when the viewer renders, then the summary still shows and the pane notes "no next steps captured" without error. |
@@ -136,7 +136,7 @@ Requirements:
 
 ## Open questions
 
-- [ ] Does Cursor expose a first-party API to create a task/todo the viewer can target, or should promotion default to Hivemind goals with Cursor tasks as best-effort (the index PRD raises this)?
+- [ ] Does Cursor expose a first-party API to create a task/todo the viewer can target, or should promotion default to Memoree goals with Cursor tasks as best-effort (the index PRD raises this)?
 - [ ] Should summaries be fetched from the remote memory table directly (authoritative, matches the worker's storage at `src/hooks/cursor/wiki-worker.ts:194-195`) or from a local cache for latency, and how fresh must they be?
 - [ ] How should a resumed-session summary (which carries a `**JSONL offset**` marker, `src/hooks/cursor/wiki-worker.ts:152-154`) be presented, as one evolving document or with revision awareness?
 - [ ] What dedupe key prevents duplicate goals from repeated promotion, the Next Step text, a hash, or a `(sessionId, stepIndex)` tuple?
@@ -151,4 +151,4 @@ Requirements:
 - [`prd-003b-settings-manager`](./prd-003b-settings-manager.md): shares the Webview shell.
 - [`../prd-002-cursor-extension-core/prd-002a-health-check.md`](../prd-002-cursor-extension-core/prd-002a-health-check.md): the `cursor-agent` login (D3) check this viewer references when a summary is missing.
 - [`../prd-002-cursor-extension-core/prd-002c-status-bar.md`](../prd-002-cursor-extension-core/prd-002c-status-bar.md): the status bar this viewer points to when a missing summary traces to degraded health.
-- Source grounding: `src/hooks/cursor/wiki-worker.ts:186-230` (summary generation, upload path `/summaries/<user>/<sessionId>.md`, the missing-summary silent failure), `tests/claude-code/wiki-next-steps-contract.test.ts:11-96` (the locked `## Next Steps` contract this pane parses), `src/notifications/sources/open-goals.ts:42-85` (canonical goals reader a promoted step feeds), `src/cli/index.ts:447-450` (`hivemind goal` command the promotion delegates to).
+- Source grounding: `src/hooks/cursor/wiki-worker.ts:186-230` (summary generation, upload path `/summaries/<user>/<sessionId>.md`, the missing-summary silent failure), `tests/claude-code/wiki-next-steps-contract.test.ts:11-96` (the locked `## Next Steps` contract this pane parses), `src/notifications/sources/open-goals.ts:42-85` (canonical goals reader a promoted step feeds), `src/cli/index.ts:447-450` (`memoree goal` command the promotion delegates to).

@@ -89,7 +89,7 @@ export function spawnCursorWikiWorker(opts: SpawnOptions): void {
   const { config, sessionId, cwd, bundleDir, reason } = opts;
   const projectName = projectNameFromCwd(cwd);
 
-  const tmpDir = join(tmpdir(), `deeplake-wiki-${sessionId}-${Date.now()}`);
+  const tmpDir = join(tmpdir(), `memoree-wiki-${sessionId}-${Date.now()}`);
   mkdirSync(tmpDir, { recursive: true });
 
   const pluginVersion = getInstalledVersion(bundleDir, ".claude-plugin") ?? "";
@@ -97,9 +97,7 @@ export function spawnCursorWikiWorker(opts: SpawnOptions): void {
   const configFile = join(tmpDir, "config.json");
   writeFileSync(configFile, JSON.stringify({
     storage: {
-      kind: config.storage?.kind ?? "deeplake",
-      orgId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.orgId : undefined,
-      workspaceId: (config.storage?.kind ?? "deeplake") === "deeplake" ? config.workspaceId : undefined,
+      kind: config.storage.kind,
     },
     memoryTable: config.tableName,
     sessionsTable: config.sessionsTableName,
@@ -110,7 +108,7 @@ export function spawnCursorWikiWorker(opts: SpawnOptions): void {
     pluginVersion,
     tmpDir,
     cursorBin: findCursorBin(),
-    cursorModel: process.env.HIVEMIND_CURSOR_MODEL ?? "auto",
+    cursorModel: process.env.MEMOREE_CURSOR_MODEL ?? "auto",
     wikiLog: WIKI_LOG,
     hooksDir: join(HOME, ".cursor", "hooks"),
     promptTemplate: WIKI_PROMPT_TEMPLATE,

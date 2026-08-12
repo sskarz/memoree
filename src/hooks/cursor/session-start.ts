@@ -20,7 +20,6 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { loadCredentials, healDriftedOrgToken } from "../../commands/auth.js";
 import { loadConfig } from "../../config.js";
 import { resolveDirConfig } from "../../dir-config.js";
 import { createStorageBackend } from "../../storage/factory.js";
@@ -33,7 +32,6 @@ import { maybeAutoMineLocal } from "../../skillify/spawn-mine-local-worker.js";
 import { readStdin } from "../../utils/stdin.js";
 import { log as _log } from "../../utils/debug.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
-import { autoUpdate } from "../shared/autoupdate.js";
 import { autoPullSkills } from "../../skillify/auto-pull.js";
 import { GOALS_INSTRUCTIONS_CLI } from "../shared/goals-instructions.js";
 import { spawnGraphPullWorker } from "../../graph/spawn-pull-worker.js";
@@ -41,36 +39,29 @@ import { graphContextLine } from "../../graph/session-context.js";
 const log = (msg: string) => _log("cursor-session-start", msg);
 
 const __bundleDir = dirname(fileURLToPath(import.meta.url));
-// Hivemind requires its npm bin (`hivemind` from @deeplake/hivemind) on PATH.
-// Inject text uses bare `hivemind <sub>` form — no per-agent path resolution needed.
+// Memoree requires its npm bin (`memoree` from memoree) on PATH.
+// Inject text uses bare `memoree <sub>` form — no per-agent path resolution needed.
 
-const context = `HIVEMIND MEMORY: Persistent memory at ~/.deeplake/memory/ shared across sessions, users, and agents.
+const context = `MEMOREE MEMORY: Persistent memory at ~/.memoree/memory/ shared across sessions, users, and agents.
 
 Structure: index.md (start here) → summaries/*.md → sessions/*.jsonl (last resort). Do NOT jump straight to JSONL.
-Search: use \`grep\` (NOT \`rg\`/ripgrep). Example: grep -ri "keyword" ~/.deeplake/memory/
-IMPORTANT: Only use these bash builtins to interact with ~/.deeplake/memory/: cat, ls, grep, echo, jq, head, tail, sed, awk, wc, sort, find. Do NOT use rg/ripgrep, python, python3, node, curl, or other interpreters — they may not be installed and the memory filesystem only supports the listed builtins.
-Do NOT spawn subagents to read Hivemind memory.
+Search: use \`grep\` (NOT \`rg\`/ripgrep). Example: grep -ri "keyword" ~/.memoree/memory/
+IMPORTANT: Only use these bash builtins to interact with ~/.memoree/memory/: cat, ls, grep, echo, jq, head, tail, sed, awk, wc, sort, find. Do NOT use rg/ripgrep, python, python3, node, curl, or other interpreters — they may not be installed and the memory filesystem only supports the listed builtins.
+Do NOT spawn subagents to read Memoree memory.
 
-Organization management — each argument is SEPARATE (do NOT quote subcommands together):
-- hivemind login                              — SSO login
-- hivemind whoami                             — show current user/org
-- hivemind org list                           — list organizations
-- hivemind org switch <name-or-id>            — switch organization
-- hivemind workspaces                         — list workspaces
-- hivemind workspace <id>                     — switch workspace
-- hivemind invite <email> <ADMIN|WRITE|READ>  — invite member (ALWAYS ask user which role before inviting)
-- hivemind members                            — list members
-- hivemind remove <user-id>                   — remove member
+Diagnostics:
+- memoree doctor                             — verify local storage and embeddings
+- memoree backend status                     — show the active storage backend
 
 SKILLS (skillify) — mine + share reusable skills across the org:
 ${renderSkillifyCommands()}
 
-Embeddings (semantic memory search) — opt-in, persisted in ~/.deeplake/config.json:
-- hivemind embeddings install               — download deps (~600MB), symlink agents, set enabled:true
-- hivemind embeddings enable                — flip enabled:true (run install first if deps missing)
-- hivemind embeddings disable               — flip enabled:false + SIGTERM daemon (deps stay on disk)
-- hivemind embeddings uninstall [--prune]   — remove agent symlinks + disable; --prune wipes deps too
-- hivemind embeddings status                — show config + deps + per-agent link state`;
+Embeddings (semantic memory search) — opt-in, persisted in ~/.memoree/config.json:
+- memoree embeddings install               — download deps (~600MB), symlink agents, set enabled:true
+- memoree embeddings enable                — flip enabled:true (run install first if deps missing)
+- memoree embeddings disable               — flip enabled:false + SIGTERM daemon (deps stay on disk)
+- memoree embeddings uninstall [--prune]   — remove agent symlinks + disable; --prune wipes deps too
+- memoree embeddings status                — show config + deps + per-agent link state`;
 
 interface CursorSessionStartInput {
   session_id?: string;
@@ -115,44 +106,27 @@ async function createPlaceholder(
 }
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   const input = await readStdin<CursorSessionStartInput>();
   const sessionId = resolveSessionId(input);
   const cwd = resolveCwd(input);
-
-  let creds = loadCredentials();
-  if (!creds?.token) {
-    log("no credentials found");
-    const auto = maybeAutoMineLocal();
-    log(`auto-mine: ${auto.triggered ? "triggered (background)" : `skipped (${auto.reason})`}`);
-  } else {
-    log(`credentials loaded: org=${creds.orgName ?? creds.orgId}`);
-    creds = await healDriftedOrgToken(creds, log);
-  }
-
-  // Centralized autoupdate fires BEFORE the DB ensure-table calls — those
-  // can stall for tens of seconds against a slow/unreachable backend, and
-  // autoUpdate has no dependency on table state. Run it first so the user
-  // sees the upgrade notice promptly even when the API is down.
-  await autoUpdate(creds, { agent: "cursor" });
-
   // Resolve plugin version once — also stamped on the placeholder row.
   const current = getInstalledVersion(__bundleDir, ".claude-plugin");
   const pluginVersion = current ?? "";
 
-  // HIVEMIND_CAPTURE=false means full read-only mode — no INSERTs
+  // MEMOREE_CAPTURE=false means full read-only mode — no INSERTs
   // AND no DDL. ensureTable + ensureSessionsTable create/heal tables
   // (DDL writes), so they're gated on captureEnabled too. The
   // renderer is read-only and runs regardless. Codex review pass 2
   // + pass 4 together surfaced this layering: only writes (placeholder
   // + ensure DDL) are gated; reads (renderer) always run.
-  const captureEnabled = process.env.HIVEMIND_CAPTURE !== "false";
+  const captureEnabled = process.env.MEMOREE_CAPTURE !== "false";
 
-  // Per-directory `.hivemind`: route / opt out for this tree. Resolved once and
+  // Per-directory `.memoree`: route / opt out for this tree. Resolved once and
   // reused for the placeholder write and the disclosure banner below.
   const baseConfig = loadConfig();
-  const storageAvailable = Boolean(baseConfig && ((baseConfig.storage?.kind ?? "deeplake") !== "deeplake" || creds?.token));
+  const storageAvailable = Boolean(baseConfig);
   const dirRes = baseConfig ? resolveDirConfig(baseConfig, cwd) : null;
   const collectHere = captureEnabled && (dirRes?.collect ?? true);
   let rulesBlock = "";
@@ -170,8 +144,8 @@ async function main(): Promise<void> {
           log("placeholder created");
         } else {
           log(dirRes && !dirRes.collect
-            ? `placeholder + schema ensure skipped (.hivemind collect:false ${dirRes.found?.path})`
-            : "placeholder + schema ensure skipped (HIVEMIND_CAPTURE=false)");
+            ? `placeholder + schema ensure skipped (.memoree collect:false ${dirRes.found?.path})`
+            : "placeholder + schema ensure skipped (MEMOREE_CAPTURE=false)");
         }
         // Read-only renderer. Cursor's additional_context is invisible
         // to the user (model-only), so the full block is fine. Renderer
@@ -196,56 +170,49 @@ async function main(): Promise<void> {
     }
   }
 
-  // Auto-pull skills from all org users on every SessionStart (5s timeout).
+  // Auto-pull shared skills on every SessionStart (5s timeout).
   // File writes inside runPull are idempotent (skipped when local version
   // is at-or-newer than remote), so re-running every session is cheap on
   // disk; the only per-call cost is the SQL round-trip. autoPullSkills
   // never rejects — all errors are swallowed inside. Hard opt-out:
-  // HIVEMIND_AUTOPULL_DISABLED=1.
+  // MEMOREE_AUTOPULL_DISABLED=1.
   const pullResult = await autoPullSkills();
   log(`autopull: pulled=${pullResult.pulled} skipped=${pullResult.skipped}`);
 
   let versionNotice = "";
-  if (current) versionNotice = `\nHivemind v${current}`;
+  if (current) versionNotice = `\nMemoree v${current}`;
 
-  // No placeholder substitution — inject already uses bare `hivemind <sub>` form.
+  // No placeholder substitution — inject already uses bare `memoree <sub>` form.
   const localMined = countLocalManifestEntries();
   const localMinedNote = localMined > 0
-    ? `\n${localMined} local skill${localMined === 1 ? "" : "s"} from past 'hivemind skillify mine-local' run(s) live in ~/.claude/skills/. Run 'hivemind login' to start sharing new mining results with your team.`
+    ? `\n${localMined} local skill${localMined === 1 ? "" : "s"} from past 'memoree skillify mine-local' run(s) live in ~/.claude/skills/. Run 'memoree doctor' to start sharing new mining results with your team.`
     : "";
   // Async auto-pull on SessionStart — detached, never blocks. Pulled
   // bytes land for the NEXT SessionStart. See src/graph/spawn-pull-worker.ts.
-  // Gate on creds: avoid wasted process churn when unauthenticated
-  // (pullSnapshot would early-return skipped-no-auth anyway).
+  // Skip the worker when the selected storage backend is unavailable.
   if (storageAvailable) spawnGraphPullWorker(resolveCwd(input), __bundleDir);
 
-  // Disclose the EFFECTIVE identity (after any `.hivemind` overlay).
+  // Disclose the EFFECTIVE identity (after any `.memoree` overlay).
   const effConfig = dirRes?.config ?? baseConfig;
   const routed = !!(dirRes?.found && dirRes.collect && baseConfig &&
     (dirRes.config.orgId !== baseConfig.orgId || dirRes.config.workspaceId !== baseConfig.workspaceId));
-  const effOrg = effConfig ? (effConfig.orgName ?? effConfig.orgId) : (creds?.orgName ?? creds?.orgId);
-  const effWs = effConfig ? effConfig.workspaceId : (creds?.workspaceId ?? "default");
-  const provider = effConfig?.storage?.kind ?? "deeplake";
-  const identityLine = provider === "deeplake"
-    ? (dirRes && !dirRes.collect
-        ? `Deeplake capture is disabled for this directory (${dirRes.found?.path}); memory search still uses org: ${effOrg}`
-        : `Logged in to Deeplake as org: ${effOrg} (workspace: ${effWs})${routed ? ` · routed by ${dirRes?.found?.path}` : ""}`)
-    : `Hivemind memory backend: ${provider}${dirRes && !dirRes.collect ? ` · capture disabled by ${dirRes.found?.path}` : ""}`;
+  const provider = effConfig?.storage.kind ?? "sqlite";
+  const identityLine = `Memoree memory backend: ${provider}${dirRes && !dirRes.collect ? ` · capture disabled by ${dirRes.found?.path}` : ""}`;
   const baseContext = storageAvailable && effConfig
     ? `${context}\n${identityLine}${versionNotice}`
-    : `${context}\nNot logged in to Deeplake. Run: hivemind login${localMinedNote}${versionNotice}`;
-  // Cursor cannot route Write/Edit through hivemind hooks (its
+    : `${context}\nLocal Memoree storage is unavailable. Run: memoree doctor${localMinedNote}${versionNotice}`;
+  // Cursor cannot route Write/Edit through memoree hooks (its
   // pre-tool-use only intercepts Shell). So the agent here uses
-  // the CLI variant — `hivemind goal add/list/...` invoked as
-  // shell commands. Same end state (rows in hivemind_goals /
-  // hivemind_kpis), different code path inside the agent.
+  // the CLI variant — `memoree goal add/list/...` invoked as
+  // shell commands. Same end state (rows in memoree_goals /
+  // memoree_kpis), different code path inside the agent.
   const baseWithGoals = storageAvailable && effConfig ? `${baseContext}\n\n${GOALS_INSTRUCTIONS_CLI}` : baseContext;
   const withRules = rulesBlock
     ? `${baseWithGoals}\n\n${rulesBlock}`
     : baseWithGoals;
 
   // Local code graph context (Phase 3 v1.1) — same inject Claude Code emits
-  // (src/hooks/session-start.ts). Cheap: reads ~/.hivemind/.../​.last-build.json,
+  // (src/hooks/session-start.ts). Cheap: reads ~/.memoree/.../​.last-build.json,
   // never parses the ~1 MB snapshot. Returns null when no graph exists for
   // this repo, in which case we append nothing. Without this, Cursor never
   // told the agent the graph existed — the silent gap A3 closes.

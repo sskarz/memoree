@@ -2,7 +2,7 @@
  * Snapshot history log (Phase 1.5).
  *
  * Append-only JSONL at:
- *   ~/.hivemind/graphs/<repo-key>/history.jsonl
+ *   ~/.memoree/graphs/<repo-key>/history.jsonl
  *
  * One line per successful snapshot write. Cheap to scan, easy to diff,
  * trivially exportable. Each entry captures enough to identify and locate

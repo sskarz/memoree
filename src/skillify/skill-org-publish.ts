@@ -1,5 +1,5 @@
 /**
- * Direct publish of a SkillOpt-improved skill BACK to the Deeplake `skills`
+ * Direct publish of a SkillOpt-improved skill BACK to the Memoree `skills`
  * table — the org-wide source of truth. The engine improves a skill and lands
  * the result as a NEW version (append-only; readers take ORDER BY version DESC),
  * so every teammate re-pulls it on next sync. No approval gate by design:

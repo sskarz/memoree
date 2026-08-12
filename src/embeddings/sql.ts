@@ -1,11 +1,11 @@
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "../storage/schema.js";
 
-// Helpers for embedding values in SQL. Deeplake stores vectors as `FLOAT4[]`,
-// PostgreSQL as DOUBLE PRECISION[], and SQLite as JSON text.
+// Helpers for embedding values in SQL. PostgreSQL stores vectors as
+// DOUBLE PRECISION[] and SQLite stores them as JSON text.
 
 export function embeddingSqlLiteral(
   vec: number[] | null | undefined,
-  dialect: StorageDialect = "deeplake",
+  dialect: StorageDialect = "postgres",
 ): string {
   if (!vec || vec.length === 0) return "NULL";
   // FLOAT4 is IEEE-754 single-precision. `toFixed` would lose precision; use
@@ -17,6 +17,5 @@ export function embeddingSqlLiteral(
     parts.push(String(v));
   }
   if (dialect === "sqlite") return `'[${parts.join(",")}]'`;
-  if (dialect === "postgres") return `ARRAY[${parts.join(",")}]::double precision[]`;
-  return `ARRAY[${parts.join(",")}]::float4[]`;
+  return `ARRAY[${parts.join(",")}]::double precision[]`;
 }

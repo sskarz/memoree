@@ -6,33 +6,33 @@
  * Invoked via `nohup node graph-pull-worker.js --cwd <cwd>` from each
  * agent's SessionStart hook (claude-code / codex / cursor / hermes). The
  * parent hook calls `.unref()` and exits immediately — this worker keeps
- * running, calls pullSnapshot(cwd), writes the snapshot if cloud is
+ * running, calls pullSnapshot(cwd), writes the snapshot if backend is
  * fresher than local, and exits.
  *
  * Async-on-SessionStart tradeoff (deliberate, per design discussion):
  *   - Pro: SessionStart returns instantly. No multi-hundred-ms tax on
  *     every session open.
  *   - Con: the CURRENT session sees the PRE-pull state in graphContextLine
- *     and in any `~/.deeplake/graph/` reads. The next SessionStart picks
+ *     and in any `~/.memoree/graph/` reads. The next SessionStart picks
  *     up the freshly-pulled state.
  *   In practice the freshness gap is one session boundary (typically
  *   minutes), which is fine. Users who need an immediate pull can run
- *   `hivemind graph pull` manually.
+ *   `memoree graph pull` manually.
  *
  * The worker is intentionally detached + silent to the user: stdio is
  * ignored, output goes to a per-repo log file
- * (~/.hivemind/graphs/<key>/.graph-pull.log) only when DEBUG is wanted.
+ * (~/.memoree/graphs/<key>/.graph-pull.log) only when DEBUG is wanted.
  * Never writes to stdout/stderr — the spawning parent has detached and
  * any output would go nowhere useful.
  *
- * Disable via HIVEMIND_GRAPH_PULL=0 (read by pullSnapshot itself; the
+ * Disable via MEMOREE_GRAPH_PULL=0 (read by pullSnapshot itself; the
  * worker still spawns but exits in the skipped-disabled branch).
  */
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { pullSnapshot } from "../graph/deeplake-pull.js";
+import { pullSnapshot } from "../graph/snapshot-pull.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { repoDir } from "../graph/snapshot.js";
 
@@ -43,9 +43,9 @@ function getArg(name: string): string | null {
 }
 
 /**
- * Hard wall-clock timeout for the worker. The DeeplakeApi fetch() path
+ * Hard wall-clock timeout for the worker. The MemoreeApi fetch() path
  * does NOT install an AbortSignal on its HTTP requests (codex P1 in this
- * commit: graph-pull-worker.ts citing src/deeplake-api.ts:413), so a
+ * commit: graph-pull-worker.ts citing src/memoree-api.ts:413), so a
  * network stall, blackholed connection, or stuck proxy could leave this
  * worker waiting indefinitely. With repeated SessionStart events (think
  * `claude -p` in a tight scripted loop), detached workers would
@@ -54,10 +54,10 @@ function getArg(name: string): string | null {
  *
  * 30 seconds is generous for a pull: SELECT ~300-500ms + ~1 MB download
  * over a slow link still fits well under it, and a real network failure
- * shows up well before. Tuneable via HIVEMIND_GRAPH_PULL_TIMEOUT_MS.
+ * shows up well before. Tuneable via MEMOREE_GRAPH_PULL_TIMEOUT_MS.
  */
 function workerTimeoutMs(): number {
-  const raw = process.env.HIVEMIND_GRAPH_PULL_TIMEOUT_MS;
+  const raw = process.env.MEMOREE_GRAPH_PULL_TIMEOUT_MS;
   if (raw === undefined) return 30_000;
   const n = parseInt(raw, 10);
   return Number.isFinite(n) && n > 0 ? n : 30_000;
@@ -105,8 +105,8 @@ async function main(): Promise<void> {
     } else if (outcome.kind === "local-newer") {
       extras.push(`commit=${outcome.commitSha.slice(0, 7)}`);
       extras.push(`localTs=${outcome.localTs}`);
-      extras.push(`cloudTs=${outcome.cloudTs}`);
-    } else if (outcome.kind === "no-cloud-row") {
+      extras.push(`backendTs=${outcome.backendTs}`);
+    } else if (outcome.kind === "no-backend-row") {
       extras.push(`commit=${outcome.commitSha.slice(0, 7)}`);
     } else if (outcome.kind === "error") {
       extras.push(outcome.message);

@@ -5,7 +5,7 @@
  * so the caller constructs the logger once by passing HOOKS_DIR.
  *
  * This is the *user-visible* log — entries like "SessionEnd:
- * triggering summary for <sid>" land here regardless of HIVEMIND_DEBUG.
+ * triggering summary for <sid>" land here regardless of MEMOREE_DEBUG.
  * For debug-gated diagnostics use `_log` from src/utils/debug.ts.
  */
 
@@ -18,7 +18,7 @@ export interface WikiLogger {
   path: string;
 }
 
-export function makeWikiLogger(hooksDir: string, filename = "deeplake-wiki.log"): WikiLogger {
+export function makeWikiLogger(hooksDir: string, filename = "memoree-wiki.log"): WikiLogger {
   const path = join(hooksDir, filename);
   return {
     path,

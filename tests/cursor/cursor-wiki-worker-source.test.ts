@@ -48,9 +48,9 @@ describe("cursor spawn-wiki-worker source", () => {
     expect(SPAWN_SRC).not.toContain('resolveCliBin("codex"');
   });
 
-  it("config builder includes cursorModel from HIVEMIND_CURSOR_MODEL with `auto` default", () => {
-    expect(SPAWN_SRC).toContain("HIVEMIND_CURSOR_MODEL");
-    expect(SPAWN_SRC).toMatch(/HIVEMIND_CURSOR_MODEL.*\?\?\s*"auto"/);
+  it("config builder includes cursorModel from MEMOREE_CURSOR_MODEL with `auto` default", () => {
+    expect(SPAWN_SRC).toContain("MEMOREE_CURSOR_MODEL");
+    expect(SPAWN_SRC).toMatch(/MEMOREE_CURSOR_MODEL.*\?\?\s*"auto"/);
   });
 
   it("hooksDir + wikiLog point at ~/.cursor/ (not ~/.codex/)", () => {

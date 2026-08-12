@@ -3,12 +3,12 @@ import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, statSync, u
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
-import { HIVEMIND_BLOCK_START, HIVEMIND_BLOCK_END } from "../../src/cli/agents-md.js";
+import { MEMOREE_BLOCK_START, MEMOREE_BLOCK_END } from "../../src/cli/agents-md.js";
 
 /**
  * Tests for the disk-side of src/cli/install-codex.ts.
  *
- * The pure helpers (`isHivemindHookEntry`, `mergeHooks`) already have
+ * The pure helpers (`isMemoreeHookEntry`, `mergeHooks`) already have
  * coverage in install-helpers.test.ts. Here we exercise installCodex /
  * uninstallCodex against a real (tmp) ~/.codex layout — copying the
  * fake bundle, writing hooks.json, dropping the agentskills symlink,
@@ -44,8 +44,8 @@ beforeEach(() => {
   mkdirSync(join(tmpPkg, "harnesses", "codex", "bundle"), { recursive: true });
   writeFileSync(join(tmpPkg, "harnesses", "codex", "bundle", "session-start.js"), "// fake bundle file");
   writeFileSync(join(tmpPkg, "harnesses", "codex", "bundle", "capture.js"), "// fake bundle file");
-  mkdirSync(join(tmpPkg, "harnesses", "codex", "skills", "deeplake-memory"), { recursive: true });
-  writeFileSync(join(tmpPkg, "harnesses", "codex", "skills", "deeplake-memory", "SKILL.md"), "fake skill body");
+  mkdirSync(join(tmpPkg, "harnesses", "codex", "skills", "memoree-memory"), { recursive: true });
+  writeFileSync(join(tmpPkg, "harnesses", "codex", "skills", "memoree-memory", "SKILL.md"), "fake skill body");
   // Mock package.json so getVersion() resolves to a known value.
   writeFileSync(join(tmpPkg, "package.json"), JSON.stringify({ version: "1.2.3" }));
 
@@ -77,15 +77,15 @@ describe("installCodex — happy path", () => {
     const { installCodex } = await importInstaller();
     installCodex();
 
-    const pluginDir = join(tmpHome, ".codex", "hivemind");
+    const pluginDir = join(tmpHome, ".codex", "memoree");
     expect(existsSync(pluginDir)).toBe(true);
     expect(existsSync(join(pluginDir, "bundle", "session-start.js"))).toBe(true);
     expect(existsSync(join(pluginDir, "bundle", "capture.js"))).toBe(true);
-    expect(existsSync(join(pluginDir, "skills", "deeplake-memory", "SKILL.md"))).toBe(true);
-    expect(readFileSync(join(pluginDir, ".hivemind_version"), "utf-8")).toBe("1.2.3");
+    expect(existsSync(join(pluginDir, "skills", "memoree-memory", "SKILL.md"))).toBe(true);
+    expect(readFileSync(join(pluginDir, ".memoree_version"), "utf-8")).toBe("1.2.3");
   });
 
-  it("writes a hooks.json with exactly five hivemind events: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop", async () => {
+  it("writes a hooks.json with exactly five memoree events: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop", async () => {
     const { installCodex } = await importInstaller();
     installCodex();
 
@@ -146,11 +146,11 @@ describe("installCodex — happy path", () => {
     expect(merged.hooks.PostToolUse).toHaveLength(1);
   });
 
-  it("creates the agentskills symlink at ~/.agents/skills/hivemind-memory", async () => {
+  it("creates the agentskills symlink at ~/.agents/skills/memoree-memory", async () => {
     const { installCodex } = await importInstaller();
     installCodex();
 
-    const link = join(tmpHome, ".agents", "skills", "hivemind-memory");
+    const link = join(tmpHome, ".agents", "skills", "memoree-memory");
     expect(existsSync(link)).toBe(true);
     // Validate it points at the real on-disk skill payload.
     expect(existsSync(join(link, "SKILL.md"))).toBe(true);
@@ -245,7 +245,7 @@ describe("installCodex — happy path", () => {
     expect(existsSync(join(tmpHome, ".codex", "config.toml"))).toBe(false);
   });
 
-  it("preserves a user-defined hook on a non-hivemind event when re-installing over an existing config", async () => {
+  it("preserves a user-defined hook on a non-memoree event when re-installing over an existing config", async () => {
     // CLAUDE.md rule 12: failure case before the fix surface — write the
     // shape of an existing hooks.json that the bug would clobber.
     const userHook = {
@@ -275,10 +275,10 @@ describe("installCodex — happy path", () => {
   });
 
   it("warns and skips the symlink (without throwing) when the skill source is missing", async () => {
-    rmSync(join(tmpPkg, "harnesses", "codex", "skills", "deeplake-memory"), { recursive: true, force: true });
+    rmSync(join(tmpPkg, "harnesses", "codex", "skills", "memoree-memory"), { recursive: true, force: true });
     const { installCodex } = await importInstaller();
     expect(() => installCodex()).not.toThrow();
-    expect(existsSync(join(tmpHome, ".agents", "skills", "hivemind-memory"))).toBe(false);
+    expect(existsSync(join(tmpHome, ".agents", "skills", "memoree-memory"))).toBe(false);
   });
 
   it("throws when the bundle source is missing (build hasn't run)", async () => {
@@ -287,10 +287,10 @@ describe("installCodex — happy path", () => {
     expect(() => installCodex()).toThrow(/Codex bundle missing/);
   });
 
-  it("strips a non-canonical hivemind hook entry (sibling dev-clone leftover) and warns about it", async () => {
-    // Realistic dual-install fixture: a previous `npm link` of a hivemind dev
+  it("strips a non-canonical memoree hook entry (sibling dev-clone leftover) and warns about it", async () => {
+    // Realistic dual-install fixture: a previous `npm link` of a memoree dev
     // clone left a SessionStart hook pointing at /tmp/old-clone instead of
-    // the canonical ~/.codex/hivemind. installCodex must recognise that as
+    // the canonical ~/.codex/memoree. installCodex must recognise that as
     // ours-but-foreign, strip it, and surface what it stripped to stderr.
     const foreignCmd = `node "/tmp/old-clone/codex/bundle/session-start.js"`;
     writeFileSync(
@@ -303,7 +303,7 @@ describe("installCodex — happy path", () => {
     );
 
     const stderrCalls: string[] = [];
-    // Re-spy so we can read what reportForeignHivemindHooks wrote.
+    // Re-spy so we can read what reportForeignMemoreeHooks wrote.
     vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
       stderrCalls.push(typeof chunk === "string" ? chunk : String(chunk));
       return true;
@@ -319,7 +319,7 @@ describe("installCodex — happy path", () => {
     // Normalize separators: on Windows the command is written with backslashes
     // (join()), so compare against a join()-built path with both sides slashed.
     const cmd = hooks.hooks.SessionStart[0].hooks[0].command.replace(/\\/g, "/");
-    const canonical = join(tmpHome, ".codex", "hivemind", "bundle", "session-start.js").replace(/\\/g, "/");
+    const canonical = join(tmpHome, ".codex", "memoree", "bundle", "session-start.js").replace(/\\/g, "/");
     expect(cmd).toContain(canonical);
     expect(cmd).not.toContain("/tmp/old-clone");
 
@@ -329,9 +329,9 @@ describe("installCodex — happy path", () => {
   });
 
   it("does NOT classify an entry as foreign when its hooks[] contains a malformed sibling element", async () => {
-    // Edge case: an entry whose hooks[] mixes one canonical hivemind hook
+    // Edge case: an entry whose hooks[] mixes one canonical memoree hook
     // with garbage (a null entry, a hook with a non-string command). The
-    // canonical hook is recognised — so the entry is hivemind and gets
+    // canonical hook is recognised — so the entry is memoree and gets
     // stripped — but the malformed siblings short-circuit the "is foreign"
     // check, so we must NOT report this entry as a non-canonical dev clone.
     const canonicalForeignCmd = `node "/opt/other-install/codex/bundle/capture.js"`;
@@ -376,9 +376,9 @@ describe("installCodex — happy path", () => {
     // Normalize separators (Windows join() writes backslashes).
     const slash = (s: string): string => s.replace(/\\/g, "/");
     expect(slash(hooks.hooks.PostToolUse[0].hooks[0].command))
-      .toContain(slash(join(tmpHome, ".codex", "hivemind", "bundle", "capture.js")));
+      .toContain(slash(join(tmpHome, ".codex", "memoree", "bundle", "capture.js")));
     expect(slash(hooks.hooks.PreToolUse[0].hooks[0].command))
-      .toContain(slash(join(tmpHome, ".codex", "hivemind", "bundle", "pre-tool-use.js")));
+      .toContain(slash(join(tmpHome, ".codex", "memoree", "bundle", "pre-tool-use.js")));
 
     // And: no foreign warning, because neither entry passed isForeign (the
     // malformed siblings made `.every()` return false in both).
@@ -390,13 +390,13 @@ describe("installCodex — happy path", () => {
 });
 
 // Reuse the source-of-truth markers so the test tracks any format change.
-const BEGIN = HIVEMIND_BLOCK_START;
-const END = HIVEMIND_BLOCK_END;
+const BEGIN = MEMOREE_BLOCK_START;
+const END = MEMOREE_BLOCK_END;
 
 describe("installCodex — AGENTS.md memory block", () => {
   const agentsPath = (): string => join(tmpHome, ".codex", "AGENTS.md");
 
-  it("creates ~/.codex/AGENTS.md with exactly one hivemind block carrying the proactive instruction", async () => {
+  it("creates ~/.codex/AGENTS.md with exactly one memoree block carrying the proactive instruction", async () => {
     const { installCodex } = await importInstaller();
     installCodex();
     const md = readFileSync(agentsPath(), "utf-8");
@@ -405,8 +405,8 @@ describe("installCodex — AGENTS.md memory block", () => {
     // The whole point: proactive memory + rules/goals guidance is injected
     // here (silent model context), not in the user-visible session-start hook.
     expect(md).toContain("Proactively consult");
-    expect(md).toContain("hivemind rules list");
-    expect(md).toContain("hivemind goal list --mine");
+    expect(md).toContain("memoree rules list");
+    expect(md).toContain("memoree goal list --mine");
   });
 
   it("preserves a user's pre-existing AGENTS.md content; appends the block once", async () => {
@@ -429,7 +429,7 @@ describe("installCodex — AGENTS.md memory block", () => {
 });
 
 describe("uninstallCodex", () => {
-  it("strips the hivemind block from AGENTS.md while preserving user content", async () => {
+  it("strips the memoree block from AGENTS.md while preserving user content", async () => {
     const agentsPath = join(tmpHome, ".codex", "AGENTS.md");
     writeFileSync(agentsPath, `# Header\nuser line\n\n${BEGIN}\nstale\n${END}\n\n## After\nmore user\n`);
     const { uninstallCodex } = await importInstaller();
@@ -452,14 +452,14 @@ describe("uninstallCodex", () => {
     const { installCodex, uninstallCodex } = await importInstaller();
     installCodex();
     expect(existsSync(join(tmpHome, ".codex", "hooks.json"))).toBe(true);
-    expect(existsSync(join(tmpHome, ".agents", "skills", "hivemind-memory"))).toBe(true);
+    expect(existsSync(join(tmpHome, ".agents", "skills", "memoree-memory"))).toBe(true);
 
     uninstallCodex();
     expect(existsSync(join(tmpHome, ".codex", "hooks.json"))).toBe(false);
-    expect(existsSync(join(tmpHome, ".agents", "skills", "hivemind-memory"))).toBe(false);
+    expect(existsSync(join(tmpHome, ".agents", "skills", "memoree-memory"))).toBe(false);
     // Plugin payload is intentionally preserved (lets the user re-install
     // without re-downloading) — assert the bundle is still there.
-    expect(existsSync(join(tmpHome, ".codex", "hivemind", "bundle", "session-start.js"))).toBe(true);
+    expect(existsSync(join(tmpHome, ".codex", "memoree", "bundle", "session-start.js"))).toBe(true);
   });
 
   it("is a no-op when there's nothing to remove (cold uninstall)", async () => {
@@ -467,8 +467,8 @@ describe("uninstallCodex", () => {
     expect(() => uninstallCodex()).not.toThrow();
   });
 
-  it("preserves a non-hivemind hook during uninstall: rewrites hooks.json instead of deleting it", async () => {
-    // Install hivemind, then mix in a user-owned hook that shares an event
+  it("preserves a non-memoree hook during uninstall: rewrites hooks.json instead of deleting it", async () => {
+    // Install memoree, then mix in a user-owned hook that shares an event
     // with us. Uninstall must strip our entries but keep the user's, which
     // exercises the writeJson branch (hooks.json survives) rather than the
     // unlinkSync branch (hooks.json deleted because nothing else is left).
@@ -489,7 +489,7 @@ describe("uninstallCodex", () => {
     expect(after.hooks.PostToolUse[0]).toEqual(userHook);
     // Top-level metadata is preserved through the rewrite.
     expect(after.version).toBe(9);
-    // Hivemind-only events lose their entries entirely.
+    // Memoree-only events lose their entries entirely.
     expect(after.hooks.SessionStart ?? []).toHaveLength(0);
   });
 

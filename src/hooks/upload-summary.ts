@@ -2,7 +2,7 @@
  * Shared summary-upload logic for claude-code + codex wiki workers.
  *
  * Combines the summary, size_bytes and description column writes into a
- * SINGLE UPDATE (or INSERT) statement — the Deeplake backend silently
+ * SINGLE UPDATE (or INSERT) statement — the Memoree backend silently
  * drops one of two rapid UPDATEs on the same row, so splitting these
  * across two statements ends up losing the summary column while only
  * description lands.
@@ -11,7 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { embeddingSqlLiteral } from "../embeddings/sql.js";
 import { redactSecrets } from "./shared/redact.js";
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "../storage/schema.js";
 import { escapedStringPrefix } from "../storage/sql-dialect.js";
 
 export type QueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
@@ -36,7 +36,7 @@ export interface UploadParams {
   /** Dialect used by the detached worker's selected storage backend. */
   dialect?: StorageDialect;
   /**
-   * Hivemind plugin version that produced this summary.
+   * Memoree plugin version that produced this summary.
    * - INSERT: omitted lands the column default (''), schema-compatible.
    * - UPDATE: omitted means "don't touch the column" — a refresh from a
    *   legacy spawner that doesn't pass pluginVersion must NOT overwrite
@@ -135,7 +135,7 @@ export async function uploadSummary(query: QueryFn, params: UploadParams): Promi
   const ts = params.ts ?? new Date().toISOString();
   const desc = extractDescription(text);
   const sizeBytes = Buffer.byteLength(text);
-  const dialect = params.dialect ?? "deeplake";
+  const dialect = params.dialect ?? "postgres";
   const embSql = embeddingSqlLiteral(params.embedding ?? null, dialect);
   const stringPrefix = escapedStringPrefix(dialect);
   // Keep undefined sentinel for UPDATE conditional. INSERT still defaults to ''.
@@ -149,7 +149,7 @@ export async function uploadSummary(query: QueryFn, params: UploadParams): Promi
     // FINALIZE-WINS: a finalized row (real summary + non-placeholder
     // description) must never be clobbered back to a placeholder/stub.
     //
-    // Production failure mode this prevents (org activeloop, ~56% of summaries
+    // Production failure mode this prevents (org sskarz, ~56% of summaries
     // stuck at 'in progress'): a stale/duplicate writer — a resumed session,
     // or a late wiki worker that produced empty / content-free text —
     // overwrites a real summary with a stub, making the row invisible to

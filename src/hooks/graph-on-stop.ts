@@ -24,7 +24,7 @@
  *
  * Common-case workload (when the gate skips):
  *
- *   1. Read ~/.hivemind/graphs/<key>/.last-build.json
+ *   1. Read ~/.memoree/graphs/<key>/.last-build.json
  *   2. If now - lastBuild.ts < TICK_INTERVAL_MS → exit 0 (rate limit)
  *   3. Get HEAD via git rev-parse. If null → exit 0 (not in a git repo)
  *   4. If HEAD == lastBuild.commit_sha → exit 0 (no new commits)
@@ -68,10 +68,10 @@ function workTreeIdFor(cwd: string): string {
  * How long between auto-rebuilds. The first SessionEnd after this interval
  * AND after a commit-with-source-changes is the one that fires the build.
  * Earlier SessionEnds within the window skip the build. Override via
- * HIVEMIND_GRAPH_TICK_INTERVAL_MS for tests.
+ * MEMOREE_GRAPH_TICK_INTERVAL_MS for tests.
  */
 function tickIntervalMs(): number {
-  const raw = process.env.HIVEMIND_GRAPH_TICK_INTERVAL_MS;
+  const raw = process.env.MEMOREE_GRAPH_TICK_INTERVAL_MS;
   if (raw === undefined) return 10 * 60 * 1000; // 10 minutes
   const parsed = parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 10 * 60 * 1000;
@@ -102,7 +102,7 @@ export interface GateDecision {
 }
 
 export function decideGate(ctx: GateContext): GateDecision {
-  if (ctx.envDisable) return { fire: false, reason: "disabled (HIVEMIND_GRAPH_ON_STOP=0)" };
+  if (ctx.envDisable) return { fire: false, reason: "disabled (MEMOREE_GRAPH_ON_STOP=0)" };
 
   const { key: repoKey } = deriveProjectKey(ctx.cwd);
   const baseDir = repoDir(repoKey);
@@ -211,8 +211,8 @@ export async function main(deps: MainDeps = {}): Promise<void> {
   const releaseFn = deps.releaseBuildLock ?? releaseBuildLock;
   const gateFn = deps.decideGate ?? decideGate;
   // Disable switch for users / CI:
-  //   HIVEMIND_GRAPH_ON_STOP=0   → no-op
-  const envDisable = process.env.HIVEMIND_GRAPH_ON_STOP === "0";
+  //   MEMOREE_GRAPH_ON_STOP=0   → no-op
+  const envDisable = process.env.MEMOREE_GRAPH_ON_STOP === "0";
   // Claude Code passes a JSON payload on stdin; we don't need anything from
   // it for Phase 1 (cwd is process.cwd()), so we skip the read entirely.
   const ctx: GateContext = {

@@ -1,25 +1,20 @@
 {
-  "name": "hivemind",
+  "name": "memoree",
   "owner": {
-    "name": "Activeloop",
-    "email": "support@activeloop.ai"
+    "name": "sskarz",
+    "email": "support@sskarz.ai"
   },
   "metadata": {
-    "description": "Cloud-backed persistent shared memory for AI agents powered by Deeplake",
+    "description": "Local-first memory for coding agents",
     "version": "0.7.145"
   },
   "plugins": [
     {
-      "name": "hivemind",
-      "description": "Persistent shared memory powered by Deeplake — captures all session activity and provides cross-session, cross-agent memory search",
+      "name": "memoree",
+      "description": "Local SQLite memory with semantic and lexical retrieval",
       "version": "0.7.145",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/activeloopai/hivemind.git",
-        "path": "harnesses/claude-code",
-        "sha": "0ba9c988811ea1d71203d02ac2d54d1c75c950d1"
-      },
-      "homepage": "https://github.com/activeloopai/hivemind"
+      "source": "./harnesses/claude-code",
+      "homepage": "https://github.com/sskarz/memoree"
     }
   ]
 }

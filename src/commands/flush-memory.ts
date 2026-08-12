@@ -1,10 +1,10 @@
 /**
- * `hivemind memory flush` — upload staged backfill summaries into the org's
+ * `memoree memory flush` — upload staged backfill summaries into the org's
  * `memory` table (the FLUSH phase; needs auth).
  *
  * The install-time EXTRACT phase (backfill-memory.ts) stages summaries +
- * local embeddings under ~/.claude/hivemind/pending-memory/ with manifest
- * rows marked `uploaded: false`. This command — run after `hivemind login`
+ * local embeddings under ~/.claude/memoree/pending-memory/ with manifest
+ * rows marked `uploaded: false`. This command
  * /org-select — reads those rows and INSERTs each into the chosen org's
  * memory table via the same uploadSummary() path the live wiki-worker uses,
  * then flips the row to `uploaded: true`.
@@ -69,7 +69,7 @@ async function defaultEmbed(text: string): Promise<number[] | null> {
   if (embeddingsDisabled()) return null;
   try {
     // No daemonEntry: EmbedClient falls back to the canonical shared daemon
-    // (~/.hivemind/embed-deps/embed-daemon.js) + autospawn, which is correct
+    // (~/.memoree/embed-deps/embed-daemon.js) + autospawn, which is correct
     // regardless of how this command is bundled.
     return await new EmbedClient({ autoSpawn: true }).embed(text, "document");
   } catch {
@@ -79,7 +79,7 @@ async function defaultEmbed(text: string): Promise<number[] | null> {
 
 export function defaultDeps(pluginVersion?: string): FlushDeps {
   return {
-    // Route by cwd so a flush targets the directory's `.hivemind` workspace,
+    // Route by cwd so a flush targets the directory's `.memoree` workspace,
     // consistent with capture (see src/dir-config.ts).
     loadConfig: loadRoutedConfig,
     makeQuery: (config) =>

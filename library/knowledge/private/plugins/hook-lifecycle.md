@@ -17,7 +17,7 @@ Which hook events fire on each agent, what each hook does, which implementation 
 
 ## Hook event coverage by agent
 
-Each assistant has its own event vocabulary. The table below maps the logical Hivemind events to the names each agent actually emits.
+Each assistant has its own event vocabulary. The table below maps the logical Memoree events to the names each agent actually emits.
 
 | Logical event | Claude Code | Codex | Cursor (1.7+) | OpenClaw | Hermes | pi |
 |---|---|---|---|---|---|---|
@@ -45,8 +45,8 @@ The code paths that actually perform capture, recall, and summary generation are
 | `src/hooks/wiki-worker.ts` | Background summary worker (Claude Code). Reads session rows, shells `claude -p`, uploads result to `memory` table. |
 | `src/hooks/spawn-wiki-worker.ts` | Detached spawn helper. Writes a temp config JSON and forks `wiki-worker.js` as an unref'd child. |
 | `src/hooks/shared/context-renderer.ts` | Renders the rules and goals block injected at SessionStart. Read-only; absorbs its own errors. |
-| `src/hooks/shared/capture-gate.ts` | `HIVEMIND_CAPTURE !== "false"` gate and only-CLI entrypoint check used by every capture path. |
-| `src/hooks/shared/autoupdate.ts` | `autoUpdate(creds, { agent })`: checks npm registry, spawns `hivemind update` if a newer version is found. |
+| `src/hooks/shared/capture-gate.ts` | `MEMOREE_CAPTURE !== "false"` gate and only-CLI entrypoint check used by every capture path. |
+| `src/hooks/shared/autoupdate.ts` | `autoUpdate(creds, { agent })`: checks npm registry, spawns the removed updater command if a newer version is found. |
 | `src/hooks/shared/goals-instructions.ts` | `GOALS_INSTRUCTIONS_CLI`: the CLI-variant goal-management instructions injected for Cursor, Hermes, and pi. |
 | `src/hooks/shared/skillopt-hook.ts` | Arms the skill-optimization counter when the agent invokes an org skill. |
 | `src/hooks/summary-state.ts` | Per-session sidecar: `clearSessionEnded`, `markSessionEnded`, `tryAcquireLock`, `releaseLock`, `finalizeSummary`. |
@@ -90,7 +90,7 @@ src/hooks/
     └── wiki-worker.ts          # shells `pi --print --provider <p> --model <m>`
 ```
 
-The pi extension itself lives at `harnesses/pi/extension-source/hivemind.ts` (installed as `~/.pi/agent/hivemind/hivemind.ts`). It contains the pi-native session hooks and spawns the wiki worker. Only the wiki worker is in `src/hooks/pi/` because the extension entry point is pi-specific TypeScript that pi compiles directly.
+The pi extension itself lives at `harnesses/pi/extension-source/memoree.ts` (installed as `~/.pi/agent/memoree/memoree.ts`). It contains the pi-native session hooks and spawns the wiki worker. Only the wiki worker is in `src/hooks/pi/` because the extension entry point is pi-specific TypeScript that pi compiles directly.
 
 ---
 
@@ -100,10 +100,10 @@ The pi extension itself lives at `harnesses/pi/extension-source/hivemind.ts` (in
 
 The SessionStart hook runs once when the assistant opens a new session. Its responsibilities, in order, are:
 
-1. Load credentials from `~/.deeplake/credentials.json`. On a fresh box with no token, either prompt for login (OpenClaw, pi) or log a notice and continue read-only (all others).
+1. Load credentials from `the removed cloud credentials file`. On a fresh box with no token, either prompt for login (OpenClaw, pi) or log a notice and continue read-only (all others).
 2. Heal token/org drift with `healDriftedOrgToken` if credentials are present.
 3. Run `autoUpdate` before any database calls so the update notice appears even if the backend is slow. (Not in Codex, which defers this to the detached setup process.)
-4. Ensure the `memory` and `sessions` tables exist (`api.ensureTable()`, `api.ensureSessionsTable()`). Gated on `HIVEMIND_CAPTURE !== "false"`.
+4. Ensure the `memory` and `sessions` tables exist (`api.ensureTable()`, `api.ensureSessionsTable()`). Gated on `MEMOREE_CAPTURE !== "false"`.
 5. Write a placeholder summary row so the session is visible in the index while it is in progress. Gated on capture.
 6. Render the rules/goals context block via `renderContextBlock`. Read-only; runs regardless of the capture gate.
 7. Pull skills from teammates with `autoPullSkills`.
@@ -128,7 +128,7 @@ OpenClaw batches capture differently: `agent_end` delivers the full conversation
 
 ### Pre-tool-use (VFS recall)
 
-The PreToolUse hook is the VFS intercept. It runs before every tool execution and looks for Bash, Read, Grep, or Glob calls whose paths start with `~/.deeplake/memory/`. When it sees one, it rewrites the call into a SQL-backed response:
+The PreToolUse hook is the VFS intercept. It runs before every tool execution and looks for Bash, Read, Grep, or Glob calls whose paths start with `~/.memoree/memory/`. When it sees one, it rewrites the call into a SQL-backed response:
 
 - `cat` / `Read` on a path becomes a direct row read from the `memory` or `sessions` table via `readVirtualPathContent`.
 - `grep` / `Glob` becomes a hybrid lexical-plus-semantic search through `handleGrepDirect` (in `src/hooks/grep-direct.ts`).
@@ -139,7 +139,7 @@ Write and Edit on a memory path are denied with guidance to use Bash instead. Co
 
 ```mermaid
 flowchart TD
-    hookFire["PreToolUse fires"] --> isMemoryPath{"path starts with\n~/.deeplake/memory/?"}
+    hookFire["PreToolUse fires"] --> isMemoryPath{"path starts with\n~/.memoree/memory/?"}
     isMemoryPath -- no --> passThrough["Pass through unchanged"]
     isMemoryPath -- yes --> routeCmd{"command type?"}
     routeCmd -- "cat / Read" --> sqlRead["readVirtualPathContent\n→ SELECT row"]
@@ -159,7 +159,7 @@ flowchart TD
 The SessionEnd hook exits fast and pushes all work to detached processes:
 
 1. Call `markSessionEnded` so other sessions stop treating this one as live.
-2. Call `recordSessionUsage` to parse the transcript for memory-search activity and append a record to `~/.deeplake/usage-stats.jsonl`.
+2. Call `recordSessionUsage` to parse the transcript for memory-search activity and append a record to `~/.memoree/usage-stats.jsonl`.
 3. Call `forceSessionEndTrigger` to run skillify mining (uses its own per-project lock, independent of the summary lock).
 4. Acquire the per-session summary lock and spawn the wiki worker with reason `SessionEnd`.
 
@@ -173,7 +173,7 @@ If the spawn throws before the worker takes ownership, the hook releases the loc
 flowchart LR
     subgraph shared["Shared core (always the same)"]
         capGate["Capture gate check"]
-        deeplakeInsert["INSERT to sessions table"]
+        memoreeInsert["INSERT to sessions table"]
         vfsRoute["VFS path routing"]
         summaryWorker["Wiki worker spawn"]
         skillify["Skillify trigger"]

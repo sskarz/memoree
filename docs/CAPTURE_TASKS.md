@@ -1,16 +1,16 @@
-# Capture Tasks — turning conversation tangents into Hivemind goals
+# Capture Tasks — turning conversation tangents into Memoree goals
 
 **Status:** v1 implemented · **Owner:** Sasun · **Companion to:** "pick up where you left off" (resume-brief)
 
 > **Decision (v1).** We did **not** build the auto-detection pipeline below (Stop-hook → LLM gate → dedup → confirm). Instead, capture is **explicit, user-initiated, and in-session**: the user says *"save this for later"* and the agent — which already holds the live context — writes the task as a goal then and there. Its sibling is the resume half: when the user says *"let's work on that task,"* the agent transfers the stored context back into the session and continues with no re-explaining.
 >
-> The whole feature is a **Save↔Resume context-transfer pair**, designed together: what Save stores is exactly what Resume hands back. Implemented as two operations in the `hivemind-goals` skill (all agent copies) plus two small CLI additions — `hivemind goal add --agent capture` (provenance) and `hivemind goal get <goal_id>` (full-body read for the transfer). No Stop-hook, gate, worker, confirm-flow, or new table. The auto-detection design below is preserved as **Later** (see Scope).
+> The whole feature is a **Save↔Resume context-transfer pair**, designed together: what Save stores is exactly what Resume hands back. Implemented as two operations in the `memoree-goals` skill (all agent copies) plus two small CLI additions — `memoree goal add --agent capture` (provenance) and `memoree goal get <goal_id>` (full-body read for the transfer). No Stop-hook, gate, worker, confirm-flow, or new table. The auto-detection design below is preserved as **Later** (see Scope).
 
 ## Problem
 
 Mid-session, a user often states a *new, unrelated* action — "oh, we should also fix the retry backoff", "remind me to email johg", "later we need to migrate the index". It's a real commitment, but it's a tangent from whatever the agent is doing right now, so it evaporates: the agent stays on the main thread, the session ends, the task is lost.
 
-This is a stickiness lever, not an acquisition one. Hivemind's value is "nothing gets lost across sessions"; today that holds for the *main* thread (resume-brief) but not for the *side* threads a user throws out in passing. Capturing them:
+This is a stickiness lever, not an acquisition one. Memoree's value is "nothing gets lost across sessions"; today that holds for the *main* thread (resume-brief) but not for the *side* threads a user throws out in passing. Capturing them:
 
 - makes the memory measurably more useful (more reasons to keep it installed → W1→W2 stickiness, the leak the data points at);
 - feeds the existing **goals** system, which already drives the SessionStart "📌 N goals open" banner and the context-block goals injection.
@@ -19,7 +19,7 @@ Non-goal: this is not a general TODO manager. It captures *agent-observed* commi
 
 ## What "a task" means here
 
-Reuse the existing **goals** primitive — there is no separate "tasks" concept (the legacy `hivemind tasks` CLI was folded into goals). A captured task is a goal row:
+Reuse the existing **goals** primitive — there is no separate "tasks" concept (the legacy `memoree tasks` CLI was folded into goals). A captured task is a goal row:
 
 - table: `GOALS_COLUMNS` — `goal_id / owner / status / content / version / created_at / agent`
 - VFS: `memory/goal/<owner>/<status>/<goal_id>.md`, `content` = markdown (first line = label)
@@ -32,7 +32,7 @@ Reuse the existing **goals** primitive — there is no separate "tasks" concept 
                     ↓  (Stop hook, end of turn/session)
 agent surfaces (user channel only):
   📝 Noticed a side task: "Add rate-limiting to the webhook handler"
-     Save to Hivemind goals?  (reply: yes / no / edit)
+     Save to Memoree goals?  (reply: yes / no / edit)
                     ↓ user: "yes"
 goal written → shows in next session's "📌 N goals open" banner + goals context block.
 ```
@@ -53,7 +53,7 @@ Reuse the **skillify mine pipeline** shape (`src/skillify/`), which already does
 
 | Mode | Value | Risk | 
 |---|---|---|
-| **Command** (`/hivemind:capture-tasks`) | zero noise, zero risk | user must remember → most tasks still lost |
+| **Command** (`/memoree:capture-tasks`) | zero noise, zero risk | user must remember → most tasks still lost |
 | **Auto** (Stop hook writes silently) | highest capture | pollutes goals with mis-detected / rhetorical items; hard to trust |
 | **Confirm** (Stop hook proposes, user approves) | captures the value | one extra interaction; depends on detection quality |
 
@@ -89,9 +89,9 @@ No new injection surface: capture writes to the goals table; goals already rende
 ## Scope
 
 **v1 (shipped) — explicit Save↔Resume context-transfer**
-- **Save:** on "save this for later", the agent writes a goal whose body is a resumable *context package* (`<label>` + `Start here / Files / Branch / Run / Why`) via `hivemind goal add --agent capture "<package>"`. `agent:"capture"` keeps parked side-tasks separable from hand-made goals.
-- **Resume:** on "let's work on that task", the agent finds the goal, pulls the full body with `hivemind goal get <goal_id>`, flips it to `in_progress`, and continues from `Start here:` — automatic context transfer, no re-explaining.
-- Implemented in the `hivemind-goals` skill (claude-code / codex / hermes / openclaw copies) + `src/commands/goal.ts` (`--agent` flag, `goal get`). Reuses the existing goals primitive — no separate task store, no new table.
+- **Save:** on "save this for later", the agent writes a goal whose body is a resumable *context package* (`<label>` + `Start here / Files / Branch / Run / Why`) via `memoree goal add --agent capture "<package>"`. `agent:"capture"` keeps parked side-tasks separable from hand-made goals.
+- **Resume:** on "let's work on that task", the agent finds the goal, pulls the full body with `memoree goal get <goal_id>`, flips it to `in_progress`, and continues from `Start here:` — automatic context transfer, no re-explaining.
+- Implemented in the `memoree-goals` skill (claude-code / codex / hermes / openclaw copies) + `src/commands/goal.ts` (`--agent` flag, `goal get`). Reuses the existing goals primitive — no separate task store, no new table.
 
 **Later (the auto-detection design above)**
 - Stop-hook → LLM gate → dedup → confirm → write, to catch tangents the user *forgets* to park. Gated behind proving demand for explicit capture first.

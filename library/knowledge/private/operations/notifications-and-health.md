@@ -2,7 +2,7 @@
 
 > Category: Operations | Version: 1.0 | Date: June 2026 | Status: Active
 
-Architecture of the Hivemind notifications framework and the proactive prerequisite environment health check and auto-wiring engine.
+Architecture of the Memoree notifications framework and the proactive prerequisite environment health check and auto-wiring engine.
 
 **Related:**
 - [`cli-command-architecture.md`](cli-command-architecture.md)
@@ -17,7 +17,7 @@ Architecture of the Hivemind notifications framework and the proactive prerequis
 
 Coding assistant integrations are complex and fragile. They are highly dependent on external command-line utilities, correct user sessions, and global configuration files like `~/.cursor/hooks.json`. 
 
-To prevent silent failures, Hivemind implements two proactive operational guardrails:
+To prevent silent failures, Memoree implements two proactive operational guardrails:
 1. **The Notifications Framework:** Evaluates, queues, and delivers contextual alerts on session start, helping developers resolve subscription issues, account limits, and local mining opportunities.
 2. **The Environment Health Check:** Continuously monitors local prerequisites, verifies compiler tools and helper CLIs, and auto-wires lifecycle hooks with near-zero friction.
 
@@ -63,12 +63,12 @@ export async function drainSessionStart(opts: DrainOptions): Promise<void> {
 
 In some environments, such as Claude Code, the notifications hook can be registered in both the user's global configuration (`~/.claude/settings.json`) and the marketplace plugin definition (`hooks.json`). This causes two separate Node processes to spawn and run in parallel, both reading state before either writes.
 
-To prevent duplicate banners from cluttering the terminal, Hivemind implements an atomic claiming lock using POSIX file semantics:
+To prevent duplicate banners from cluttering the terminal, Memoree implements an atomic claiming lock using POSIX file semantics:
 
 ```114:133:src/notifications/state.ts
 export function tryClaim(n: Notification): boolean {
   const home = resolve(homedir());
-  const claimsDir = join(home, ".deeplake", "notifications-claims");
+  const claimsDir = join(home, ".memoree", "notifications-claims");
   try {
     mkdirSync(claimsDir, { recursive: true, mode: 0o700 });
   } catch (e: any) {
@@ -92,7 +92,7 @@ The first process to call `openSync` with the exclusive write-creation flag (`wx
 
 ### Transient vs. Persistent States
 
-* **Persistent Notifications:** Welcome messages, first-time guides, or organization-wide savings recaps are registered in state. Storing their `id` and `dedupKey` in `~/.deeplake/notifications-state.json` ensures they display exactly once.
+* **Persistent Notifications:** Welcome messages, first-time guides, or organization-wide savings recaps are registered in state. Storing their `id` and `dedupKey` in `~/.memoree/notifications-state.json` ensures they display exactly once.
 * **Transient Notifications:** Used for self-clearing events, such as payment failures or missing background dependencies. When a transient notification is drained, its claim file is unlinked using `releaseClaim`, allowing future sessions to re-emit the warning if the underlying issue continues.
 
 To prevent filesystem corruption during state updates, `writeState` writes output to a temporary process-tagged file first, then executes an atomic POSIX `renameSync` operation over the active state path.
@@ -105,7 +105,7 @@ The health check resolves the silent-failure gap described in `prd-002a-health-c
 
 | Dimension | Checked Precondition | Resolving Strategy |
 | --- | --- | --- |
-| **D1: `hivemind` CLI** | Is the global `hivemind` CLI binary installed? | PATH resolution with version probing. |
+| **D1: `memoree` CLI** | Is the global `memoree` CLI binary installed? | PATH resolution with version probing. |
 | **D2: `cursor-agent` CLI** | Is `cursor-agent` present and executable? | PATH resolution with fallbacks to known IDE directories. |
 | **D3: `cursor-agent` login** | Is the user logged into `cursor-agent`? | A lightweight status query command. |
 | **D4: Hooks wired and current** | Are the correct lifecycle hooks present? | Checks `hooks.json` for matches against the current bundle. |
@@ -118,14 +118,14 @@ Surfacing logged-out and missing states upfront prevents the shared database fro
 
 The auto-wiring engine removes the friction of manual hook setup by managing the `~/.cursor/hooks.json` configuration file on the developer's behalf.
 
-The engine wires six specific lifecycle events to redirect agent actions through the Hivemind shared core:
+The engine wires six specific lifecycle events to redirect agent actions through the Memoree shared core:
 
 ```44:61:src/cli/install-cursor.ts
 function buildHookConfig(): Record<string, CursorHookEntry[]> {
   return {
     sessionStart: [buildHookCmd("session-start.js", 30)],
     beforeSubmitPrompt: [buildHookCmd("capture.js", 10)],
-    // preToolUse with Shell matcher rewrites grep/rg against ~/.deeplake/memory/
+    // preToolUse with Shell matcher rewrites grep/rg against ~/.memoree/memory/
     // into a single SQL fast-path call, matching Claude Code / Codex accuracy.
     preToolUse: [buildHookCmdShellMatcher("pre-tool-use.js", 30)],
     postToolUse: [buildHookCmd("capture.js", 15)],
@@ -144,6 +144,6 @@ function buildHookConfig(): Record<string, CursorHookEntry[]> {
 
 To operate safely inside developer environments, the auto-wiring process adheres to three strict rules:
 
-1. **Preserving Foreign Hooks:** Auto-wiring must never overwrite other third-party hooks. It parses the existing array, filters out entries matching Hivemind paths via `isHivemindEntry`, and appends the new configuration.
+1. **Preserving Foreign Hooks:** Auto-wiring must never overwrite other third-party hooks. It parses the existing array, filters out entries matching Memoree paths via `isMemoreeEntry`, and appends the new configuration.
 2. **Idempotency:** Re-wiring when no configuration has changed must not touch the file. This protects the hook-trust fingerprint calculated by the editor, avoiding warning dialogs. This is implemented using `writeJsonIfChanged` under the hood.
-3. **Reversibility:** When uninstalling, the engine strips only the Hivemind hooks. If the resulting `hooks` object contains no further hooks, the configuration file itself is cleanly unlinked.
+3. **Reversibility:** When uninstalling, the engine strips only the Memoree hooks. If the resulting `hooks` object contains no further hooks, the configuration file itself is cleanly unlinked.

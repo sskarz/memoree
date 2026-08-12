@@ -1,5 +1,5 @@
 /**
- * Shared AGENTS.md hivemind-block management.
+ * Shared AGENTS.md memoree-block management.
  *
  * AGENTS.md is the global agent-instructions file that several harnesses
  * auto-load into the model's context every session — SILENTLY, with no
@@ -12,11 +12,11 @@
  * different files, so there is no collision).
  */
 
-export const HIVEMIND_BLOCK_START = "<!-- BEGIN hivemind-memory -->";
-export const HIVEMIND_BLOCK_END = "<!-- END hivemind-memory -->";
+export const MEMOREE_BLOCK_START = "<!-- BEGIN memoree-memory -->";
+export const MEMOREE_BLOCK_END = "<!-- END memoree-memory -->";
 
 /**
- * Insert or replace the hivemind block in `existing`. `block` is the full
+ * Insert or replace the memoree block in `existing`. `block` is the full
  * marker-fenced block (START … END). Idempotent: a prior block (matched on
  * the marker pair) is stripped before re-appending, so repeated installs
  * leave exactly one block. User content outside the markers is preserved.
@@ -24,8 +24,8 @@ export const HIVEMIND_BLOCK_END = "<!-- END hivemind-memory -->";
 export function upsertMarkedBlock(
   existing: string | null,
   block: string,
-  start: string = HIVEMIND_BLOCK_START,
-  end: string = HIVEMIND_BLOCK_END,
+  start: string = MEMOREE_BLOCK_START,
+  end: string = MEMOREE_BLOCK_END,
 ): string {
   if (!existing) return `${block}\n`;
   const first = findFirstBlock(existing, start, end);
@@ -46,15 +46,15 @@ export function upsertMarkedBlock(
 }
 
 /**
- * Remove EVERY hivemind block from `existing`, preserving surrounding content.
+ * Remove EVERY memoree block from `existing`, preserving surrounding content.
  * Loops so duplicate marker pairs are all removed; skips stray/unclosed BEGIN
  * markers (never pairing them with a later block's END) so user data under a
  * half-written marker is never truncated.
  */
 export function stripMarkedBlock(
   existing: string,
-  start: string = HIVEMIND_BLOCK_START,
-  end: string = HIVEMIND_BLOCK_END,
+  start: string = MEMOREE_BLOCK_START,
+  end: string = MEMOREE_BLOCK_END,
 ): string {
   let text = existing;
   for (;;) {

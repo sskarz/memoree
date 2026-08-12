@@ -2,7 +2,7 @@
 
 /**
  * SessionEnd hook — garbage-collects old plugin version directories
- * under ~/.claude/plugins/cache/hivemind/hivemind/.
+ * under ~/.claude/plugins/cache/memoree/memoree/.
  *
  * Keeps the current version plus the two next-newest
  * (DEFAULT_KEEP_COUNT = 3), so sessions that started on a previous
@@ -36,7 +36,7 @@ export interface RunGcOptions {
 
 export function runGc(bundleDir: string, opts: RunGcOptions = {}): void {
   const log = opts.log ?? defaultLog;
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   const resolved = resolveVersionedPluginDir(bundleDir);
   if (!resolved) { log("not a versioned install, skipping"); return; }

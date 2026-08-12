@@ -10,7 +10,7 @@ describe("readCurrentSkillRow", () => {
       expect(sql).toContain("author = 'kamo'");
       expect(sql).toContain("ORDER BY version DESC");
       return [{
-        name: "posthog", author: "kamo", project: "deeplake-api", project_key: "pk1",
+        name: "posthog", author: "kamo", project: "memoree-api", project_key: "pk1",
         local_path: ".claude/skills", install: "global",
         source_sessions: JSON.stringify(["s1", "s2"]), source_agent: "claude_code",
         scope: "me", contributors: JSON.stringify(["kamo"]),
@@ -60,7 +60,7 @@ describe("readCurrentSkillRow", () => {
 
 describe("publishImprovedSkill", () => {
   const base: CurrentSkillRow = {
-    name: "posthog", author: "kamo", project: "deeplake-api", projectKey: "pk1",
+    name: "posthog", author: "kamo", project: "memoree-api", projectKey: "pk1",
     localPath: ".claude/skills", install: "global", sourceSessions: ["s1"],
     sourceAgent: "claude_code", scope: "me", contributors: ["kamo"],
     description: "smoke test", trigger: "posthog", body: "## Rules\n1. mock the client", version: 3,
@@ -73,7 +73,7 @@ describe("publishImprovedSkill", () => {
     const res = await publishImprovedSkill({
       query, tableName: "skills", workspaceId: "ws1",
       current: base, newBody: "## Rules\n1. NEVER mock — assert on the real HTTP request",
-      collaborator: "kamo@activeloop.ai", now: "2026-06-06T00:00:00Z",
+      collaborator: "kamo@sskarz.ai", now: "2026-06-06T00:00:00Z",
     });
 
     expect(res.version).toBe(4);                       // 3 + 1
@@ -90,10 +90,10 @@ describe("publishImprovedSkill", () => {
     let sql = "";
     await publishImprovedSkill({
       query: async (s: string) => { sql = s; }, tableName: "skills", workspaceId: "ws1",
-      current: base, newBody: "x", collaborator: "kamo@activeloop.ai", now: "t",
+      current: base, newBody: "x", collaborator: "kamo@sskarz.ai", now: "t",
     });
     // contributors persisted as JSON — kamo (original) first, then collaborator, then skillopt
-    expect(sql).toContain(JSON.stringify(["kamo", "kamo@activeloop.ai", SKILLOPT_CONTRIBUTOR]));
+    expect(sql).toContain(JSON.stringify(["kamo", "kamo@sskarz.ai", SKILLOPT_CONTRIBUTOR]));
   });
 
   it("does not duplicate the skillopt marker if it's already a contributor", async () => {

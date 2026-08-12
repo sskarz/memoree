@@ -10,7 +10,7 @@ export const HOME = homedir();
 // three layouts:
 //   - source (src/cli/util.ts) → project root
 //   - local bundle (bundle/cli.js)              → project root
-//   - npm-installed (node_modules/@deeplake/hivemind/bundle/cli.js)
+//   - npm-installed (node_modules/memoree/bundle/cli.js)
 //                                               → install dir
 // Without the walk-up, the source path resolved to `src/` (one dir up
 // from src/cli/util.ts), so unit tests importing the installers couldn't
@@ -20,7 +20,7 @@ export function pkgRoot(): string {
   for (let i = 0; i < 8; i++) {
     try {
       const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-      if (pkg.name === "@deeplake/hivemind" || pkg.name === "hivemind") return dir;
+      if (pkg.name === "memoree" || pkg.name === "memoree") return dir;
     } catch { /* not here, keep walking */ }
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -84,11 +84,11 @@ export function writeJsonIfChanged(path: string, obj: unknown): boolean {
 
 export function writeVersionStamp(dir: string, version: string): void {
   ensureDir(dir);
-  writeFileSync(join(dir, ".hivemind_version"), version);
+  writeFileSync(join(dir, ".memoree_version"), version);
 }
 
 export function readVersionStamp(dir: string): string | null {
-  const p = join(dir, ".hivemind_version");
+  const p = join(dir, ".memoree_version");
   if (!existsSync(p)) return null;
   try { return readFileSync(p, "utf-8").trim(); } catch { return null; }
 }
@@ -111,7 +111,7 @@ export function claudeDesktopConfigDir(): string {
   return join(home, ".config", "Claude");
 }
 
-// Hivemind's value is bidirectional shared memory — every supported agent
+// Memoree's value is bidirectional shared memory — every supported agent
 // must capture (write) AND recall (read). Cline / Roo Code / Kilo Code were
 // dropped because their public API (src/exports/cline.d.ts) is control-only
 // (startNewTask / sendMessage / pressPrimary/SecondaryButton). No event
@@ -129,7 +129,7 @@ const PLATFORM_MARKERS: DetectedPlatform[] = [
   // tool_result / message_end / session_shutdown / etc.) — Tier 1 capable.
   { id: "pi", markerDir: join(HOME, ".pi") },
   // claude_cowork — Anthropic's agentic desktop assistant, hosted in the
-  // Claude Desktop app. Registers the shared hivemind MCP server into
+  // Claude Desktop app. Registers the shared memoree MCP server into
   // claude_desktop_config.json (recall-only; capture is the desktop app's
   // own concern). Marker is the OS-specific Claude Desktop config dir.
   { id: "claude_cowork", markerDir: claudeDesktopConfigDir() },

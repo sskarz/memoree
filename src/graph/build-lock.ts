@@ -9,7 +9,7 @@
  * dropped-Stop workaround lost interactive per-turn rebuilds. This lock
  * lets us register on both events again.
  *
- * Lock file: ~/.hivemind/graphs/<repo-key>/.build.in-flight
+ * Lock file: ~/.memoree/graphs/<repo-key>/.build.in-flight
  * Format: { pid: number, ts: epoch_ms } (best-effort JSON; format does
  * not affect correctness — the file's EXISTENCE is the lock).
  *

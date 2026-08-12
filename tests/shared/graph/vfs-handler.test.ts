@@ -18,7 +18,7 @@ function makeSnapshot(commit: string = "deadbeef"): GraphSnapshot {
   return {
     directed: true,
     multigraph: true,
-    graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: commit, repo_key: "k" },
+    graph: { schema_version: 1, generator: "memoree-graph", commit_sha: commit, repo_key: "k" },
     observation: {
       ts: "2026-05-21T00:00:00Z",
       branch: "main",
@@ -80,7 +80,7 @@ describe("handleGraphVfs", () => {
   it("returns no-graph when no local build exists", () => {
     const r = handleGraphVfs("index.md", cwd);
     expect(r.kind).toBe("no-graph");
-    if (r.kind === "no-graph") expect(r.message).toContain("hivemind graph");
+    if (r.kind === "no-graph") expect(r.message).toContain("memoree graph");
   });
 
   it("returns no-graph when last-build points at a missing snapshot file", () => {

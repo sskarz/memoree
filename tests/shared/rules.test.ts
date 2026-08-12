@@ -29,7 +29,7 @@ function mockQuery(script: Array<(sql: string) => unknown>) {
   return { calls, query };
 }
 
-const TBL = "hivemind_rules";
+const TBL = "memoree_rules";
 
 /** Build a fake row matching RULES_COLUMNS shape. */
 function fakeRow(overrides: Partial<RuleRow> = {}): Record<string, unknown> {
@@ -37,9 +37,9 @@ function fakeRow(overrides: Partial<RuleRow> = {}): Record<string, unknown> {
     id: "row-uuid",
     rule_id: "rule-uuid",
     text: "no DROP TABLE on prod",
-    scope: "team",
+    scope: "shared",
     status: "active",
-    assigned_by: "alice@activeloop.ai",
+    assigned_by: "alice@sskarz.ai",
     version: 1,
     created_at: "2026-05-20T10:00:00.000Z",
     agent: "manual",
@@ -59,19 +59,18 @@ describe("insertRule", () => {
     const { calls, query } = mockQuery([() => []]);
     const result = await insertRule(query, TBL, {
       text: "no DROP TABLE on prod",
-      assigned_by: "alice@activeloop.ai",
+      assigned_by: "alice@sskarz.ai",
     });
     expect(result.version).toBe(1);
     expect(result.rule_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatch(/^INSERT INTO "hivemind_rules"/);
+    expect(calls[0]).toMatch(/^INSERT INTO "memoree_rules"/);
     // version literal is 1, never quoted
     expect(calls[0]).toMatch(/, 1, /);
-    // scope is hardcoded to 'team' for rules (A3 in the plan)
-    expect(calls[0]).toContain("'team'");
+    expect(calls[0]).toContain("'shared'");
     // status defaults to 'active' on first insert
     expect(calls[0]).toContain("'active'");
-    expect(calls[0]).toContain("'alice@activeloop.ai'");
+    expect(calls[0]).toContain("'alice@sskarz.ai'");
     // Body uses E-string literal so backslashes / quotes stay safe
     expect(calls[0]).toContain(`E'no DROP TABLE on prod'`);
   });
@@ -80,7 +79,7 @@ describe("insertRule", () => {
     const { calls, query } = mockQuery([() => []]);
     await insertRule(query, TBL, {
       text: "don't run 'rm -rf /' \\ ever",
-      assigned_by: "alice@activeloop.ai",
+      assigned_by: "alice@sskarz.ai",
     });
     // single quotes get doubled, backslashes get doubled (sqlStr contract)
     expect(calls[0]).toContain(`E'don''t run ''rm -rf /'' \\\\ ever'`);
@@ -89,7 +88,7 @@ describe("insertRule", () => {
   it("rejects empty text", async () => {
     const { calls, query } = mockQuery([() => []]);
     await expect(
-      insertRule(query, TBL, { text: "", assigned_by: "alice@activeloop.ai" }),
+      insertRule(query, TBL, { text: "", assigned_by: "alice@sskarz.ai" }),
     ).rejects.toThrow(/must not be empty/);
     expect(calls).toHaveLength(0);
   });
@@ -98,7 +97,7 @@ describe("insertRule", () => {
     const { calls, query } = mockQuery([() => []]);
     const oversized = "x".repeat(_MAX_TEXT_LENGTH + 1);
     await expect(
-      insertRule(query, TBL, { text: oversized, assigned_by: "alice@activeloop.ai" }),
+      insertRule(query, TBL, { text: oversized, assigned_by: "alice@sskarz.ai" }),
     ).rejects.toThrow(/exceeds 2000 chars/);
     expect(calls).toHaveLength(0);
   });
@@ -141,7 +140,7 @@ describe("insertRule", () => {
     const { calls, query } = mockQuery([() => []]);
     await insertRule(query, TBL, {
       text: "test",
-      assigned_by: "alice@activeloop.ai",
+      assigned_by: "alice@sskarz.ai",
       agent: "claude_code",
       plugin_version: "0.7.99",
     });
@@ -168,7 +167,7 @@ describe("editRule", () => {
     ]);
     const result = await editRule(query, TBL, {
       rule_id: "rule-uuid",
-      assigned_by: "bob@activeloop.ai",
+      assigned_by: "bob@sskarz.ai",
       text: "new text",
     });
     expect(result).toEqual({ rule_id: "rule-uuid", version: 2 });
@@ -176,11 +175,11 @@ describe("editRule", () => {
     // ORDER BY carries the tie-break compound key (see getRuleLatest test
     // below). Tertiary `id DESC` was added in PR #193 (CodeRabbit) to
     // resolve same-millisecond v=N+1 races deterministically.
-    expect(calls[0]).toMatch(/^SELECT .* FROM "hivemind_rules" WHERE rule_id = 'rule-uuid' ORDER BY version DESC, created_at DESC, id DESC LIMIT 1$/);
-    expect(calls[1]).toMatch(/^INSERT INTO "hivemind_rules"/);
+    expect(calls[0]).toMatch(/^SELECT .* FROM "memoree_rules" WHERE rule_id = 'rule-uuid' ORDER BY version DESC, created_at DESC, id DESC LIMIT 1$/);
+    expect(calls[1]).toMatch(/^INSERT INTO "memoree_rules"/);
     expect(calls[1]).toContain(`E'new text'`);
     expect(calls[1]).toContain(", 2, ");
-    expect(calls[1]).toContain("'bob@activeloop.ai'");
+    expect(calls[1]).toContain("'bob@sskarz.ai'");
   });
 
   it("carries over previous text when only status is changed", async () => {
@@ -190,7 +189,7 @@ describe("editRule", () => {
     ]);
     const result = await editRule(query, TBL, {
       rule_id: "rule-uuid",
-      assigned_by: "bob@activeloop.ai",
+      assigned_by: "bob@sskarz.ai",
       status: "done",
     });
     expect(result.version).toBe(4);
@@ -237,7 +236,7 @@ describe("markRuleDone", () => {
     ]);
     const result = await markRuleDone(query, TBL, {
       rule_id: "rule-uuid",
-      assigned_by: "alice@activeloop.ai",
+      assigned_by: "alice@sskarz.ai",
     });
     expect(result).toEqual({ rule_id: "rule-uuid", version: 3 });
     expect(calls[1]).toContain("'done'");
@@ -252,7 +251,7 @@ describe("markRuleDone", () => {
     ]);
     const result = await markRuleDone(query, TBL, {
       rule_id: "rule-uuid",
-      assigned_by: "alice@activeloop.ai",
+      assigned_by: "alice@sskarz.ai",
     });
     // Already-done rules still get a v+1 row — the new row records
     // "alice closed-again at 10:00", which is the audit trail the
@@ -283,7 +282,7 @@ describe("listRules", () => {
     expect(rows[0].text).toBe("A v2");
     expect(rows[0].version).toBe(2);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatch(/^SELECT .* FROM "hivemind_rules" ORDER BY version DESC, created_at DESC, id DESC$/);
+    expect(calls[0]).toMatch(/^SELECT .* FROM "memoree_rules" ORDER BY version DESC, created_at DESC, id DESC$/);
   });
 
   it("honors the status='all' filter (no status filter applied)", async () => {

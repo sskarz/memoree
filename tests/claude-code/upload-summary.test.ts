@@ -13,9 +13,9 @@ import {
 /**
  * Functional tests against the real uploadSummary helper. The query
  * function is mocked so no network call is made, but every SQL statement
- * the worker would send to Deeplake is captured and asserted on.
+ * the worker would send to Memoree is captured and asserted on.
  *
- * Context: Deeplake silently drops one of two rapid UPDATEs on the same
+ * Context: Memoree silently drops one of two rapid UPDATEs on the same
  * row. The worker MUST keep summary + description in the same statement.
  */
 
@@ -53,7 +53,7 @@ const BASE = {
   sessionId: "sess-1",
 } as const;
 
-describe("uploadSummary — Deeplake single-UPDATE invariant", () => {
+describe("uploadSummary — Memoree single-UPDATE invariant", () => {
   it("UPDATE path: issues exactly one UPDATE containing BOTH summary and description", async () => {
     // SELECT returns 1 row → UPDATE branch
     const { fn, calls } = makeSpyQuery([[{ path: BASE.vpath }]]);
@@ -153,7 +153,7 @@ describe("uploadSummary — summary_embedding column", () => {
     });
     const insert = calls.find(c => /^INSERT INTO/i.test(c))!;
     expect(insert).toContain("summary_embedding");
-    expect(insert).toContain("ARRAY[0.1,-0.2,0.3]::float4[]");
+    expect(insert).toContain("ARRAY[0.1,-0.2,0.3]::double precision[]");
   });
 
   it("UPDATE path sets summary_embedding in the same statement as summary", async () => {
@@ -165,7 +165,7 @@ describe("uploadSummary — summary_embedding column", () => {
     });
     const update = calls.find(c => /^UPDATE/i.test(c))!;
     expect(update).toContain("summary = E'");
-    expect(update).toContain("summary_embedding = ARRAY[0.5,0.25]::float4[]");
+    expect(update).toContain("summary_embedding = ARRAY[0.5,0.25]::double precision[]");
   });
 
   it("writes SQL NULL for summary_embedding when the caller omits the embedding", async () => {

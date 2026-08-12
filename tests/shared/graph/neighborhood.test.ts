@@ -20,7 +20,7 @@ const fixture: GraphSnapshot = {
   multigraph: true,
   graph: {
     schema_version: 1,
-    generator: "hivemind-graph",
+    generator: "memoree-graph",
     commit_sha: "abc1234",
     repo_key: "test-repo",
   },

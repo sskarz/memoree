@@ -3,7 +3,7 @@
 /**
  * Background skillify worker.
  *
- * Pulls the last N sessions from Deeplake in the configured scope, strips
+ * Pulls the last N sessions from Memoree in the configured scope, strips
  * tool calls / thinking, asks Haiku whether the recent activity warrants a
  * new or merged skill, and writes the result under the project's
  * .claude/skills directory.
@@ -35,9 +35,7 @@ import {
 } from "./state.js";
 
 interface WorkerConfig {
-  storage?: { kind: "deeplake" | "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
-  apiUrl?: string;
-  token?: string;
+  storage?: { kind: "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
   orgId?: string;
   workspaceId: string;
   sessionsTable: string;
@@ -73,9 +71,9 @@ interface WorkerConfig {
   /**
    * Optional pre-built dispatch table that openclaw's spawn helper threads
    * through so the worker bundle can repopulate its own
-   * `globalThis.__hivemind_tuning__`. Each process has its own globalThis,
+   * `globalThis.__memoree_tuning__`. Each process has its own globalThis,
    * so values populated in the openclaw plugin (the spawn's parent) don't
-   * survive the fork. esbuild's `define` rewrote `process.env.HIVEMIND_X`
+   * survive the fork. esbuild's `define` rewrote `process.env.MEMOREE_X`
    * reads in the openclaw worker bundle to look at that global, so we
    * have to restore it here BEFORE any shared module function fires. The
    * other agents' worker bundles read `process.env` at runtime as usual
@@ -88,12 +86,12 @@ interface WorkerConfig {
 const cfg: WorkerConfig = JSON.parse(readFileSync(process.argv[2], "utf-8"));
 
 // Restore the tuning dispatch BEFORE any imported shared-module function
-// runs. Function-scoped env reads (every `process.env.HIVEMIND_X` in this
-// bundle was rewritten to `globalThis.__hivemind_tuning__?.X` for openclaw)
+// runs. Function-scoped env reads (every `process.env.MEMOREE_X` in this
+// bundle was rewritten to `globalThis.__memoree_tuning__?.X` for openclaw)
 // only fire from here onward, so an assignment at this point is sufficient.
 // On non-openclaw worker bundles `cfg.tuning` is undefined and this is a
 // no-op write of an empty object.
-(globalThis as Record<string, unknown>).__hivemind_tuning__ = cfg.tuning ?? {};
+(globalThis as Record<string, unknown>).__memoree_tuning__ = cfg.tuning ?? {};
 const tmpDir = cfg.tmpDir;
 const verdictPath = join(tmpDir, "verdict.json");
 const promptPath = join(tmpDir, "prompt.txt");
@@ -120,7 +118,7 @@ function esc(s: string): string {
 // half-open socket, transparent proxy that doesn't close) would otherwise
 // keep the worker process alive past the wall-clock at which the parent
 // already considers the run abandoned. 30s matches the per-attempt budget
-// in src/deeplake-api.ts (QUERY_TIMEOUT_MS).
+// in src/memoree-api.ts (QUERY_TIMEOUT_MS).
 const storageBackend = createWorkerStorage({ ...cfg, memoryTable: cfg.skillsTable }, wlog);
 const query = (sql: string): Promise<Record<string, unknown>[]> => queryWorkerStorage(storageBackend, sql);
 
@@ -397,7 +395,7 @@ async function main(): Promise<void> {
     );
 
     /**
-     * After a successful local write/merge, push a row to the Deeplake
+     * After a successful local write/merge, push a row to the Memoree
      * `skills` table for org-wide provenance. Failures here do not abort
      * the local write — the local file is the source of truth, the table
      * is a side-channel index. We log and move on.
@@ -413,7 +411,7 @@ async function main(): Promise<void> {
      *     (immutable lineage), `contributors` gets the editor appended
      *     by mergeSkill itself.
      */
-    async function recordToDeeplake(
+    async function recordToMemoree(
       result: {
         path: string;
         version: number;
@@ -494,7 +492,7 @@ async function main(): Promise<void> {
         // so local state + the org row match the frontmatter/dir on disk.
         verdict.name = result.name;
         recordSkill(cfg.projectKey, verdict.name, watermarkUuid, watermarkDate);
-        await recordToDeeplake(result, verdict);
+        await recordToMemoree(result, verdict);
       } catch (e: any) {
         wlog(`writeNewSkill failed: ${e.message}`);
         advanceWatermark(cfg.projectKey, watermarkUuid, watermarkDate);
@@ -512,7 +510,7 @@ async function main(): Promise<void> {
         });
         wlog(`merged into skill: ${result.path} (v${result.version})`);
         recordSkill(cfg.projectKey, verdict.name, watermarkUuid, watermarkDate);
-        await recordToDeeplake(result, verdict);
+        await recordToMemoree(result, verdict);
       } catch (e: any) {
         // The gate sometimes hallucinates a MERGE target that exists in the
         // user's global skills (~/.claude/skills/) but not in this project.
@@ -534,7 +532,7 @@ async function main(): Promise<void> {
             // Adopt the canonical capped name so state/org row match disk.
             verdict.name = result.name;
             recordSkill(cfg.projectKey, verdict.name, watermarkUuid, watermarkDate);
-            await recordToDeeplake(result, verdict);
+            await recordToMemoree(result, verdict);
           } catch (e2: any) {
             wlog(`writeNewSkill fallback also failed: ${e2.message}`);
             advanceWatermark(cfg.projectKey, watermarkUuid, watermarkDate);

@@ -2,7 +2,7 @@
 
 > Category: AI | Version: 1.0 | Date: June 2026 | Status: Active
 
-How Hivemind mines recent agent sessions to crystallize reusable `SKILL.md` files, propagate them to teammates, and keep the team's shared knowledge growing automatically.
+How Memoree mines recent agent sessions to crystallize reusable `SKILL.md` files, propagate them to teammates, and keep the team's shared knowledge growing automatically.
 
 **Related:**
 - [`session-capture.md`](session-capture.md)
@@ -10,7 +10,7 @@ How Hivemind mines recent agent sessions to crystallize reusable `SKILL.md` file
 - [`../collaboration/team-skills-sharing.md`](../collaboration/team-skills-sharing.md)
 - [`../architecture/session-lifecycle.md`](../architecture/session-lifecycle.md)
 - [`../architecture/system-overview.md`](../architecture/system-overview.md)
-- [`../data/deeplake-tables-schema.md`](../data/deeplake-tables-schema.md)
+- [`../data/memoree-tables-schema.md`](../data/memoree-tables-schema.md)
 - [`../../../../docs/SKILLIFY.md`](../../../../docs/SKILLIFY.md)
 
 ---
@@ -19,7 +19,7 @@ How Hivemind mines recent agent sessions to crystallize reusable `SKILL.md` file
 
 Recurring patterns in agent sessions are worth codifying. When multiple sessions show the same approach to a problem (a particular migration idiom, a common debugging sequence, a non-obvious tool invocation pattern), that knowledge should not be locked inside those session transcripts. Skillify extracts the pattern, writes it as a `SKILL.md`, and propagates the file to every agent on the team.
 
-The pipeline has two halves. The first is local and happens at the end of every session: a stop-counter fires the skillify worker as a detached background process. The second is collaborative and happens at session start: every agent auto-pulls the latest skills from the Deeplake `skills` table into its own skill directory.
+The pipeline has two halves. The first is local and happens at the end of every session: a stop-counter fires the skillify worker as a detached background process. The second is collaborative and happens at session start: every agent auto-pulls the latest skills from the Memoree `skills` table into its own skill directory.
 
 ---
 
@@ -27,9 +27,9 @@ The pipeline has two halves. The first is local and happens at the end of every 
 
 The skillify worker fires on two triggers, both wired in `src/hooks/capture.ts` after each successful capture INSERT.
 
-The **stop-counter trigger** increments a per-project counter after each `Stop` event. When the counter reaches `HIVEMIND_SKILLIFY_EVERY_N_TURNS` (default 20), it resets the counter and spawns the worker. The **session-end trigger** fires unconditionally at `Stop` / `SessionEnd` regardless of the counter, catching tail-of-session knowledge that the mid-session counter might miss.
+The **stop-counter trigger** increments a per-project counter after each `Stop` event. When the counter reaches `MEMOREE_SKILLIFY_EVERY_N_TURNS` (default 20), it resets the counter and spawns the worker. The **session-end trigger** fires unconditionally at `Stop` / `SessionEnd` regardless of the counter, catching tail-of-session knowledge that the mid-session counter might miss.
 
-Per-project counter state lives at `~/.deeplake/state/skillify/<project-key>.json`. The project key is the SHA-1 of `git config remote.origin.url`, falling back to the absolute path for non-git directories. This means the counter is isolated per project: heavy use in one repo never triggers premature mining in another.
+Per-project counter state lives at `~/.memoree/state/skillify/<project-key>.json`. The project key is the SHA-1 of `git config remote.origin.url`, falling back to the absolute path for non-git directories. This means the counter is isolated per project: heavy use in one repo never triggers premature mining in another.
 
 A worker-lock mechanism prevents two concurrent skillify workers for the same project from running simultaneously. The lock is held in a file and released in the worker's `finally` block.
 
@@ -40,7 +40,7 @@ A worker-lock mechanism prevents two concurrent skillify workers for the same pr
 The worker is spawned as a detached Node process with its configuration serialized to a temp JSON file. The invocation looks like:
 
 ```
-node skillify-worker.js /tmp/hivemind-skillify-<uuid>/config.json
+node skillify-worker.js /tmp/memoree-skillify-<uuid>/config.json
 ```
 
 ### Step 1: fetch candidate sessions
@@ -90,9 +90,9 @@ On a `MERGE` verdict, `mergeSkill()` opens the existing file, updates the body a
 
 The `SKILL.md` includes YAML frontmatter with provenance metadata: `source_sessions`, `version`, `created_by_agent`, and timestamps.
 
-### Step 5: record to the Deeplake skills table
+### Step 5: record to the Memoree skills table
 
-After a successful local write, the worker inserts a row into the `skills` table for org-wide provenance. This is the mechanism by which teammates discover each other's mined skills. The INSERT uses the append-only pattern (never UPDATE) to sidestep Deeplake's UPDATE-coalescing quirk.
+After a successful local write, the worker inserts a row into the `skills` table for org-wide provenance. This is the mechanism by which teammates discover each other's mined skills. The INSERT uses the append-only pattern (never UPDATE) to sidestep Memoree's UPDATE-coalescing quirk.
 
 Cross-author merges auto-promote the scope from `me` to `team` in the recorded row, so future `pull` commands know the skill is co-owned.
 
@@ -107,12 +107,12 @@ flowchart TD
     keepBranch["KEEP: writeNewSkill()"]
     mergeBranch["MERGE: mergeSkill()"]
     skipBranch["SKIP: advance watermark"]
-    recordDeeplake["INSERT into skills table\n(org-wide provenance)"]
+    recordMemoree["INSERT into skills table\n(org-wide provenance)"]
     advanceWatermark["Advance watermark\n(oldest mined session)"]
 
     stopEvent --> fetchSessions --> extractPairs --> buildPrompt --> runGate --> parseVerdict
-    parseVerdict -- KEEP --> keepBranch --> recordDeeplake --> advanceWatermark
-    parseVerdict -- MERGE --> mergeBranch --> recordDeeplake --> advanceWatermark
+    parseVerdict -- KEEP --> keepBranch --> recordMemoree --> advanceWatermark
+    parseVerdict -- MERGE --> mergeBranch --> recordMemoree --> advanceWatermark
     parseVerdict -- SKIP --> skipBranch
 ```
 
@@ -126,9 +126,9 @@ The watermark is set to the date of the **oldest** mined session, not the newest
 
 ## Pull and auto-pull
 
-Once a skill row exists in the `skills` table, any teammate can pull it with `hivemind skillify pull`. The pull writes to `~/.claude/skills/<name>--<author>/SKILL.md` (the `--<author>` suffix keeps cross-author skills with the same name disjoint) and fans out symlinks into the skill roots of every other detected agent (`~/.agents/skills/`, `~/.hermes/skills/`, `~/.pi/agent/skills/`) so all agents find the file without a separate copy.
+Once a skill row exists in the `skills` table, any teammate can pull it with `memoree skillify pull`. The pull writes to `~/.claude/skills/<name>--<author>/SKILL.md` (the `--<author>` suffix keeps cross-author skills with the same name disjoint) and fans out symlinks into the skill roots of every other detected agent (`~/.agents/skills/`, `~/.hermes/skills/`, `~/.pi/agent/skills/`) so all agents find the file without a separate copy.
 
-Auto-pull runs at every session start. The pull is idempotent: it skips a file when the local version is at or newer than the remote. The call is bounded by a 5-second timeout and swallows all errors, so a slow or unavailable Deeplake never blocks a session from starting.
+Auto-pull runs at every session start. The pull is idempotent: it skips a file when the local version is at or newer than the remote. The call is bounded by a 5-second timeout and swallows all errors, so a slow or unavailable Memoree never blocks a session from starting.
 
 ---
 
@@ -136,12 +136,12 @@ Auto-pull runs at every session start. The pull is idempotent: it skips a file w
 
 | Env var | Default | Effect |
 |---|---|---|
-| `HIVEMIND_SKILLIFY_EVERY_N_TURNS` | `20` | Stop-counter threshold for mid-session trigger |
-| `HIVEMIND_SKILLS_TABLE` | `skills` | Deeplake table name for org-wide provenance |
-| `HIVEMIND_SKILLIFY_WORKER` | unset | Recursion guard; set to `1` automatically inside the worker |
-| `HIVEMIND_CURSOR_MODEL` | `auto` | (cursor only) Model passed to the gate call |
-| `HIVEMIND_HERMES_PROVIDER` | `openrouter` | (hermes only) Provider for the gate call |
-| `HIVEMIND_HERMES_MODEL` | `anthropic/claude-haiku-4-5` | (hermes only) Model for the gate call |
-| `HIVEMIND_AUTOPULL_DISABLED` | unset | Set to `1` to disable auto-pull at session start |
+| `MEMOREE_SKILLIFY_EVERY_N_TURNS` | `20` | Stop-counter threshold for mid-session trigger |
+| `MEMOREE_SKILLS_TABLE` | `skills` | Memoree table name for org-wide provenance |
+| `MEMOREE_SKILLIFY_WORKER` | unset | Recursion guard; set to `1` automatically inside the worker |
+| `MEMOREE_CURSOR_MODEL` | `auto` | (cursor only) Model passed to the gate call |
+| `MEMOREE_HERMES_PROVIDER` | `openrouter` | (hermes only) Provider for the gate call |
+| `MEMOREE_HERMES_MODEL` | `anthropic/claude-haiku-4-5` | (hermes only) Model for the gate call |
+| `MEMOREE_AUTOPULL_DISABLED` | unset | Set to `1` to disable auto-pull at session start |
 
 Logs write to `~/.claude/hooks/skillify.log`. Each line shows the session pool mined, the gate verdict, and whether a file was written.

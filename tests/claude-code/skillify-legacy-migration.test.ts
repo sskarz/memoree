@@ -16,8 +16,8 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
 let sandboxHome: string;
 
-const legacyOf = (h: string) => join(h, ".deeplake", "state", "skilify");
-const currentOf = (h: string) => join(h, ".deeplake", "state", "skillify");
+const legacyOf = (h: string) => join(h, ".memoree", "state", "skilify");
+const currentOf = (h: string) => join(h, ".memoree", "state", "skillify");
 
 async function freshMigrate() {
   vi.resetModules();

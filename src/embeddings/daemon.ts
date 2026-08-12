@@ -174,8 +174,8 @@ const invokedDirectly = import.meta.url === `file://${process.argv[1]}`
   || (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop() ?? ""));
 
 if (invokedDirectly) {
-  const dims = process.env.HIVEMIND_EMBED_DIMS ? Number(process.env.HIVEMIND_EMBED_DIMS) : undefined;
-  const idleTimeoutMs = process.env.HIVEMIND_EMBED_IDLE_MS ? Number(process.env.HIVEMIND_EMBED_IDLE_MS) : undefined;
+  const dims = process.env.MEMOREE_EMBED_DIMS ? Number(process.env.MEMOREE_EMBED_DIMS) : undefined;
+  const idleTimeoutMs = process.env.MEMOREE_EMBED_IDLE_MS ? Number(process.env.MEMOREE_EMBED_IDLE_MS) : undefined;
   const d = new EmbedDaemon({ dims, idleTimeoutMs });
   d.start().catch((e) => {
     log(`fatal: ${e.message}`);

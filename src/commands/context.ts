@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * CLI surface for `hivemind context`.
+ * CLI surface for `memoree context`.
  *
  * Prints the same rules + open-goals + HOW-TO block that the
  * SessionStart forks inject into agent context. Two consumers:
  *
  *   1. pi / openclaw agents — these platforms don't have a SessionStart
- *      hook in v1, so they invoke `hivemind context` from the model to
+ *      hook in v1, so they invoke `memoree context` from the model to
  *      pull the block on demand. Deterministic output: identical to
  *      what claude-code / cursor / hermes get auto-injected, so the
  *      same prompt instructions land regardless of which agent runs
  *      them.
  *
- *   2. Any agent / human debugging the inject — `hivemind context`
+ *   2. Any agent / human debugging the inject — `memoree context`
  *      is a read-only diagnostic that surfaces what the renderer
  *      would produce right now without firing SessionStart.
  *
@@ -27,10 +27,10 @@ import { createStorageBackend } from "../storage/factory.js";
 import { renderContextBlock } from "../hooks/shared/context-renderer.js";
 
 const USAGE = `
-hivemind context — print the rules + open-goals block on demand
+memoree context — print the rules + open-goals block on demand
 
 Usage:
-  hivemind context
+  memoree context
 
 Same output that SessionStart auto-injects for claude-code / cursor /
 hermes: active org rules + the current user's open goals (status
@@ -48,7 +48,7 @@ export async function runContextCommand(args: string[]): Promise<void> {
 
   const cfg = loadRoutedConfig();
   if (!cfg) {
-    console.error("Not logged in. Run `hivemind login` first.");
+    console.error("Memoree storage is unavailable. Run `memoree doctor`.");
     process.exit(2);
     throw new Error("unreachable");
   }

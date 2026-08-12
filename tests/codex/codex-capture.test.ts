@@ -138,11 +138,11 @@ describe("codex: entry building", () => {
       session_id: "s1",
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "ls -la ~/.deeplake/memory/" },
+      tool_input: { command: "ls -la ~/.memoree/memory/" },
       tool_response: { stdout: "total 0" },
     });
     const parsed = JSON.parse(entry?.tool_input as string);
-    expect(parsed.command).toBe("ls -la ~/.deeplake/memory/");
+    expect(parsed.command).toBe("ls -la ~/.memoree/memory/");
   });
 });
 
@@ -219,9 +219,9 @@ describe("codex: stop transcript parsing", () => {
 // ── Pre-tool-use Bash detection ──────────────────────────────────────────────
 
 const MEMORY_PATHS = [
-  "/home/testuser/.deeplake/memory",
-  "~/.deeplake/memory",
-  "$HOME/.deeplake/memory",
+  "/home/testuser/.memoree/memory",
+  "~/.memoree/memory",
+  "$HOME/.memoree/memory",
 ];
 
 function touchesMemory(cmd: string): boolean {
@@ -230,19 +230,19 @@ function touchesMemory(cmd: string): boolean {
 
 describe("codex: Bash memory detection", () => {
   it("detects cat targeting memory path", () => {
-    expect(touchesMemory("cat ~/.deeplake/memory/index.md")).toBe(true);
+    expect(touchesMemory("cat ~/.memoree/memory/index.md")).toBe(true);
   });
 
   it("detects ls targeting memory path", () => {
-    expect(touchesMemory("ls -la ~/.deeplake/memory/summaries/")).toBe(true);
+    expect(touchesMemory("ls -la ~/.memoree/memory/summaries/")).toBe(true);
   });
 
   it("detects grep targeting memory path", () => {
-    expect(touchesMemory("grep -r 'keyword' ~/.deeplake/memory/")).toBe(true);
+    expect(touchesMemory("grep -r 'keyword' ~/.memoree/memory/")).toBe(true);
   });
 
   it("detects echo redirect targeting memory path", () => {
-    expect(touchesMemory('echo "hello" > ~/.deeplake/memory/test.md')).toBe(true);
+    expect(touchesMemory('echo "hello" > ~/.memoree/memory/test.md')).toBe(true);
   });
 
   it("ignores commands not targeting memory", () => {
@@ -252,11 +252,11 @@ describe("codex: Bash memory detection", () => {
   });
 
   it("detects $HOME variant", () => {
-    expect(touchesMemory("cat $HOME/.deeplake/memory/index.md")).toBe(true);
+    expect(touchesMemory("cat $HOME/.memoree/memory/index.md")).toBe(true);
   });
 
   it("detects absolute path variant", () => {
-    expect(touchesMemory("cat /home/testuser/.deeplake/memory/notes.md")).toBe(true);
+    expect(touchesMemory("cat /home/testuser/.memoree/memory/notes.md")).toBe(true);
   });
 });
 

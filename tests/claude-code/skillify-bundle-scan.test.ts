@@ -108,8 +108,8 @@ describe("known anti-patterns are absent from bundled worker", () => {
 describe("legacy state-dir migration is shipped in every agent's bundle", () => {
   // The migration call wires into the four read/write entry points so a
   // post-rename worker / SessionStart sees the migrated state. If any of
-  // these regressions ship, users with a populated ~/.deeplake/state/skilify/
-  // would silently start fresh on ~/.deeplake/state/skillify/.
+  // these regressions ship, users with a populated ~/.memoree/state/skilify/
+  // would silently start fresh on ~/.memoree/state/skillify/.
   //
   // claude-code/codex/cursor/hermes/openclaw ship the shared TS module
   // compiled into skillify-worker.js + the SessionStart hooks. pi ships

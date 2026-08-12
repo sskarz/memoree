@@ -10,15 +10,15 @@
 
 ## Overview
 
-This sub-feature is the dashboard's front door: the pane a developer sees first when they open Hivemind inside Cursor. It does one job extremely well, **make the value of the shared brain visible and believable**. It renders a small set of KPI cards (tokens saved, sessions captured, active memory recalls, skills created) and a scannable list of recent sessions, drawn from the same read-only data layer the CLI dashboard already uses (`src/dashboard/data.ts:270-288`). It lives in a Cursor Webview, so the developer never opens an external browser or runs a command to see what Hivemind has done for them.
+This sub-feature is the dashboard's front door: the pane a developer sees first when they open Memoree inside Cursor. It does one job extremely well, **make the value of the shared brain visible and believable**. It renders a small set of KPI cards (tokens saved, sessions captured, active memory recalls, skills created) and a scannable list of recent sessions, drawn from the same read-only data layer the CLI dashboard already uses (`src/dashboard/data.ts:270-288`). It lives in a Cursor Webview, so the developer never opens an external browser or runs a command to see what Memoree has done for them.
 
-The value is trust through visibility. After PRD-002, a developer knows Hivemind is *on*. This pane shows them it is *working*, and, crucially, it never lets a number lie by omission. The single hardest design problem here is not drawing a card; it is making a `0` or a stale value honest. The two ways Hivemind produces a confusing number, a stale cached snapshot and the accumulate-only-on-recall stats model, are both surfaced and explained here rather than left to scare the developer into thinking the product is broken.
+The value is trust through visibility. After PRD-002, a developer knows Memoree is *on*. This pane shows them it is *working*, and, crucially, it never lets a number lie by omission. The single hardest design problem here is not drawing a card; it is making a `0` or a stale value honest. The two ways Memoree produces a confusing number, a stale cached snapshot and the accumulate-only-on-recall stats model, are both surfaced and explained here rather than left to scare the developer into thinking the product is broken.
 
 ---
 
 ## Why this matters: the mystery zeros we are killing
 
-A developer who sees "0 tokens saved" after a morning of work concludes Hivemind is broken and stops trusting it. But the 0 is usually correct and benign, and the code already knows why. Two mechanisms produce it:
+A developer who sees "0 tokens saved" after a morning of work concludes Memoree is broken and stops trusting it. But the 0 is usually correct and benign, and the code already knows why. Two mechanisms produce it:
 
 **1. The stale cached snapshot.** Org-wide stats come from a daily server rollup and are cached locally for one hour. The cache deliberately returns a fresh value without re-fetching, and even returns a *stale* value when the network fails:
 
@@ -53,9 +53,9 @@ export interface UsageRecord {
   /** Agent session_id (Claude Code session UUID). */
   sessionId: string;
   /** Bytes of `tool_result.content` returned from Bash tool calls grep'ing
-   *  `~/.deeplake/memory/` during this session ... */
+   *  `~/.memoree/memory/` during this session ... */
   memorySearchBytes: number;
-  /** Count of Bash tool calls that referenced `.deeplake/memory` ... */
+  /** Count of Bash tool calls that referenced `.memoree/memory` ... */
   memorySearchCount: number;
 }
 ```
@@ -106,7 +106,7 @@ Freshness is a first-class part of every org-sourced card, not a footnote.
 
 1. **Stamp the age.** When `tokensSource` is `"org"`, the card shows when the snapshot was taken, derived from the cache's `fetchedAt` (`src/notifications/sources/org-stats.ts:80-91,143`). "As of 12 minutes ago" turns a confusing stale number into an understood one.
 2. **Explain the rollup cadence.** A tooltip or sub-line notes that org stats refresh from a daily server rollup, so same-minute precision is not expected. This matches the cache's own rationale ("the server rollup runs daily, so per-session freshness isn't meaningful," `src/notifications/sources/org-stats.ts:14-19`).
-3. **Offer refresh.** A refresh control re-runs `loadDashboardData`. Per the index's open question, an explicit refresh may request fresher org stats than the 1-hour cache serves; the implementation must avoid hammering `/me/hivemind-stats` on rapid clicks (debounce or disable while in-flight).
+3. **Offer refresh.** A refresh control re-runs `loadDashboardData`. Per the index's open question, an explicit refresh may request fresher org stats than the 1-hour cache serves; the implementation must avoid hammering `/me/memoree-stats` on rapid clicks (debounce or disable while in-flight).
 4. **Be honest when offline.** If the org fetch fails and only a stale cache exists, the data layer returns the stale value (`src/notifications/sources/org-stats.ts:187,202-204`); the card must label it "offline, showing last known" rather than implying it is current.
 
 ---

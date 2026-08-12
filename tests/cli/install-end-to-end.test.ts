@@ -63,16 +63,16 @@ async function freshImport<T>(path: string): Promise<T> {
 // ─── Codex ─────────────────────────────────────────────────────────────────
 
 describe("installCodex / uninstallCodex", () => {
-  it("install creates ~/.codex/hivemind/ + hooks.json + ~/.agents/skills symlink", async () => {
+  it("install creates ~/.codex/memoree/ + hooks.json + ~/.agents/skills symlink", async () => {
     const { installCodex } = await freshImport<typeof import("../../src/cli/install-codex.js")>(
       "../../src/cli/install-codex.js"
     );
     installCodex();
 
-    expect(existsSync(join(fakeHome, ".codex/hivemind/bundle"))).toBe(true);
-    expect(existsSync(join(fakeHome, ".codex/hivemind/.hivemind_version"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".codex/memoree/bundle"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".codex/memoree/.memoree_version"))).toBe(true);
     expect(existsSync(join(fakeHome, ".codex/hooks.json"))).toBe(true);
-    expect(existsSync(join(fakeHome, ".agents/skills/hivemind-memory"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".agents/skills/memoree-memory"))).toBe(true);
 
     // hooks.json shape — exact event set + each event has at least one entry.
     const hooks = JSON.parse(readFileSync(join(fakeHome, ".codex/hooks.json"), "utf-8"));
@@ -83,7 +83,7 @@ describe("installCodex / uninstallCodex", () => {
     expect(hooks.hooks.PreToolUse[0].matcher).toBe("Bash");
   });
 
-  it("install preserves user's pre-existing custom hook on a non-hivemind event", async () => {
+  it("install preserves user's pre-existing custom hook on a non-memoree event", async () => {
     // Pre-create hooks.json with a user-defined Notification hook.
     const userHook = {
       hooks: { Notification: [{ hooks: [{ type: "command", command: "/usr/local/bin/my-notify.sh", timeout: 5 }] }] },
@@ -104,7 +104,7 @@ describe("installCodex / uninstallCodex", () => {
     expect(Object.keys(hooks.hooks)).toContain("SessionStart");
   });
 
-  it("re-install is idempotent — no duplicate hivemind entries on PostToolUse", async () => {
+  it("re-install is idempotent — no duplicate memoree entries on PostToolUse", async () => {
     const { installCodex } = await freshImport<typeof import("../../src/cli/install-codex.js")>(
       "../../src/cli/install-codex.js"
     );
@@ -127,9 +127,9 @@ describe("installCodex / uninstallCodex", () => {
     cx.uninstallCodex();
     // Without any pre-existing user hooks, every event was ours → file deleted.
     expect(existsSync(join(fakeHome, ".codex/hooks.json"))).toBe(false);
-    expect(existsSync(join(fakeHome, ".agents/skills/hivemind-memory"))).toBe(false);
+    expect(existsSync(join(fakeHome, ".agents/skills/memoree-memory"))).toBe(false);
     // Plugin dir is intentionally retained — see install-codex.ts:81 comment.
-    expect(existsSync(join(fakeHome, ".codex/hivemind"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".codex/memoree"))).toBe(true);
   });
 
   it("uninstall PRESERVES a user-defined custom hook (data-loss fix)", async () => {
@@ -155,7 +155,7 @@ describe("installCodex / uninstallCodex", () => {
     // User's Notification hook intact + count is exact.
     expect(after.hooks.Notification).toHaveLength(1);
     expect(after.hooks.Notification[0].hooks[0].command).toBe("/usr/local/bin/my-notify.sh");
-    // Every hivemind event is stripped — none of the 5 we add must remain.
+    // Every memoree event is stripped — none of the 5 we add must remain.
     for (const ev of ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]) {
       expect(after.hooks[ev]).toBeUndefined();
     }
@@ -165,13 +165,13 @@ describe("installCodex / uninstallCodex", () => {
 // ─── Cursor ────────────────────────────────────────────────────────────────
 
 describe("installCursor / uninstallCursor", () => {
-  it("install creates ~/.cursor/hivemind/ + writes hooks to ~/.cursor/hooks.json", async () => {
+  it("install creates ~/.cursor/memoree/ + writes hooks to ~/.cursor/hooks.json", async () => {
     const { installCursor } = await freshImport<typeof import("../../src/cli/install-cursor.js")>(
       "../../src/cli/install-cursor.js"
     );
     installCursor();
 
-    expect(existsSync(join(fakeHome, ".cursor/hivemind/bundle"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".cursor/memoree/bundle"))).toBe(true);
     expect(existsSync(join(fakeHome, ".cursor/hooks.json"))).toBe(true);
 
     const cfg = JSON.parse(readFileSync(join(fakeHome, ".cursor/hooks.json"), "utf-8"));
@@ -179,7 +179,7 @@ describe("installCursor / uninstallCursor", () => {
     expect(cfg.hooks.beforeSubmitPrompt).toBeDefined();
     expect(cfg.hooks.postToolUse).toBeDefined();
     // Marker key is set so uninstall can remove it cleanly.
-    expect(cfg._hivemindManaged).toBeDefined();
+    expect(cfg._memoreeManaged).toBeDefined();
   });
 
   it("install merges into existing hooks.json without losing user entries", async () => {
@@ -206,7 +206,7 @@ describe("installCursor / uninstallCursor", () => {
     expect(cfg.myCustomTopLevel).toBe("preserve me");
   });
 
-  it("uninstall removes hivemind hooks; deletes hooks.json when nothing meaningful remains", async () => {
+  it("uninstall removes memoree hooks; deletes hooks.json when nothing meaningful remains", async () => {
     const cx = await freshImport<typeof import("../../src/cli/install-cursor.js")>(
       "../../src/cli/install-cursor.js"
     );
@@ -217,13 +217,13 @@ describe("installCursor / uninstallCursor", () => {
     expect(existsSync(join(fakeHome, ".cursor/hooks.json"))).toBe(false);
   });
 
-  it("uninstall preserves user hooks (only strips hivemind entries)", async () => {
+  it("uninstall preserves user hooks (only strips memoree entries)", async () => {
     const cx = await freshImport<typeof import("../../src/cli/install-cursor.js")>(
       "../../src/cli/install-cursor.js"
     );
     cx.installCursor();
 
-    // Add a user hook on top of the hivemind config.
+    // Add a user hook on top of the memoree config.
     const cfgPath = join(fakeHome, ".cursor/hooks.json");
     const cfg = JSON.parse(readFileSync(cfgPath, "utf-8"));
     cfg.hooks.beforeSubmitPrompt.push({ command: "/usr/local/bin/user-hook.sh" });
@@ -232,11 +232,11 @@ describe("installCursor / uninstallCursor", () => {
     cx.uninstallCursor();
     expect(existsSync(cfgPath)).toBe(true);
     const after = JSON.parse(readFileSync(cfgPath, "utf-8"));
-    // User hook survives, hivemind entries gone.
+    // User hook survives, memoree entries gone.
     const userHookSurvives = after.hooks.beforeSubmitPrompt
       .some((e: any) => e.command === "/usr/local/bin/user-hook.sh");
     expect(userHookSurvives).toBe(true);
-    expect(after._hivemindManaged).toBeUndefined();
+    expect(after._memoreeManaged).toBeUndefined();
   });
 });
 
@@ -249,14 +249,14 @@ describe("installHermes / uninstallHermes", () => {
     );
     installHermes();
 
-    expect(existsSync(join(fakeHome, ".hermes/hivemind/bundle"))).toBe(true);
-    expect(existsSync(join(fakeHome, ".hermes/skills/hivemind-memory/SKILL.md"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".hermes/memoree/bundle"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".hermes/skills/memoree-memory/SKILL.md"))).toBe(true);
     expect(existsSync(join(fakeHome, ".hermes/config.yaml"))).toBe(true);
 
     const cfg = readFileSync(join(fakeHome, ".hermes/config.yaml"), "utf-8");
     expect(cfg).toContain("mcp_servers:");
     expect(cfg).toContain("hooks:");
-    expect(cfg).toContain("hivemind");
+    expect(cfg).toContain("memoree");
   });
 
   it("install preserves a user-defined section in config.yaml", async () => {
@@ -274,20 +274,20 @@ describe("installHermes / uninstallHermes", () => {
     expect(cfg).toContain("custom: true");
   });
 
-  it("uninstall strips skill + hivemind config sections, keeps non-hivemind user entries", async () => {
+  it("uninstall strips skill + memoree config sections, keeps non-memoree user entries", async () => {
     const hx = await freshImport<typeof import("../../src/cli/install-hermes.js")>(
       "../../src/cli/install-hermes.js"
     );
     hx.installHermes();
-    expect(existsSync(join(fakeHome, ".hermes/skills/hivemind-memory/SKILL.md"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".hermes/skills/memoree-memory/SKILL.md"))).toBe(true);
 
     hx.uninstallHermes();
-    expect(existsSync(join(fakeHome, ".hermes/skills/hivemind-memory"))).toBe(false);
+    expect(existsSync(join(fakeHome, ".hermes/skills/memoree-memory"))).toBe(false);
   });
 
   it("uninstall removes hooks_auto_accept (silent-auto-accept residual fix)", async () => {
     // CLAUDE.md rule 12 — failure-case-before-fix: installHermes sets
-    // cfg.hooks_auto_accept = true so the hivemind hooks fire without a
+    // cfg.hooks_auto_accept = true so the memoree hooks fire without a
     // consent prompt. The pre-fix uninstallHermes never removed this flag,
     // so any unrelated hook a user added later would silently auto-accept.
     // This test would FAIL on main pre-fix (flag still true after uninstall)
@@ -303,7 +303,7 @@ describe("installHermes / uninstallHermes", () => {
 
     hx.uninstallHermes();
 
-    // Either the file is gone (whole config was hivemind-only) or it
+    // Either the file is gone (whole config was memoree-only) or it
     // exists without the flag. Negative pattern: under no circumstance
     // should `hooks_auto_accept` survive uninstall.
     if (existsSync(join(fakeHome, ".hermes/config.yaml"))) {
@@ -323,21 +323,21 @@ describe("installHermes / uninstallHermes", () => {
 // ─── pi ────────────────────────────────────────────────────────────────────
 
 describe("installPi / uninstallPi", () => {
-  it("install upserts AGENTS.md hivemind block + drops extension at ~/.pi/agent/extensions/", async () => {
+  it("install upserts AGENTS.md memoree block + drops extension at ~/.pi/agent/extensions/", async () => {
     const { installPi } = await freshImport<typeof import("../../src/cli/install-pi.js")>(
       "../../src/cli/install-pi.js"
     );
     installPi();
 
     expect(existsSync(join(fakeHome, ".pi/agent/AGENTS.md"))).toBe(true);
-    expect(existsSync(join(fakeHome, ".pi/agent/extensions/hivemind.ts"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".pi/agent/extensions/memoree.ts"))).toBe(true);
 
     const agents = readFileSync(join(fakeHome, ".pi/agent/AGENTS.md"), "utf-8");
-    expect(agents).toContain("BEGIN hivemind-memory");
-    expect(agents).toContain("END hivemind-memory");
+    expect(agents).toContain("BEGIN memoree-memory");
+    expect(agents).toContain("END memoree-memory");
   });
 
-  it("install does NOT drop a per-agent ~/.pi/agent/skills/hivemind-memory/SKILL.md", async () => {
+  it("install does NOT drop a per-agent ~/.pi/agent/skills/memoree-memory/SKILL.md", async () => {
     // Negative pattern: pi reads from both ~/.pi/agent/skills and
     // ~/.agents/skills, so a per-agent drop would collide with the codex
     // installer's shared symlink. install-pi.ts deliberately skips it.
@@ -345,7 +345,7 @@ describe("installPi / uninstallPi", () => {
       "../../src/cli/install-pi.js"
     );
     installPi();
-    expect(existsSync(join(fakeHome, ".pi/agent/skills/hivemind-memory/SKILL.md"))).toBe(false);
+    expect(existsSync(join(fakeHome, ".pi/agent/skills/memoree-memory/SKILL.md"))).toBe(false);
   });
 
   it("install preserves user-edited AGENTS.md content outside the marker block", async () => {
@@ -361,7 +361,7 @@ describe("installPi / uninstallPi", () => {
     const after = readFileSync(join(fakeHome, ".pi/agent/AGENTS.md"), "utf-8");
     expect(after).toContain("# My pi guidance");
     expect(after).toContain("- always be helpful");
-    expect(after).toContain("BEGIN hivemind-memory");
+    expect(after).toContain("BEGIN memoree-memory");
   });
 
   it("re-install is idempotent — exactly one BEGIN/END marker pair after multiple runs", async () => {
@@ -373,8 +373,8 @@ describe("installPi / uninstallPi", () => {
     installPi();
 
     const after = readFileSync(join(fakeHome, ".pi/agent/AGENTS.md"), "utf-8");
-    const begins = (after.match(/BEGIN hivemind-memory/g) ?? []).length;
-    const ends = (after.match(/END hivemind-memory/g) ?? []).length;
+    const begins = (after.match(/BEGIN memoree-memory/g) ?? []).length;
+    const ends = (after.match(/END memoree-memory/g) ?? []).length;
     expect(begins).toBe(1);
     expect(ends).toBe(1);
   });
@@ -386,7 +386,7 @@ describe("installPi / uninstallPi", () => {
     cx.installPi();
     cx.uninstallPi();
 
-    expect(existsSync(join(fakeHome, ".pi/agent/extensions/hivemind.ts"))).toBe(false);
+    expect(existsSync(join(fakeHome, ".pi/agent/extensions/memoree.ts"))).toBe(false);
     // AGENTS.md had nothing else → installer deletes the empty file.
     expect(existsSync(join(fakeHome, ".pi/agent/AGENTS.md"))).toBe(false);
   });
@@ -404,23 +404,23 @@ describe("installPi / uninstallPi", () => {
 
     const after = readFileSync(join(fakeHome, ".pi/agent/AGENTS.md"), "utf-8");
     expect(after).toContain("# My pi guidance");
-    expect(after).not.toContain("BEGIN hivemind-memory");
+    expect(after).not.toContain("BEGIN memoree-memory");
   });
 });
 
 // ─── MCP shared server ────────────────────────────────────────────────────
 
 describe("ensureMcpServerInstalled", () => {
-  it("drops server.js into ~/.hivemind/mcp/ + version stamp at ~/.hivemind/", async () => {
+  it("drops server.js into ~/.memoree/mcp/ + version stamp at ~/.memoree/", async () => {
     const { ensureMcpServerInstalled } = await freshImport<
       typeof import("../../src/cli/install-mcp-shared.js")
     >("../../src/cli/install-mcp-shared.js");
     ensureMcpServerInstalled();
 
-    expect(existsSync(join(fakeHome, ".hivemind/mcp/server.js"))).toBe(true);
-    // writeVersionStamp(HIVEMIND_DIR, ...) writes to ~/.hivemind/.hivemind_version,
+    expect(existsSync(join(fakeHome, ".memoree/mcp/server.js"))).toBe(true);
+    // writeVersionStamp(MEMOREE_DIR, ...) writes to ~/.memoree/.memoree_version,
     // one level above MCP_DIR — see install-mcp-shared.ts.
-    expect(existsSync(join(fakeHome, ".hivemind/.hivemind_version"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".memoree/.memoree_version"))).toBe(true);
   });
 
   it("buildMcpServerEntry returns a valid MCP server config record", async () => {
@@ -458,10 +458,10 @@ function buildClaudeMock(state: {
       }
       const sub = args.join(" ");
       if (sub === "plugin marketplace list") {
-        return Buffer.from(state.marketplaceListed ? "hivemind\nfoo\n" : "foo\nbar\n");
+        return Buffer.from(state.marketplaceListed ? "memoree\nfoo\n" : "foo\nbar\n");
       }
       if (sub === "plugin list") {
-        return Buffer.from(state.pluginInstalled ? "hivemind@hivemind\n" : "other-plugin\n");
+        return Buffer.from(state.pluginInstalled ? "memoree@memoree\n" : "other-plugin\n");
       }
       return Buffer.from("");
     },
@@ -478,9 +478,9 @@ describe("installClaude / uninstallClaude", () => {
     installClaude();
     const cmds = m.calls.map(c => c.slice(1).join(" "));
     expect(cmds).toContain("--version");
-    expect(cmds).toContain("plugin marketplace add activeloopai/hivemind");
-    expect(cmds).toContain("plugin install hivemind");
-    expect(cmds).toContain("plugin enable hivemind@hivemind");
+    expect(cmds).toContain(`plugin marketplace add ${process.cwd()}`);
+    expect(cmds).toContain("plugin install memoree@memoree --scope user");
+    expect(cmds).toContain("plugin enable memoree@memoree --scope user");
   });
 
   it("install skips marketplace+install when already configured (idempotent)", async () => {
@@ -493,10 +493,10 @@ describe("installClaude / uninstallClaude", () => {
     const cmds = m.calls.map(c => c.slice(1).join(" "));
     // Negative pattern (CLAUDE.md rule 8): no duplicate `marketplace add` or
     // `plugin install` on second call when state shows it's already there.
-    expect(cmds).not.toContain("plugin marketplace add activeloopai/hivemind");
-    expect(cmds).not.toContain("plugin install hivemind");
+    expect(cmds).not.toContain(`plugin marketplace add ${process.cwd()}`);
+    expect(cmds).not.toContain("plugin install memoree@memoree --scope user");
     // Enable is still safe to run unconditionally.
-    expect(cmds).toContain("plugin enable hivemind@hivemind");
+    expect(cmds).toContain("plugin enable memoree@memoree --scope user");
   });
 
   it("install throws a clear error when claude CLI is missing", async () => {
@@ -518,16 +518,16 @@ describe("installClaude / uninstallClaude", () => {
     );
     uninstallClaude();
     const cmds = m.calls.map(c => c.slice(1).join(" "));
-    expect(cmds).toContain("plugin disable hivemind@hivemind");
-    expect(cmds).toContain("plugin uninstall hivemind@hivemind");
+    expect(cmds).toContain("plugin disable memoree@memoree --scope user");
+    expect(cmds).toContain("plugin uninstall memoree@memoree --scope user");
   });
 
-  it("uninstall is graceful when claude CLI is missing (logs, does not throw)", async () => {
+  it("uninstall reports when claude CLI is missing", async () => {
     const m = buildClaudeMock({ hasCli: false });
     execFileSyncMock.mockImplementation(m.impl);
     const { uninstallClaude } = await freshImport<typeof import("../../src/cli/install-claude.js")>(
       "../../src/cli/install-claude.js"
     );
-    expect(() => uninstallClaude()).not.toThrow();
+    expect(() => uninstallClaude()).toThrow(/Claude Code CLI/);
   });
 });

@@ -21,13 +21,14 @@ type Embedder = (input: string | string[], opts: Record<string, unknown>) => Pro
 // Minimal shape of @huggingface/transformers that this wrapper actually uses.
 // Declared locally instead of `typeof import("@huggingface/transformers")` so
 // the typecheck does NOT resolve the package at compile time: it's an
-// optional, on-demand dependency (installed by `hivemind embeddings install`)
+// optional, on-demand dependency (installed by `memoree embeddings install`)
 // and is absent on some platforms (e.g. Windows CI), where a `typeof import`
 // query would make `tsc` fail with TS2307.
 interface TransformersModule {
   env: {
     allowLocalModels: boolean;
     useFSCache: boolean;
+    cacheDir?: string;
     [key: string]: unknown;
   };
   pipeline: (
@@ -48,11 +49,11 @@ export interface NomicOptions {
 // The daemon may have been spawned from any plugin bundle path (marketplace
 // versioned caches, dev tree, etc.). Bundle-relative `node_modules` resolution
 // is unreliable across marketplace upgrades, so we explicitly look in the
-// canonical shared-deps location that `hivemind embeddings install` populates,
+// canonical shared-deps location that `memoree embeddings install` populates,
 // and only fall back to the bare specifier (dev tree / colocated install).
 
 export async function _importFromCanonicalSharedDeps(
-  sharedDir: string = join(homedir(), ".hivemind", "embed-deps"),
+  sharedDir: string = join(homedir(), ".memoree", "embed-deps"),
 ): Promise<TransformersModule> {
   const base = pathToFileURL(`${sharedDir}/`).href;
   // `createRequire(base).resolve(...)` honors the package's `"require"`
@@ -101,7 +102,7 @@ export async function defaultImportTransformers(
     const canonicalDetail = canonicalErr instanceof Error ? canonicalErr.message : String(canonicalErr);
     throw new Error(
       `@huggingface/transformers is not installed anywhere reachable. ` +
-        `Run \`hivemind embeddings install\` to install it. ` +
+        `Run \`memoree embeddings install\` to install it. ` +
         `(canonical: ${canonicalDetail}; bare: ${detail})`,
     );
   }
@@ -133,6 +134,7 @@ export class NomicEmbedder {
       const mod = await _importTransformers();
       mod.env.allowLocalModels = false;
       mod.env.useFSCache = true;
+      mod.env.cacheDir = join(homedir(), ".memoree", "models");
       this.pipeline = (await mod.pipeline("feature-extraction", this.repo, { dtype: this.dtype as "fp32" | "q8" })) as unknown as Embedder;
     })();
     try {
@@ -186,7 +188,7 @@ export class NomicEmbedder {
 // ── Test helpers ────────────────────────────────────────────────────────────
 // Production never calls these. They let unit tests bypass the
 // canonical-shared-deps resolver (which would otherwise hit the real
-// ~/.hivemind/embed-deps/ on dev machines and ignore vi.mock).
+// ~/.memoree/embed-deps/ on dev machines and ignore vi.mock).
 
 export function _setTransformersImporterForTesting(fn: TransformersImporter): void {
   _importTransformers = fn;

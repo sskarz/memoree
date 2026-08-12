@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { isHivemindHookEntry, mergeHooks } from "../../src/cli/install-codex.js";
-import { upsertHivemindBlock, stripHivemindBlock } from "../../src/cli/install-pi.js";
-import { isHivemindEntry, stripHooksFromConfig } from "../../src/cli/install-cursor.js";
+import { isMemoreeHookEntry, mergeHooks } from "../../src/cli/install-codex.js";
+import { upsertMemoreeBlock, stripMemoreeBlock } from "../../src/cli/install-pi.js";
+import { isMemoreeEntry, stripHooksFromConfig } from "../../src/cli/install-cursor.js";
 
 /**
- * Unit tests for the pure helpers behind `hivemind <agent> install/uninstall`.
+ * Unit tests for the pure helpers behind `memoree <agent> install/uninstall`.
  *
  * Why these specifically (per CLAUDE.md testing philosophy):
  *   - mergeHooks: was a data-loss bug in 0.6.47 (writeJson clobbered user hooks).
  *     Tests here include the "failure case before the fix" — a fixture that
  *     would have lost a user-defined hook under the old blind-overwrite.
- *   - isHivemindHookEntry / isHivemindEntry: drives merge/strip; needs to be
+ *   - isMemoreeHookEntry / isMemoreeEntry: drives merge/strip; needs to be
  *     conservative on malformed input (no false positives).
- *   - upsertHivemindBlock / stripHivemindBlock: marker-block round-trip on
+ *   - upsertMemoreeBlock / stripMemoreeBlock: marker-block round-trip on
  *     ~/.pi/agent/AGENTS.md. Idempotent re-install is part of the contract.
  *   - stripHooksFromConfig: cursor uninstall edge cases (empty-object,
  *     version-only) caught in PR #75 review.
@@ -21,36 +21,36 @@ import { isHivemindEntry, stripHooksFromConfig } from "../../src/cli/install-cur
  * accidentally adds an extra entry can't slip past a "merged something" check.
  */
 
-// ─── codex: isHivemindHookEntry ───────────────────────────────────────────
+// ─── codex: isMemoreeHookEntry ───────────────────────────────────────────
 
-describe("isHivemindHookEntry", () => {
-  const PD = "/home/test/.codex/hivemind";
+describe("isMemoreeHookEntry", () => {
+  const PD = "/home/test/.codex/memoree";
 
   it("true when entry has a hook command pointing into <pluginDir>/bundle/", () => {
-    expect(isHivemindHookEntry({
+    expect(isMemoreeHookEntry({
       hooks: [{ type: "command", command: `node "${PD}/bundle/session-start.js"`, timeout: 120 }],
     }, PD)).toBe(true);
   });
 
   it("false when command points OUTSIDE pluginDir (e.g. user's own hook)", () => {
-    expect(isHivemindHookEntry({
+    expect(isMemoreeHookEntry({
       hooks: [{ type: "command", command: "node /home/test/.codex/my-custom-hook.js" }],
     }, PD)).toBe(false);
   });
 
-  it("false when command points to a sibling plugin dir whose filename is NOT a hivemind bundle entry-point", () => {
-    expect(isHivemindHookEntry({
+  it("false when command points to a sibling plugin dir whose filename is NOT a memoree bundle entry-point", () => {
+    expect(isMemoreeHookEntry({
       hooks: [{ type: "command", command: "node /home/test/.codex/other-plugin/bundle/x.js" }],
     }, PD)).toBe(false);
   });
 
-  // The dual-install case from production: a local hivemind dev clone wired
+  // The dual-install case from production: a local memoree dev clone wired
   // into hooks.json under a path that's NOT the canonical install dir.
   // We MUST recognise these as ours so re-install strips them — otherwise
-  // two hivemind copies race on every codex session.
-  it("true when command points to a hivemind bundle file in a foreign path (dev-clone scenario)", () => {
-    expect(isHivemindHookEntry({
-      hooks: [{ type: "command", command: 'node "/home/test/dev-clone-of-hivemind/codex/bundle/session-start.js"', timeout: 120 }],
+  // two memoree copies race on every codex session.
+  it("true when command points to a memoree bundle file in a foreign path (dev-clone scenario)", () => {
+    expect(isMemoreeHookEntry({
+      hooks: [{ type: "command", command: 'node "/home/test/dev-clone-of-memoree/codex/bundle/session-start.js"', timeout: 120 }],
     }, PD)).toBe(true);
   });
 
@@ -61,14 +61,14 @@ describe("isHivemindHookEntry", () => {
     "pre-tool-use.js",
     "stop.js",
     "wiki-worker.js",
-  ])("true when command targets a known hivemind bundle file: bundle/%s", (file) => {
-    expect(isHivemindHookEntry({
+  ])("true when command targets a known memoree bundle file: bundle/%s", (file) => {
+    expect(isMemoreeHookEntry({
       hooks: [{ type: "command", command: `node "/some/sibling/codex/bundle/${file}"` }],
     }, PD)).toBe(true);
   });
 
   it("false when filename matches but path does not contain a 'bundle/' segment (avoids matching unrelated scripts)", () => {
-    expect(isHivemindHookEntry({
+    expect(isMemoreeHookEntry({
       hooks: [{ type: "command", command: 'node "/home/test/scripts/session-start.js"' }],
     }, PD)).toBe(false);
   });
@@ -84,11 +84,11 @@ describe("isHivemindHookEntry", () => {
     ["hook missing command", { hooks: [{ type: "command", timeout: 10 }] }],
     ["hook with non-string command", { hooks: [{ command: 123 }] }],
   ])("false on malformed input: %s", (_label, entry) => {
-    expect(isHivemindHookEntry(entry, PD)).toBe(false);
+    expect(isMemoreeHookEntry(entry, PD)).toBe(false);
   });
 
   it("true if any one hook in the entry's hooks[] matches (mixed entry)", () => {
-    expect(isHivemindHookEntry({
+    expect(isMemoreeHookEntry({
       hooks: [
         { type: "command", command: "node /not-ours.js" },
         { type: "command", command: `node "${PD}/bundle/capture.js"` },
@@ -98,28 +98,28 @@ describe("isHivemindHookEntry", () => {
 
   // Windows separator bug (2026-05-29): codex on Windows writes the hook
   // command via join() with BACKSLASHES, but the matcher used forward-slash
-  // literals. Result: isHivemindHookEntry returned false on Windows, so
+  // literals. Result: isMemoreeHookEntry returned false on Windows, so
   // re-install never stripped the prior entry and APPENDED a duplicate
   // (PostToolUse capture ran twice — the reported bug). Failure-before-fix.
   describe("Windows backslash paths (separator normalization)", () => {
-    const WPD = "C:\\Users\\angel\\.codex\\hivemind";
+    const WPD = "C:\\Users\\angel\\.codex\\memoree";
 
     it("true when a backslash command points into <pluginDir>\\bundle\\ (canonical Windows install)", () => {
-      expect(isHivemindHookEntry({
+      expect(isMemoreeHookEntry({
         hooks: [{ type: "command", command: `node "${WPD}\\bundle\\capture.js"`, timeout: 15 }],
       }, WPD)).toBe(true);
     });
 
     it("true for each known bundle file written with backslashes", () => {
       for (const f of ["session-start.js", "capture.js", "stop.js", "wiki-worker.js"]) {
-        expect(isHivemindHookEntry({
+        expect(isMemoreeHookEntry({
           hooks: [{ type: "command", command: `node "C:\\some\\sibling\\bundle\\${f}"` }],
         }, WPD)).toBe(true);
       }
     });
 
     it("still false for a user's own backslash hook outside bundle/", () => {
-      expect(isHivemindHookEntry({
+      expect(isMemoreeHookEntry({
         hooks: [{ type: "command", command: `node "C:\\Users\\angel\\.codex\\my-hook.js"` }],
       }, WPD)).toBe(false);
     });
@@ -134,14 +134,14 @@ describe("isHivemindHookEntry", () => {
     ["hooks[] contains a string",  { hooks: ["not-an-object"] }],
     ["hooks[] contains a number",  { hooks: [42] }],
   ])("false when %s", (_label, entry) => {
-    expect(isHivemindHookEntry(entry, PD)).toBe(false);
+    expect(isMemoreeHookEntry(entry, PD)).toBe(false);
   });
 });
 
 // ─── codex: mergeHooks (the data-loss-fix surface) ────────────────────────
 
 describe("mergeHooks", () => {
-  const PD = "/home/test/.codex/hivemind";
+  const PD = "/home/test/.codex/memoree";
   const ours = {
     hooks: {
       SessionStart: [{ hooks: [{ type: "command", command: `node "${PD}/bundle/session-start.js"`, timeout: 120 }] }],
@@ -160,7 +160,7 @@ describe("mergeHooks", () => {
   // exactly the fixture that would have failed under the pre-fix
   // writeJson(HOOKS_PATH, buildHooksJson()) — the user's custom Notification
   // hook would have been silently wiped.
-  it("preserves user-defined hooks for events hivemind does NOT claim", () => {
+  it("preserves user-defined hooks for events memoree does NOT claim", () => {
     const userHook = { hooks: [{ type: "command", command: "/usr/local/bin/my-notify.sh", timeout: 5 }] };
     const existing = { hooks: { Notification: [userHook] } };
 
@@ -174,7 +174,7 @@ describe("mergeHooks", () => {
     expect(h.Notification[0]).toEqual(userHook);
   });
 
-  it("preserves user hooks for events hivemind ALSO claims (both kept side-by-side)", () => {
+  it("preserves user hooks for events memoree ALSO claims (both kept side-by-side)", () => {
     const userHook = { hooks: [{ type: "command", command: "/usr/local/bin/my-pre-toolcall.sh", timeout: 3 }] };
     const existing = { hooks: { PostToolUse: [userHook] } };
 
@@ -189,29 +189,29 @@ describe("mergeHooks", () => {
   });
 
   // CLAUDE.md rule 8: the bad pattern this code class previously had
-  // (duplicate hivemind entries on every re-install) must be asserted
+  // (duplicate memoree entries on every re-install) must be asserted
   // NOT to occur, not just "merge worked."
-  it("strips prior hivemind entries on re-install — no duplication after N re-runs", () => {
+  it("strips prior memoree entries on re-install — no duplication after N re-runs", () => {
     let cur: Record<string, unknown> = {};
     for (let i = 0; i < 5; i++) cur = mergeHooks(cur, ours, PD);
 
     const h = (cur as { hooks: Record<string, unknown[]> }).hooks;
     expect(h.SessionStart).toHaveLength(1);
     expect(h.PostToolUse).toHaveLength(1);
-    // Negative pattern: NO entry has a duplicate hivemind command.
+    // Negative pattern: NO entry has a duplicate memoree command.
     const allCommands = Object.values(h).flatMap(entries =>
       entries.flatMap((e: unknown) => (e as { hooks: { command: string }[] }).hooks.map(c => c.command)),
     );
-    const hivemindCommands = allCommands.filter(c => c.includes(`${PD}/bundle/`));
-    const unique = new Set(hivemindCommands);
-    expect(hivemindCommands.length).toBe(unique.size);
+    const memoreeCommands = allCommands.filter(c => c.includes(`${PD}/bundle/`));
+    const unique = new Set(memoreeCommands);
+    expect(memoreeCommands.length).toBe(unique.size);
   });
 
   // The end-to-end repro of the reported Windows bug: re-install on Windows
-  // (backslash commands) must strip the prior hivemind PostToolUse entry, not
+  // (backslash commands) must strip the prior memoree PostToolUse entry, not
   // accumulate duplicates. Pre-fix this looped to 5 PostToolUse entries.
   it("Windows backslash re-install: no PostToolUse duplication after N re-runs", () => {
-    const WPD = "C:\\Users\\angel\\.codex\\hivemind";
+    const WPD = "C:\\Users\\angel\\.codex\\memoree";
     const winOurs = {
       hooks: {
         SessionStart: [{ hooks: [{ type: "command", command: `node "${WPD}\\bundle\\session-start.js"`, timeout: 10 }] }],
@@ -225,10 +225,10 @@ describe("mergeHooks", () => {
     expect(h.PostToolUse).toHaveLength(1);
   });
 
-  it("re-install with mixed prior (user + stale hivemind) keeps user, replaces stale", () => {
+  it("re-install with mixed prior (user + stale memoree) keeps user, replaces stale", () => {
     const userHook = { hooks: [{ type: "command", command: "/usr/local/bin/audit.sh", timeout: 5 }] };
-    const staleHivemind = { hooks: [{ type: "command", command: `node "${PD}/bundle/old-capture.js"`, timeout: 15 }] };
-    const existing = { hooks: { PostToolUse: [userHook, staleHivemind] } };
+    const staleMemoree = { hooks: [{ type: "command", command: `node "${PD}/bundle/old-capture.js"`, timeout: 15 }] };
+    const existing = { hooks: { PostToolUse: [userHook, staleMemoree] } };
 
     const merged = mergeHooks(existing, ours, PD);
     const h = (merged as { hooks: Record<string, unknown[]> }).hooks;
@@ -241,9 +241,9 @@ describe("mergeHooks", () => {
     expect(ourCmd).not.toContain("old-capture.js");
   });
 
-  it("drops events whose surviving (non-hivemind) entries are empty", () => {
-    const onlyHivemind = { hooks: [{ type: "command", command: `node "${PD}/bundle/old.js"` }] };
-    const existing = { hooks: { OldEvent: [onlyHivemind] } };
+  it("drops events whose surviving (non-memoree) entries are empty", () => {
+    const onlyMemoree = { hooks: [{ type: "command", command: `node "${PD}/bundle/old.js"` }] };
+    const existing = { hooks: { OldEvent: [onlyMemoree] } };
 
     const merged = mergeHooks(existing, ours, PD);
     const h = (merged as { hooks: Record<string, unknown[]> }).hooks;
@@ -263,14 +263,14 @@ describe("mergeHooks", () => {
   });
 });
 
-// ─── pi: upsertHivemindBlock / stripHivemindBlock ─────────────────────────
+// ─── pi: upsertMemoreeBlock / stripMemoreeBlock ─────────────────────────
 
-const BEGIN = "<!-- BEGIN hivemind-memory -->";
-const END   = "<!-- END hivemind-memory -->";
+const BEGIN = "<!-- BEGIN memoree-memory -->";
+const END   = "<!-- END memoree-memory -->";
 
-describe("upsertHivemindBlock", () => {
+describe("upsertMemoreeBlock", () => {
   it("on empty AGENTS.md: writes the marker block followed by trailing newline", () => {
-    const out = upsertHivemindBlock(null);
+    const out = upsertMemoreeBlock(null);
     expect(out).toContain(BEGIN);
     expect(out).toContain(END);
     expect(out.endsWith("\n")).toBe(true);
@@ -281,7 +281,7 @@ describe("upsertHivemindBlock", () => {
 
   it("appends to existing content with a blank-line separator (no marker yet)", () => {
     const prior = "# My pi notes\nKeep these.";
-    const out = upsertHivemindBlock(prior);
+    const out = upsertMemoreeBlock(prior);
     expect(out.startsWith("# My pi notes\nKeep these.\n\n")).toBe(true);
     expect(out).toContain(BEGIN);
     // User content is preserved verbatim.
@@ -290,7 +290,7 @@ describe("upsertHivemindBlock", () => {
 
   it("idempotent: re-upsert produces exactly one marker pair, not two", () => {
     let cur: string | null = null;
-    for (let i = 0; i < 4; i++) cur = upsertHivemindBlock(cur);
+    for (let i = 0; i < 4; i++) cur = upsertMemoreeBlock(cur);
     const begins = (cur!.match(new RegExp(BEGIN, "g")) ?? []).length;
     const ends   = (cur!.match(new RegExp(END,   "g")) ?? []).length;
     expect(begins).toBe(1);
@@ -299,7 +299,7 @@ describe("upsertHivemindBlock", () => {
 
   it("replaces in-place when marker already present (preserves before+after content)", () => {
     const prior = `# Header\n\n${BEGIN}\nold body\n${END}\n\n## After\nuser stuff`;
-    const out = upsertHivemindBlock(prior);
+    const out = upsertMemoreeBlock(prior);
     // Old body is gone; new block is in; user's before/after kept.
     expect(out).not.toContain("old body");
     expect(out).toContain("# Header");
@@ -310,7 +310,7 @@ describe("upsertHivemindBlock", () => {
 
   it("malformed prior block (BEGIN without END) → appends a fresh block", () => {
     const prior = `# Header\n${BEGIN}\nbroken — no end marker\n## After`;
-    const out = upsertHivemindBlock(prior);
+    const out = upsertMemoreeBlock(prior);
     // We do NOT silently strip the broken block (could discard user-touched
     // content); we append a fresh one and let the user clean up.
     expect(out).toContain("broken — no end marker");
@@ -320,14 +320,14 @@ describe("upsertHivemindBlock", () => {
 
   it("collapses DUPLICATE blocks (bad merge / manual paste) down to exactly one", () => {
     const prior = `# Header\n\n${BEGIN}\nfirst\n${END}\n\n## Mid\n\n${BEGIN}\nsecond\n${END}\n\n## Tail`;
-    const out = upsertHivemindBlock(prior);
+    const out = upsertMemoreeBlock(prior);
     expect((out.match(new RegExp(BEGIN, "g")) ?? []).length).toBe(1);
     expect((out.match(new RegExp(END, "g")) ?? []).length).toBe(1);
     // Both stale bodies gone; the surviving scaffold is exactly the user's
     // content with a single block (asserted via strip → exact remainder).
     expect(out).not.toContain("first");
     expect(out).not.toContain("second");
-    expect(stripHivemindBlock(out)).toBe("# Header\n\n## Mid\n\n## Tail\n");
+    expect(stripMemoreeBlock(out)).toBe("# Header\n\n## Mid\n\n## Tail\n");
   });
 
   it("on reinstall, does NOT delete user text under a preexisting stray BEGIN (data-loss guard)", () => {
@@ -335,7 +335,7 @@ describe("upsertHivemindBlock", () => {
     // install over a half-written marker). Reinstall must replace OUR block in
     // place without swallowing the user's text under the stray marker.
     const prior = `# Notes\n${BEGIN}\nuser text under stray marker\n\n${BEGIN}\nold block\n${END}\n`;
-    const out = upsertHivemindBlock(prior);
+    const out = upsertMemoreeBlock(prior);
     expect(out).toContain("user text under stray marker"); // preserved
     expect(out).not.toContain("old block"); // our block replaced
     expect((out.match(new RegExp(END, "g")) ?? []).length).toBe(1); // one well-formed block
@@ -343,7 +343,7 @@ describe("upsertHivemindBlock", () => {
 
   it("keeps the block IN PLACE on reinstall — does not relocate it below later user notes", () => {
     const prior = `# Top\n\n${BEGIN}\nold\n${END}\n\n## My overrides\nkeep last`;
-    const out = upsertHivemindBlock(prior);
+    const out = upsertMemoreeBlock(prior);
     // Block stays between "# Top" and the user's overrides (precedence kept),
     // not appended at EOF.
     expect(out.indexOf(BEGIN)).toBeLessThan(out.indexOf("## My overrides"));
@@ -352,39 +352,39 @@ describe("upsertHivemindBlock", () => {
   });
 });
 
-describe("stripHivemindBlock", () => {
+describe("stripMemoreeBlock", () => {
   it("no marker → input is returned unchanged", () => {
-    const prior = "# Header\nNo hivemind here.\n";
-    expect(stripHivemindBlock(prior)).toBe(prior);
+    const prior = "# Header\nNo memoree here.\n";
+    expect(stripMemoreeBlock(prior)).toBe(prior);
   });
 
   it("marker-only file → empty string (caller's job to delete the file)", () => {
     const prior = `${BEGIN}\nbody\n${END}`;
-    expect(stripHivemindBlock(prior)).toBe("");
+    expect(stripMemoreeBlock(prior)).toBe("");
   });
 
   it("marker between user content → both halves preserved with single blank line", () => {
-    const prior = `# Before\nuser one\n\n${BEGIN}\nhivemind body\n${END}\n\n## After\nuser two\n`;
-    const out = stripHivemindBlock(prior);
+    const prior = `# Before\nuser one\n\n${BEGIN}\nmemoree body\n${END}\n\n## After\nuser two\n`;
+    const out = stripMemoreeBlock(prior);
     expect(out).toContain("# Before");
     expect(out).toContain("user one");
     expect(out).toContain("## After");
     expect(out).toContain("user two");
-    expect(out).not.toContain("hivemind body");
+    expect(out).not.toContain("memoree body");
     expect(out).not.toContain(BEGIN);
     expect(out).not.toContain(END);
   });
 
   it("marker at file head (no 'before') → returns just the after content", () => {
     const prior = `${BEGIN}\nbody\n${END}\n\n## After only\n`;
-    const out = stripHivemindBlock(prior);
+    const out = stripMemoreeBlock(prior);
     expect(out.startsWith("## After only")).toBe(true);
     expect(out).not.toContain(BEGIN);
   });
 
   it("malformed (BEGIN without END) → input returned unchanged (don't truncate user data)", () => {
     const prior = `# Header\n${BEGIN}\nbroken — no end marker\nuser stuff after\n`;
-    expect(stripHivemindBlock(prior)).toBe(prior);
+    expect(stripMemoreeBlock(prior)).toBe(prior);
   });
 
   it("install→uninstall round-trip removes our block AND preserves user content past a stray BEGIN", () => {
@@ -393,9 +393,9 @@ describe("stripHivemindBlock", () => {
     // OUR block without deleting the user's lines between their stray marker and
     // our block. Strip must NOT pair the stray BEGIN with our block's END.
     const userFile = `# Notes\n${BEGIN}\nuser half-wrote this, no end\n`;
-    const installed = upsertHivemindBlock(userFile);
+    const installed = upsertMemoreeBlock(userFile);
     expect(installed).toContain(END); // a well-formed block was added
-    const uninstalled = stripHivemindBlock(installed);
+    const uninstalled = stripMemoreeBlock(installed);
     // Uninstall round-trips EXACTLY back to the user's original file: our block
     // removed, their stray marker and text fully preserved (no data loss).
     expect(uninstalled).toBe(userFile);
@@ -403,27 +403,27 @@ describe("stripHivemindBlock", () => {
 
   it("removes EVERY block when the file has duplicate marker pairs", () => {
     const prior = `# Before\n\n${BEGIN}\none\n${END}\n\n## Mid\n\n${BEGIN}\ntwo\n${END}\n\n## After\n`;
-    const out = stripHivemindBlock(prior);
+    const out = stripMemoreeBlock(prior);
     // Exact remainder: both blocks removed, user scaffold intact.
     expect(out).toBe("# Before\n\n## Mid\n\n## After\n");
   });
 });
 
-// ─── cursor: isHivemindEntry / stripHooksFromConfig ───────────────────────
+// ─── cursor: isMemoreeEntry / stripHooksFromConfig ───────────────────────
 
-describe("isHivemindEntry (cursor)", () => {
-  it("true when command points into ~/.cursor/hivemind/bundle/", () => {
-    expect(isHivemindEntry({ command: "node /home/u/.cursor/hivemind/bundle/capture.js" })).toBe(true);
+describe("isMemoreeEntry (cursor)", () => {
+  it("true when command points into ~/.cursor/memoree/bundle/", () => {
+    expect(isMemoreeEntry({ command: "node /home/u/.cursor/memoree/bundle/capture.js" })).toBe(true);
   });
 
   it("false when command points elsewhere", () => {
-    expect(isHivemindEntry({ command: "/usr/local/bin/my-cursor-hook" })).toBe(false);
+    expect(isMemoreeEntry({ command: "/usr/local/bin/my-cursor-hook" })).toBe(false);
   });
 
   // Same Windows separator bug as codex: a backslash command must still match
   // so cursor re-install on Windows strips the prior hooks instead of dup'ing.
-  it("true for a Windows backslash command into .cursor\\hivemind\\bundle\\", () => {
-    expect(isHivemindEntry({ command: `node "C:\\Users\\u\\.cursor\\hivemind\\bundle\\capture.js"` })).toBe(true);
+  it("true for a Windows backslash command into .cursor\\memoree\\bundle\\", () => {
+    expect(isMemoreeEntry({ command: `node "C:\\Users\\u\\.cursor\\memoree\\bundle\\capture.js"` })).toBe(true);
   });
 
   it.each([
@@ -433,25 +433,25 @@ describe("isHivemindEntry (cursor)", () => {
     ["empty object", {}],
     ["non-string command", { command: 7 }],
   ])("false on malformed input: %s", (_l, e) => {
-    expect(isHivemindEntry(e)).toBe(false);
+    expect(isMemoreeEntry(e)).toBe(false);
   });
 });
 
 describe("stripHooksFromConfig (cursor)", () => {
-  const us = { command: "node /home/u/.cursor/hivemind/bundle/capture.js" };
+  const us = { command: "node /home/u/.cursor/memoree/bundle/capture.js" };
 
   it("returns null when input is null", () => {
     expect(stripHooksFromConfig(null)).toBeNull();
   });
 
-  it("strips ONLY hivemind entries; user entries on shared events stay", () => {
+  it("strips ONLY memoree entries; user entries on shared events stay", () => {
     const userHook = { command: "/usr/local/bin/my-pre-tool.sh" };
     const cfg = { version: 1, hooks: { postToolUse: [userHook, us], beforeSubmitPrompt: [us] } };
     const stripped = stripHooksFromConfig(cfg) as { hooks: Record<string, unknown[]> };
     // postToolUse: user's hook survives, ours is gone, count is exact.
     expect(stripped.hooks.postToolUse).toHaveLength(1);
     expect(stripped.hooks.postToolUse[0]).toEqual(userHook);
-    // beforeSubmitPrompt was hivemind-only → event removed entirely.
+    // beforeSubmitPrompt was memoree-only → event removed entirely.
     expect(stripped.hooks.beforeSubmitPrompt).toBeUndefined();
   });
 
@@ -462,18 +462,18 @@ describe("stripHooksFromConfig (cursor)", () => {
     expect(stripped.version).toBe(1);
   });
 
-  it("removes the HIVEMIND marker key while preserving other fields", () => {
+  it("removes the MEMOREE marker key while preserving other fields", () => {
     // Marker key from src/cli/install-cursor.ts:18 — installCursor writes
-    // this so subsequent installs/uninstalls can identify a hivemind-managed
+    // this so subsequent installs/uninstalls can identify a memoree-managed
     // config. Uninstall MUST remove it so a re-install starts clean.
     const cfg: Record<string, unknown> = {
       version: 1,
       hooks: { postToolUse: [us] },
-      _hivemindManaged: { version: "0.6.48" },
+      _memoreeManaged: { version: "0.6.48" },
       myUserField: "keep me",
     };
     const stripped = stripHooksFromConfig(cfg) as Record<string, unknown>;
-    expect(stripped._hivemindManaged).toBeUndefined();
+    expect(stripped._memoreeManaged).toBeUndefined();
     expect(stripped.myUserField).toBe("keep me");
   });
 

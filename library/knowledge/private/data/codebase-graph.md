@@ -2,10 +2,10 @@
 
 > Category: Data | Version: 1.0 | Date: June 2026 | Status: Active
 
-How Hivemind builds a live graph of files, symbols, and edges from source code: the discover-extract-snapshot build pipeline, the tree-sitter extractors for nine languages, cross-file resolution, content-addressed caching, deterministic snapshot hashing, cloud push and pull through the `codebase` table, and the synthesized `graph/` query surface agents read.
+How Memoree builds a live graph of files, symbols, and edges from source code: the discover-extract-snapshot build pipeline, the tree-sitter extractors for nine languages, cross-file resolution, content-addressed caching, deterministic snapshot hashing, cloud push and pull through the `codebase` table, and the synthesized `graph/` query surface agents read.
 
 **Related:**
-- [`deeplake-tables-schema.md`](deeplake-tables-schema.md)
+- [`memoree-tables-schema.md`](memoree-tables-schema.md)
 - [`memory-virtual-filesystem.md`](memory-virtual-filesystem.md)
 - [`../ai/embeddings-retrieval.md`](../ai/embeddings-retrieval.md)
 - [`../architecture/system-overview.md`](../architecture/system-overview.md)
@@ -24,11 +24,11 @@ The output deliberately mirrors the NetworkX node-link JSON format (a directed m
 
 ## The build pipeline
 
-`hivemind graph build` walks the repo, extracts every supported source file, aggregates the results into one snapshot, and writes it to disk under `~/.hivemind/graphs/<repo-key>/`.
+`memoree graph build` walks the repo, extracts every supported source file, aggregates the results into one snapshot, and writes it to disk under `~/.memoree/graphs/<repo-key>/`.
 
 ```mermaid
 flowchart TD
-    build["hivemind graph build"] --> discover["discoverSourceFiles"]
+    build["memoree graph build"] --> discover["discoverSourceFiles"]
     discover --> gitls["git ls-files (honors .gitignore)"]
     discover --> walk["fallback: manual walk"]
     gitls --> perFile["per file"]
@@ -46,7 +46,7 @@ flowchart TD
     writeStep --> push["pushSnapshot (best-effort cloud sync)"]
 ```
 
-Source discovery prefers git's own ignore engine: `git ls-files --cached --others --exclude-standard -z` lists tracked plus untracked-not-ignored files, honoring `.gitignore` exactly (anchoring and nested rules included). A user-editable ignore set (`~/.deeplake/graph-ignore.json`) is applied as a safety net for directories the repo happens to track. When git is unavailable (a loose source directory), discovery falls back to a manual recursive walk that skips dotfiles and ignored directory names. Source files are recognized by extension; `.d.ts` declarations are excluded because they carry no implementation.
+Source discovery prefers git's own ignore engine: `git ls-files --cached --others --exclude-standard -z` lists tracked plus untracked-not-ignored files, honoring `.gitignore` exactly (anchoring and nested rules included). A user-editable ignore set (`~/.memoree/graph-ignore.json`) is applied as a safety net for directories the repo happens to track. When git is unavailable (a loose source directory), discovery falls back to a manual recursive walk that skips dotfiles and ignored directory names. Source files are recognized by extension; `.d.ts` declarations are excluded because they carry no implementation.
 
 Each file is content-hashed and looked up in the per-repo cache before extraction. The repo key is derived from the normalized git remote URL, so the same project resolves to the same storage directory across checkouts.
 
@@ -147,7 +147,7 @@ The `observation` field (timestamp, branch, worktree path, generator version, fi
 The per-file cache turns a full rebuild from seconds into tens of milliseconds when only one file changed. Its key is the sha256 of the file content, not the path, so identical content across files, branches, or users shares one entry.
 
 ```
-~/.hivemind/graphs/<repo-key>/.cache/<content-sha256>.json
+~/.memoree/graphs/<repo-key>/.cache/<content-sha256>.json
 ```
 
 Because the cache is content-addressed, invalidation is automatic: different content yields a different key, so a stale read is impossible. A `CACHE_SCHEMA_VERSION` embedded in each entry lets an extractor-output change invalidate old entries wholesale, since readers ignore mismatched-schema entries and fall through to re-extraction. On a cache hit after a rename or copy, `readCache` rewrites every `source_file` field, every edge id prefix, and every module node label to the caller's current path, so a reused entry never leaks the original path back into the snapshot. Corrupt entries fail validation and fall through to a fresh extraction that overwrites them.
@@ -156,7 +156,7 @@ Because the cache is content-addressed, invalidation is automatic: different con
 
 ## Cloud sync: push and pull
 
-A successful build pushes the snapshot to the `codebase` table (see [`deeplake-tables-schema.md`](deeplake-tables-schema.md)) when the user is authenticated. Push is best-effort: the local snapshot is the source of truth, and any failure logs without blocking the build. Push is skipped silently when there is no auth, no commit context, or `HIVEMIND_GRAPH_PUSH=0`.
+A successful build pushes the snapshot to the `codebase` table (see [`memoree-tables-schema.md`](memoree-tables-schema.md)) when the user is authenticated. Push is best-effort: the local snapshot is the source of truth, and any failure logs without blocking the build. Push is skipped silently when there is no auth, no commit context, or `MEMOREE_GRAPH_PUSH=0`.
 
 `pushSnapshot` uses SELECT-before-INSERT with drift detection: it selects the row for the full identity key `(org, workspace, repo, user, worktree, commit)`. If a row exists with a matching `snapshot_sha256` it is a no-op (`already-current`); if it exists with a different hash it logs a `drift` warning and refuses to overwrite, because the same commit producing different content means extractor-version drift that a human should investigate. With no existing row it inserts, storing the canonical bytes in `snapshot_jsonb`. Because the identity key has no server-side UNIQUE constraint, the function re-selects after insert and reports `inserted-with-duplicate-race` if more than one row is found, making the race observable rather than silent; the SessionEnd auto-build path also takes a cross-process build lock to serialize the most common concurrent caller.
 
@@ -188,4 +188,4 @@ The renderers carry an honest caveat: cross-file `calls` are resolved only for r
 
 ## Inspecting history
 
-Beyond the live query surface, the CLI exposes the build record. `hivemind graph diff <sha1> <sha2>` loads two snapshots by commit and prints added and removed node and edge counts with examples. `hivemind graph history` tails the per-repo `history.jsonl`, an append-only audit log where each entry is self-describing (its own commit, hash, counts, and trigger), which is why entries from different worktrees can interleave safely. `hivemind graph init` installs a managed post-commit hook that rebuilds after each commit, and `hivemind graph pull` fetches a teammate's cloud snapshot for the current HEAD. Together these keep the on-disk graph current with minimal manual intervention while the local snapshot remains the authoritative source for every read.
+Beyond the live query surface, the CLI exposes the build record. `memoree graph diff <sha1> <sha2>` loads two snapshots by commit and prints added and removed node and edge counts with examples. `memoree graph history` tails the per-repo `history.jsonl`, an append-only audit log where each entry is self-describing (its own commit, hash, counts, and trigger), which is why entries from different worktrees can interleave safely. `memoree graph init` installs a managed post-commit hook that rebuilds after each commit, and `memoree graph pull` fetches a teammate's cloud snapshot for the current HEAD. Together these keep the on-disk graph current with minimal manual intervention while the local snapshot remains the authoritative source for every read.

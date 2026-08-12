@@ -11,7 +11,7 @@ import { isPathInsideHome, renameAtomic } from "../../src/utils/atomic-write.js"
 describe("isPathInsideHome", () => {
   const home = join(sep + "home", "u");
   it("true for a path inside home", () => {
-    expect(isPathInsideHome(join(home, ".deeplake", "q.json"), home)).toBe(true);
+    expect(isPathInsideHome(join(home, ".memoree", "q.json"), home)).toBe(true);
   });
   it("true when path equals home", () => {
     expect(isPathInsideHome(home, home)).toBe(true);

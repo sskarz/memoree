@@ -10,9 +10,9 @@
  *   - it pins the exact turn, so we can window the judge tightly around it.
  *
  * Org skills only: the invoked `skill` is `<name>--<author>`. Plugin-namespaced
- * (`hivemind:...`) and bare skills are not org-mined skills and are skipped.
+ * (`memoree:...`) and bare skills are not org-mined skills and are skipped.
  *
- * Every query is injected (QueryFn), so this is unit-testable with no live Deeplake.
+ * Every query is injected (QueryFn), so this is unit-testable with no live Memoree.
  */
 import { sqlStr } from "../utils/sql.js";
 
@@ -78,7 +78,7 @@ export function invokedSkillRef(msg: ParsedMsg): string | null {
 
 /** Split "<name>--<author>" → parts. null for plugin-namespaced / bare / malformed refs. */
 export function splitOrgSkill(skill: string): { name: string; author: string } | null {
-  if (skill.includes(":")) return null; // plugin-namespaced (e.g. hivemind:hivemind-memory)
+  if (skill.includes(":")) return null; // plugin-namespaced (e.g. memoree:memoree-memory)
   // name/author are used to build filesystem paths (skills dir, proposals dir), so a
   // captured tool_input must not smuggle path separators / traversal — same untrusted
   // treatment the pull path applies to these segments.

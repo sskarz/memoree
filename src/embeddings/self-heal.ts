@@ -1,13 +1,13 @@
 // Self-heal the per-plugin-version node_modules symlink that
-// `hivemind embeddings install` creates.
+// `memoree embeddings install` creates.
 //
 // Why: `install` symlinks `<pluginDir>/node_modules` to
-// `~/.hivemind/embed-deps/node_modules` so Node's standard module
+// `~/.memoree/embed-deps/node_modules` so Node's standard module
 // resolution finds @huggingface/transformers from anywhere inside
 // `<pluginDir>/bundle/…`. But Claude Code's marketplace auto-upgrades drop
-// new versioned cache dirs (`cache/hivemind/hivemind/0.7.27/`,
+// new versioned cache dirs (`cache/memoree/memoree/0.7.27/`,
 // `0.7.28/`, …) WITHOUT the symlink. Without intervention the user
-// would have to re-run `hivemind embeddings install` after every
+// would have to re-run `memoree embeddings install` after every
 // marketplace upgrade — and most users won't, so embeddings would
 // silently degrade.
 //
@@ -38,7 +38,7 @@ export interface SelfHealOptions {
 
 /**
  * Ensure `<pluginDir>/node_modules` is a symlink to
- * `~/.hivemind/embed-deps/node_modules`. Atomic, idempotent, conservative:
+ * `~/.memoree/embed-deps/node_modules`. Atomic, idempotent, conservative:
  * never clobbers an existing real `node_modules` dir, never overrides a
  * symlink that points elsewhere, and removes a dangling symlink (target
  * no longer exists) so the next call can re-create it.
@@ -53,7 +53,7 @@ export function ensurePluginNodeModulesLink(opts: SelfHealOptions): SelfHealResu
     return { kind: "not-bundle-layout", bundleDir: opts.bundleDir };
   }
 
-  const target = opts.sharedNodeModules ?? join(homedir(), ".hivemind", "embed-deps", "node_modules");
+  const target = opts.sharedNodeModules ?? join(homedir(), ".memoree", "embed-deps", "node_modules");
   const pluginDir = dirname(opts.bundleDir);
   const link = join(pluginDir, "node_modules");
 

@@ -1,7 +1,7 @@
 /**
- * SQL escaping utilities for Deeplake SQL API.
+ * SQL escaping utilities for Memoree SQL API.
  *
- * The Deeplake HTTP query endpoint does not support parameterized queries,
+ * The Memoree HTTP query endpoint does not support parameterized queries,
  * so we must escape values carefully before interpolation.
  */
 

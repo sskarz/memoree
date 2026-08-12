@@ -2,8 +2,8 @@
 // their own (pi extension source, openclaw plugin). Talks to the same
 // per-user Unix socket as `src/embeddings/client.ts`, and — when the
 // socket is absent — auto-spawns the canonical shared daemon at
-// `~/.hivemind/embed-deps/embed-daemon.js` (deposited by
-// `hivemind embeddings install`).
+// `~/.memoree/embed-deps/embed-daemon.js` (deposited by
+// `memoree embeddings install`).
 //
 // Differences from `client.ts`:
 //   - No hello/handshake. These callers don't recycle stuck daemons:
@@ -35,8 +35,8 @@ import {
   type EmbedResponse,
 } from "./protocol.js";
 
-/** Canonical location populated by `hivemind embeddings install`. */
-export const SHARED_DAEMON_PATH = join(homedir(), ".hivemind", "embed-deps", "embed-daemon.js");
+/** Canonical location populated by `memoree embeddings install`. */
+export const SHARED_DAEMON_PATH = join(homedir(), ".memoree", "embed-deps", "embed-daemon.js");
 
 // Swappable spawn implementation. Has two legitimate callers:
 //
@@ -71,7 +71,7 @@ function getUid(): string {
   // it lands in the openclaw bundle as a literal `process.env.X` access,
   // which ClawHub's static scanner flags as `env-harvesting` (CRITICAL,
   // CI-blocking) because the bundle also contains `fetch()` for the
-  // Deeplake HTTP API. On Linux/macOS `process.getuid` is always
+  // Memoree HTTP API. On Linux/macOS `process.getuid` is always
   // present, and on platforms without it ("default" as a sentinel is
   // fine — the only requirement is that the daemon and every client
   // agree on the socket path).

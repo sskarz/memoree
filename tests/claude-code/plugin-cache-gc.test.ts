@@ -7,7 +7,7 @@ import { runGc } from "../../src/hooks/plugin-cache-gc.js";
 /**
  * Unit tests for the runGc orchestrator in plugin-cache-gc.ts. The
  * `resolveVersionedPluginDir` helper only returns a non-null value when
- * the bundleDir sits under `~/.claude/plugins/cache/hivemind/hivemind/<semver>/bundle/`.
+ * the bundleDir sits under `~/.claude/plugins/cache/memoree/memoree/<semver>/bundle/`.
  * We can construct that real-looking path under a tmp root by pointing
  * into the current user's home — no files are written until runGc calls
  * a helper that uses it, and we pass an explicit manifestPath so we
@@ -20,21 +20,21 @@ function mkRoot(): string {
   return root;
 }
 
-// Build a real versioned plugin layout under ~/.claude/plugins/cache/hivemind/hivemind/<v>/.
+// Build a real versioned plugin layout under ~/.claude/plugins/cache/memoree/memoree/<v>/.
 // We use a uniquely-named top-level cache dir inside ~/.claude/plugins/cache/ so we don't
-// clobber any real hivemind install, then fabricate versions beneath it.
+// clobber any real memoree install, then fabricate versions beneath it.
 function mkFakeVersionedLayout(): {
   bundleDir: string;
   versionsRoot: string;
   cleanup: () => void;
 } {
-  const unique = `hivemind-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  // Inside the hivemind org-dir, siblings of versions are dirs. Make a sandbox
+  const unique = `memoree-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  // Inside the memoree org-dir, siblings of versions are dirs. Make a sandbox
   // org-dir to avoid touching the real one.
   const sandboxOrg = join(homedir(), ".claude", "plugins", "cache", unique);
-  // resolveVersionedPluginDir looks for parent dir named "hivemind" (the inner
+  // resolveVersionedPluginDir looks for parent dir named "memoree" (the inner
   // one), so mirror that name inside our sandbox org.
-  const versionsRoot = join(sandboxOrg, "hivemind");
+  const versionsRoot = join(sandboxOrg, "memoree");
   mkdirSync(versionsRoot, { recursive: true });
   const bundleDir = join(versionsRoot, "0.6.39", "bundle");
   return {
@@ -59,15 +59,15 @@ describe("runGc", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns early when HIVEMIND_WIKI_WORKER=1 (no log of skip)", () => {
-    const prev = process.env.HIVEMIND_WIKI_WORKER;
-    process.env.HIVEMIND_WIKI_WORKER = "1";
+  it("returns early when MEMOREE_WIKI_WORKER=1 (no log of skip)", () => {
+    const prev = process.env.MEMOREE_WIKI_WORKER;
+    process.env.MEMOREE_WIKI_WORKER = "1";
     try {
       runGc("/anything", { log });
       expect(logs).toEqual([]);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_WIKI_WORKER;
-      else process.env.HIVEMIND_WIKI_WORKER = prev;
+      if (prev === undefined) delete process.env.MEMOREE_WIKI_WORKER;
+      else process.env.MEMOREE_WIKI_WORKER = prev;
     }
   });
 
@@ -83,7 +83,7 @@ describe("runGc", () => {
       mkdirSync(join(layout.versionsRoot, "0.6.39"), { recursive: true });
       const manifestPath = join(root, "installed_plugins.json");
       writeFileSync(manifestPath, JSON.stringify({
-        plugins: { "hivemind@hivemind": [{ version: "0.6.39" }] },
+        plugins: { "memoree@memoree": [{ version: "0.6.39" }] },
       }));
       runGc(layout.bundleDir, { log, manifestPath });
       expect(logs.some(l => l.startsWith("nothing to gc"))).toBe(true);
@@ -100,7 +100,7 @@ describe("runGc", () => {
       }
       const manifestPath = join(root, "installed_plugins.json");
       writeFileSync(manifestPath, JSON.stringify({
-        plugins: { "hivemind@hivemind": [{ version: "0.6.39" }] },
+        plugins: { "memoree@memoree": [{ version: "0.6.39" }] },
       }));
       runGc(layout.bundleDir, { log, manifestPath });
 
@@ -121,7 +121,7 @@ describe("runGc", () => {
       }
       const manifestPath = join(root, "installed_plugins.json");
       writeFileSync(manifestPath, JSON.stringify({
-        plugins: { "hivemind@hivemind": [{ version: "0.6.39" }] },
+        plugins: { "memoree@memoree": [{ version: "0.6.39" }] },
       }));
       runGc(layout.bundleDir, { log, manifestPath, keepCount: 1 });
 
@@ -160,7 +160,7 @@ describe("runGc", () => {
       mkdirSync(livePidSnapshot, { recursive: true });
       const manifestPath = join(root, "installed_plugins.json");
       writeFileSync(manifestPath, JSON.stringify({
-        plugins: { "hivemind@hivemind": [{ version: "0.6.39" }] },
+        plugins: { "memoree@memoree": [{ version: "0.6.39" }] },
       }));
       runGc(layout.bundleDir, { log, manifestPath });
       expect(existsSync(deadPidSnapshot)).toBe(false);

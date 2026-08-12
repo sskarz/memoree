@@ -64,7 +64,7 @@ const DISPATCH: Record<Agent, AgentDispatch> = {
     // -z oneshot via the user's provider; --ignore-user-config drops user MCP/skills,
     // so an explicit -m/--provider is required (matches the wiki worker's defaults).
     // NOTE: the openrouter-style default model below is only valid for openrouter.
-    // A user on another provider MUST set HIVEMIND_SKILLOPT_HERMES_PROVIDER + _MODEL
+    // A user on another provider MUST set MEMOREE_SKILLOPT_HERMES_PROVIDER + _MODEL
     // to a valid id — e.g. AWS Bedrock needs an INFERENCE-PROFILE id like
     // `us.anthropic.claude-haiku-4-5-20251001-v1:0` (a bare model id, or a legacy
     // one, is rejected by Bedrock and hermes swallows the error → empty output).
@@ -87,7 +87,7 @@ const DISPATCH: Record<Agent, AgentDispatch> = {
   },
   pi: {
     // The google/gemini default needs a Google API key. A user on another provider
-    // MUST set HIVEMIND_SKILLOPT_PI_PROVIDER + _MODEL — e.g. AWS Bedrock uses provider
+    // MUST set MEMOREE_SKILLOPT_PI_PROVIDER + _MODEL — e.g. AWS Bedrock uses provider
     // `amazon-bedrock` and an inference-profile model id like
     // `us.anthropic.claude-haiku-4-5-20251001-v1:0`. With a wrong default pi exits
     // non-zero ("No API key found") → surfaced loudly via the exit-code guard, not silent.
@@ -99,13 +99,13 @@ const DISPATCH: Record<Agent, AgentDispatch> = {
   },
 };
 
-/** Per-agent, per-role env override: HIVEMIND_SKILLOPT_<AGENT>_<ROLE>_MODEL, then _<AGENT>_MODEL. */
+/** Per-agent, per-role env override: MEMOREE_SKILLOPT_<AGENT>_<ROLE>_MODEL, then _<AGENT>_MODEL. */
 function envModel(agent: Agent, role: ScorerRole, env: NodeJS.ProcessEnv): string | undefined {
   const [specific, fallback] = modelEnvNames(agent, role);
   return env[specific] ?? env[fallback];
 }
 
-/** Per-agent provider override (harnesses/hermes/pi): HIVEMIND_SKILLOPT_<AGENT>_PROVIDER. The
+/** Per-agent provider override (harnesses/hermes/pi): MEMOREE_SKILLOPT_<AGENT>_PROVIDER. The
  *  openrouter default is wrong for a user on a different provider (e.g. AWS Bedrock),
  *  so the provider must be overridable per install. */
 function envProvider(agent: Agent, env: NodeJS.ProcessEnv): string | undefined {
@@ -139,13 +139,13 @@ export function agentModel(opts: {
       return reject(new Error(`${opts.agent}: provider overridden to '${provider}' without a model — set ${modelEnvNames(opts.agent, opts.role)[1]} to a valid id for that provider`));
     }
     const args = d.buildArgs(model, provider, system, user);
-    // HIVEMIND_CAPTURE=false: these calls aren't real sessions. HIVEMIND_WIKI_WORKER=1:
+    // MEMOREE_CAPTURE=false: these calls aren't real sessions. MEMOREE_WIKI_WORKER=1:
     // the spawned agent skips this package's SessionStart hook (no context injection /
     // auto-pull / recursive firing). Inherit the (possibly caller-scoped) `env` so scoped
     // creds/config reach the child too, not just the global process.env.
     const child = spawnFn(bin, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...env, HIVEMIND_CAPTURE: "false", HIVEMIND_WIKI_WORKER: "1" },
+      env: { ...env, MEMOREE_CAPTURE: "false", MEMOREE_WIKI_WORKER: "1" },
       windowsHide: true,
     });
     let out = "";
@@ -172,7 +172,7 @@ export function agentModel(opts: {
 
 /**
  * Resolve which agent the worker should score on. Explicit override wins
- * (HIVEMIND_SKILLOPT_AGENT, set by a per-agent trigger/installer), then the env
+ * (MEMOREE_SKILLOPT_AGENT, set by a per-agent trigger/installer), then the env
  * signatures we can detect reliably, then claude_code as the default.
  */
 export function detectScorerAgent(env: NodeJS.ProcessEnv = process.env): Agent {

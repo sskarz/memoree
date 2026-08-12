@@ -47,10 +47,10 @@ interface CodexStopInput {
   model: string;
 }
 
-const CAPTURE = process.env.HIVEMIND_CAPTURE !== "false";
+const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
 
 async function main(): Promise<void> {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   const input = await readStdin<CodexStopInput>();
   const sessionId = input.session_id;
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
       const jsonForSql = line.replace(/'/g, "''");
 
       // Best-effort embed: if the daemon is unavailable (no @huggingface/transformers
-      // or HIVEMIND_EMBEDDINGS=false), embed() returns null and the column lands NULL.
+      // or MEMOREE_EMBEDDINGS=false), embed() returns null and the column lands NULL.
       const embedding = embeddingsDisabled()
         ? null
         : await new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() }).embed(line, "document");
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
 
   // Coordinate with the periodic worker: if one is already running for this
   // session, skip. Two workers writing the same summary row trip the
-  // Deeplake UPDATE-coalescing quirk (see CLAUDE.md) and drop one write.
+  // SQL UPDATE-coalescing quirk (see CLAUDE.md) and drop one write.
   const cwd = input.cwd || process.cwd();
 
   // Skillify has its own per-project lock — fire before the wiki-worker lock

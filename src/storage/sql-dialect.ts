@@ -1,4 +1,4 @@
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "./schema.js";
 
 /** Render an expression as text without relying on backend-side SQL rewriting. */
 export function textExpression(expression: string, dialect: StorageDialect): string {

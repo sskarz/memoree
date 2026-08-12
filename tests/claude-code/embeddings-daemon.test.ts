@@ -80,7 +80,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sock = join(dir, `hivemind-embed-${uid}.sock`);
+    const sock = join(dir, `memoree-embed-${uid}.sock`);
     const resp = await sendLine(sock, { op: "ping", id: "p1" });
     expect(resp.id).toBe("p1");
     expect(resp.ready).toBe(true);
@@ -95,7 +95,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sock = join(dir, `hivemind-embed-${uid}.sock`);
+    const sock = join(dir, `memoree-embed-${uid}.sock`);
     const resp = await sendLine(sock, { op: "embed", id: "e1", kind: "document", text: "hello" });
     expect(resp.id).toBe("e1");
     expect(resp.embedding).toEqual([0.1, 0.2, 0.3]);
@@ -109,7 +109,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sock = join(dir, `hivemind-embed-${uid}.sock`);
+    const sock = join(dir, `memoree-embed-${uid}.sock`);
     const resp = await sendLine(sock, { op: "bogus", id: "x" });
     expect(resp.error).toContain("unknown op");
 
@@ -122,7 +122,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const pidPath = join(dir, `hivemind-embed-${uid}.pid`);
+    const pidPath = join(dir, `memoree-embed-${uid}.pid`);
     const { readFileSync } = await import("node:fs");
     const pid = Number(readFileSync(pidPath, "utf-8").trim());
     expect(pid).toBe(process.pid);
@@ -132,7 +132,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
 
   it("unlinks a stale socket on startup before re-binding", async () => {
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     // Pre-create a stale file at the socket path.
     writeFileSync(sockPath, "stale");
     expect(existsSync(sockPath)).toBe(true);
@@ -163,7 +163,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sock = join(dir, `hivemind-embed-${uid}.sock`);
+    const sock = join(dir, `memoree-embed-${uid}.sock`);
     const resp = await sendLine(sock, { op: "embed", id: "e2", kind: "document", text: "hi" });
     expect(resp.id).toBe("e2");
     expect(resp.error).toContain("forced embed failure");
@@ -183,7 +183,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     await new Promise<void>((resolve, reject) => {
       const sock = connect(sockPath);
       sock.setEncoding("utf-8");
@@ -214,7 +214,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     await new Promise<void>((resolve) => {
       const sock = connect(sockPath);
       sock.on("error", () => { /* swallow — we intentionally destroy below */ });
@@ -227,7 +227,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
       });
     });
     // Follow-up ping should still work — the daemon didn't crash.
-    const sockPathStr = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPathStr = join(dir, `memoree-embed-${uid}.sock`);
     const resp = await sendLine(sockPathStr, { op: "ping", id: "after" });
     expect(resp.id).toBe("after");
     exitSpy.mockRestore();
@@ -239,7 +239,7 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     await daemon.start();
 
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     // Write a bad line then a good one on the same connection. Per the PR
     // review fix: the daemon must NOT silently drop the bad line — it has
     // to write a sentinel `{id: "unknown", error: "parse error"}` so the

@@ -13,7 +13,7 @@ import { ensureMcpServerInstalled, MCP_SERVER_PATH } from "./install-mcp-shared.
 //      — provides agent context. No event capture.
 //
 //   2. MCP servers via ~/.hermes/config.yaml `mcp_servers:` key
-//      — direct hivemind_search/read/index tool calls. Read-only recall.
+//      — direct memoree_search/read/index tool calls. Read-only recall.
 //
 //   3. Shell hooks via ~/.hermes/config.yaml `hooks:` key (see
 //      agent/shell_hooks.py in NousResearch/hermes-agent for the wire
@@ -30,37 +30,37 @@ import { ensureMcpServerInstalled, MCP_SERVER_PATH } from "./install-mcp-shared.
 //   - https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
 
 const HERMES_HOME = join(HOME, ".hermes");
-const SKILLS_DIR = join(HERMES_HOME, "skills", "hivemind-memory");
-const HIVEMIND_DIR = join(HERMES_HOME, "hivemind");
-const BUNDLE_DIR = join(HIVEMIND_DIR, "bundle");
+const SKILLS_DIR = join(HERMES_HOME, "skills", "memoree-memory");
+const MEMOREE_DIR = join(HERMES_HOME, "memoree");
+const BUNDLE_DIR = join(MEMOREE_DIR, "bundle");
 const CONFIG_PATH = join(HERMES_HOME, "config.yaml");
-const SERVER_KEY = "hivemind";
+const SERVER_KEY = "memoree";
 
 const SKILL_BODY = `---
-name: hivemind-memory
-description: Global team and org memory powered by Activeloop. ALWAYS check BOTH built-in memory AND Hivemind memory when recalling information.
+name: memoree-memory
+description: Global team and org memory powered by sskarz. ALWAYS check BOTH built-in memory AND Memoree memory when recalling information.
 ---
 
-# Hivemind Memory
+# Memoree Memory
 
-You have persistent memory at \`~/.deeplake/memory/\` — global memory shared across all sessions, users, and agents in the org.
+You have persistent memory at \`~/.memoree/memory/\` — global memory shared across all sessions, users, and agents in the org.
 
-## Hivemind tools (preferred)
+## Memoree tools (preferred)
 
-When you need to recall org memory, prefer calling the hivemind MCP tools — one tool call returns ranked hits across all summaries and sessions in a single SQL query:
+When you need to recall org memory, prefer calling the memoree MCP tools — one tool call returns ranked hits across all summaries and sessions in a single SQL query:
 
-- \`hivemind_search { query, limit? }\` — keyword/regex search across summaries + sessions
-- \`hivemind_read { path }\` — read full content at a Hivemind memory path (e.g. \`/summaries/alice/abc.md\`)
-- \`hivemind_index { prefix?, limit? }\` — list summary entries
+- \`memoree_search { query, limit? }\` — keyword/regex search across summaries + sessions
+- \`memoree_read { path }\` — read full content at a Memoree memory path (e.g. \`/summaries/alice/abc.md\`)
+- \`memoree_index { prefix?, limit? }\` — list summary entries
 
 Different paths under \`/summaries/<username>/\` are different users — do NOT merge or alias them.
 
 ## Direct filesystem fallback
 
-If MCP tools are unavailable for some reason, fall back to reading the virtual filesystem at \`~/.deeplake/memory/\`:
+If MCP tools are unavailable for some reason, fall back to reading the virtual filesystem at \`~/.memoree/memory/\`:
 
 \`\`\`
-~/.deeplake/memory/
+~/.memoree/memory/
 ├── index.md                          ← START HERE — table of all sessions
 ├── summaries/
 │   ├── session-abc.md                ← AI-generated wiki summary
@@ -71,17 +71,17 @@ If MCP tools are unavailable for some reason, fall back to reading the virtual f
         └── user_org_ws_slug2.jsonl
 \`\`\`
 
-1. **First**: Read \`~/.deeplake/memory/index.md\`
-2. **If you need details**: Read the specific summary at \`~/.deeplake/memory/summaries/<session>.md\`
-3. **If you need raw data**: Read the session JSONL at \`~/.deeplake/memory/sessions/<user>/<file>.jsonl\`
-4. **Keyword search**: \`grep -r "keyword" ~/.deeplake/memory/\` (use \`grep\`, NOT \`rg\`/ripgrep — \`rg\` may not be installed)
+1. **First**: Read \`~/.memoree/memory/index.md\`
+2. **If you need details**: Read the specific summary at \`~/.memoree/memory/summaries/<session>.md\`
+3. **If you need raw data**: Read the session JSONL at \`~/.memoree/memory/sessions/<user>/<file>.jsonl\`
+4. **Keyword search**: \`grep -r "keyword" ~/.memoree/memory/\` (use \`grep\`, NOT \`rg\`/ripgrep — \`rg\` may not be installed)
 
 Do NOT jump straight to reading raw JSONL files. Always start with index.md and summaries.
 
 ## Important Constraints
 
 - Use \`grep\` (NOT \`rg\`/ripgrep) for keyword search — \`rg\` may not be installed on the host system.
-- Only use these bash builtins to interact with \`~/.deeplake/memory/\`: \`cat\`, \`ls\`, \`grep\`, \`echo\`, \`jq\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, \`wc\`, \`sort\`, \`find\`. The memory filesystem does NOT support \`rg\`, \`python\`, \`python3\`, \`node\`, or \`curl\`.
+- Only use these bash builtins to interact with \`~/.memoree/memory/\`: \`cat\`, \`ls\`, \`grep\`, \`echo\`, \`jq\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, \`wc\`, \`sort\`, \`find\`. The memory filesystem does NOT support \`rg\`, \`python\`, \`python3\`, \`node\`, or \`curl\`.
 - If a file returns empty after 2 attempts, skip it and move on. Report what you found rather than retrying exhaustively.
 `;
 
@@ -98,16 +98,16 @@ interface HermesConfig {
   [key: string]: unknown;
 }
 
-function isHivemindHook(entry: unknown): boolean {
+function isMemoreeHook(entry: unknown): boolean {
   if (!entry || typeof entry !== "object") return false;
   const cmd = (entry as { command?: string }).command;
   if (typeof cmd !== "string") return false;
   // Normalize separators: on Windows the command is written with backslashes
-  // (`...\.hermes\hivemind\bundle\capture.js` — buildHookEntry uses join()), so
+  // (`...\.hermes\memoree\bundle\capture.js` — buildHookEntry uses join()), so
   // a forward-slash-only match would fail and re-install would duplicate the
-  // hooks (same Windows bug fixed in codex's isHivemindHookEntry / cursor's
-  // isHivemindEntry).
-  return cmd.replace(/\\/g, "/").includes("/.hermes/hivemind/bundle/");
+  // hooks (same Windows bug fixed in codex's isMemoreeHookEntry / cursor's
+  // isMemoreeEntry).
+  return cmd.replace(/\\/g, "/").includes("/.hermes/memoree/bundle/");
 }
 
 function buildHookEntry(bundleFile: string, timeout: number, matcher?: string): HermesHookEntry {
@@ -123,8 +123,8 @@ function buildHooksBlock(): Record<string, HermesHookEntry[]> {
   return {
     on_session_start: [buildHookEntry("session-start.js", 30)],
     // pre_tool_call (matcher: terminal) intercepts grep/rg against
-    // ~/.deeplake/memory/ and replies with a single SQL fast-path result.
-    // Belt-and-suspenders alongside the hivemind_search MCP tool — if the
+    // ~/.memoree/memory/ and replies with a single SQL fast-path result.
+    // Belt-and-suspenders alongside the memoree_search MCP tool — if the
     // agent ignores the skill guidance and runs a terminal grep, accuracy
     // still matches Tier 1 (Claude / Codex / Cursor).
     pre_tool_call: [buildHookEntry("pre-tool-use.js", 30, "terminal")],
@@ -143,17 +143,17 @@ function mergeHooks(existing: Record<string, HermesHookEntry[]> | undefined): Re
   const ours = buildHooksBlock();
   for (const [event, entries] of Object.entries(ours)) {
     const prior = Array.isArray(merged[event]) ? merged[event] : [];
-    const stripped = prior.filter((e) => !isHivemindHook(e));
+    const stripped = prior.filter((e) => !isMemoreeHook(e));
     merged[event] = [...stripped, ...entries];
   }
   return merged;
 }
 
-function stripHivemindHooks(existing: Record<string, HermesHookEntry[]> | undefined): Record<string, HermesHookEntry[]> | undefined {
+function stripMemoreeHooks(existing: Record<string, HermesHookEntry[]> | undefined): Record<string, HermesHookEntry[]> | undefined {
   if (!existing) return undefined;
   const out: Record<string, HermesHookEntry[]> = {};
   for (const [event, entries] of Object.entries(existing)) {
-    const kept = (entries ?? []).filter((e) => !isHivemindHook(e));
+    const kept = (entries ?? []).filter((e) => !isMemoreeHook(e));
     if (kept.length > 0) out[event] = kept;
   }
   return Object.keys(out).length > 0 ? out : undefined;
@@ -193,18 +193,18 @@ export function installHermes(): void {
   if (!existsSync(srcBundle)) {
     throw new Error(`Hermes bundle missing at ${srcBundle}. Run 'npm run build' first.`);
   }
-  ensureDir(HIVEMIND_DIR);
+  ensureDir(MEMOREE_DIR);
   copyDir(srcBundle, BUNDLE_DIR);
-  const pluginNm = join(HIVEMIND_DIR, "node_modules");
-  const embedDepsNm = join(HOME, ".hivemind", "embed-deps", "node_modules");
+  const pluginNm = join(MEMOREE_DIR, "node_modules");
+  const embedDepsNm = join(HOME, ".memoree", "embed-deps", "node_modules");
   if (existsSync(embedDepsNm)) {
     try { const st = lstatSync(pluginNm); if (st.isDirectory() && !st.isSymbolicLink()) rmSync(pluginNm, { recursive: true }); } catch { /* ok */ }
     symlinkForce(embedDepsNm, pluginNm);
   }
-  writeVersionStamp(HIVEMIND_DIR, getVersion());
+  writeVersionStamp(MEMOREE_DIR, getVersion());
   log(`  Hermes         bundle installed -> ${BUNDLE_DIR}`);
 
-  // 3. MCP server — direct hivemind_search/read/index tool calls.
+  // 3. MCP server — direct memoree_search/read/index tool calls.
   ensureMcpServerInstalled();
 
   // Update config.yaml with mcp_servers + hooks + hooks_auto_accept.
@@ -229,9 +229,9 @@ export function uninstallHermes(): void {
     log(`  Hermes         removed ${SKILLS_DIR}`);
   }
 
-  if (existsSync(HIVEMIND_DIR)) {
-    rmSync(HIVEMIND_DIR, { recursive: true, force: true });
-    log(`  Hermes         removed ${HIVEMIND_DIR}`);
+  if (existsSync(MEMOREE_DIR)) {
+    rmSync(MEMOREE_DIR, { recursive: true, force: true });
+    log(`  Hermes         removed ${MEMOREE_DIR}`);
   }
 
   if (existsSync(CONFIG_PATH)) {
@@ -242,13 +242,13 @@ export function uninstallHermes(): void {
       if (Object.keys(cfg.mcp_servers).length === 0) delete cfg.mcp_servers;
       touched = true;
     }
-    const stripped = stripHivemindHooks(cfg.hooks);
+    const stripped = stripMemoreeHooks(cfg.hooks);
     if (cfg.hooks && (!stripped || Object.keys(stripped).length !== Object.keys(cfg.hooks).length)) {
       if (stripped) cfg.hooks = stripped; else delete cfg.hooks;
       touched = true;
     }
     // installHermes unconditionally writes hooks_auto_accept: true so the
-    // hivemind hooks fire without a consent prompt. Leaving that flag set
+    // memoree hooks fire without a consent prompt. Leaving that flag set
     // after uninstall would silently auto-accept any unrelated hook the
     // user adds later. Always remove it on uninstall — if a user wanted
     // hooks_auto_accept independently, they can re-add it.
@@ -262,7 +262,7 @@ export function uninstallHermes(): void {
       } else {
         writeConfig(cfg);
       }
-      log(`  Hermes         hivemind entries removed from ${CONFIG_PATH}`);
+      log(`  Hermes         memoree entries removed from ${CONFIG_PATH}`);
     }
   }
 }

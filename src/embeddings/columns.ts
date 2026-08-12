@@ -1,5 +1,5 @@
 // Centralized column names for the embedding feature. The same identifiers
-// are referenced by the SQL builders in deeplake-api.ts (CREATE / ALTER /
+// are referenced by the SQL builders in memoree-api.ts (CREATE / ALTER /
 // schema check), capture.ts and upload-summary.ts (INSERT), wiki-worker.ts
 // (UPDATE), and the grep paths (SELECT). Keeping them here avoids the typo
 // class of bugs that come from string-literal duplication and makes a future

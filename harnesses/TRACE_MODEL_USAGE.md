@@ -19,7 +19,7 @@ This lets "tokens/cost per model" be a plain `GROUP BY message->>'model'` query.
 - Wiring (per harness):
   - Claude Code — `src/hooks/capture.ts` (assistant_message / Stop)
   - Codex — `src/hooks/codex/capture.ts`
-  - Pi — `harnesses/pi/extension-source/hivemind.ts` (`message_end`; inlines the
+  - Pi — `harnesses/pi/extension-source/memoree.ts` (`message_end`; inlines the
     normalizer because pi ships raw `.ts` with no shared-module imports)
   - OpenClaw — `harnesses/openclaw/src/index.ts` (`agent_end` auto-capture)
   - Hermes — `src/hooks/hermes/capture.ts` (reads `extra.model` / `extra.platform`)

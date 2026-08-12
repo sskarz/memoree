@@ -16,7 +16,7 @@ import { homedir } from "node:os";
 import { sqlIdent, sqlStr } from "../utils/sql.js";
 
 export interface SessionQueueApi {
-  dialect?: "deeplake" | "sqlite" | "postgres";
+  dialect?: "sqlite" | "postgres";
   query(sql: string): Promise<Record<string, unknown>[]>;
   ensureSessionsTable(name?: string): Promise<void>;
 }
@@ -67,7 +67,7 @@ export interface DrainSessionQueueResult {
   batches: number;
 }
 
-const DEFAULT_QUEUE_DIR = join(homedir(), ".deeplake", "queue");
+const DEFAULT_QUEUE_DIR = join(homedir(), ".memoree", "queue");
 const DEFAULT_MAX_BATCH_ROWS = 50;
 const DEFAULT_STALE_INFLIGHT_MS = 60_000;
 const DEFAULT_AUTH_FAILURE_TTL_MS = 5 * 60_000;
@@ -128,7 +128,7 @@ export function appendQueuedSessionRow(row: QueuedSessionRow, queueDir = DEFAULT
 export function buildSessionInsertSql(
   sessionsTable: string,
   rows: QueuedSessionRow[],
-  dialect: "deeplake" | "sqlite" | "postgres" = "deeplake",
+  dialect: "sqlite" | "postgres" = "sqlite",
 ): string {
   if (rows.length === 0) throw new Error("buildSessionInsertSql: rows must not be empty");
   const table = sqlIdent(sessionsTable);

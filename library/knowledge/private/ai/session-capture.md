@@ -2,7 +2,7 @@
 
 > Category: AI | Version: 1.0 | Date: June 2026 | Status: Active
 
-How every prompt, tool call, and assistant response becomes a structured row in the Deeplake `sessions` table, and how the capture path feeds the summary and skillify workers.
+How every prompt, tool call, and assistant response becomes a structured row in the Memoree `sessions` table, and how the capture path feeds the summary and skillify workers.
 
 **Related:**
 - [`wiki-summary-workers.md`](wiki-summary-workers.md)
@@ -10,14 +10,14 @@ How every prompt, tool call, and assistant response becomes a structured row in 
 - [`embeddings-retrieval.md`](embeddings-retrieval.md)
 - [`../architecture/session-lifecycle.md`](../architecture/session-lifecycle.md)
 - [`../architecture/system-overview.md`](../architecture/system-overview.md)
-- [`../data/deeplake-tables-schema.md`](../data/deeplake-tables-schema.md)
+- [`../data/memoree-tables-schema.md`](../data/memoree-tables-schema.md)
 - [`../../../../docs/CAPTURE_TASKS.md`](../../../../docs/CAPTURE_TASKS.md)
 
 ---
 
 ## What capture does and why it works this way
 
-Capture is the root of every other Hivemind feature. Without accurate, per-event rows in the `sessions` table, the wiki worker has nothing to summarize, the skillify miner has nothing to mine, and the VFS recall has nothing to serve.
+Capture is the root of every other Memoree feature. Without accurate, per-event rows in the `sessions` table, the wiki worker has nothing to summarize, the skillify miner has nothing to mine, and the VFS recall has nothing to serve.
 
 The design is intentionally minimal: one INSERT per event, no batching, no concatenation. Batching would mean a crash mid-session drops an entire batch; concatenation means the worker that later reads the session must parse a compound blob rather than individual rows. The per-row design keeps writes atomic and readers simple.
 
@@ -75,7 +75,7 @@ INSERT INTO "sessions" (
 
 The `message` column is `jsonb`, so the entry object is serialized with `JSON.stringify` and only single-quotes are escaped (not backslashes or control characters) to preserve JSON structure. `sqlStr()` is deliberately not applied here because it would corrupt the JSON.
 
-If the `sessions` table does not exist yet (first run or workspace switch mid-session), the handler catches the error, calls `api.ensureSessionsTable()` to create it with the schema from `src/deeplake-schema.ts`, and retries the INSERT once.
+If the `sessions` table does not exist yet (first run or workspace switch mid-session), the handler catches the error, calls `api.ensureSessionsTable()` to create it with the schema from `src/storage/schema.ts`, and retries the INSERT once.
 
 ---
 
@@ -90,7 +90,7 @@ const embedding = embeddingsDisabled()
 const embeddingSql = embeddingSqlLiteral(embedding);
 ```
 
-If embeddings are disabled (via `HIVEMIND_EMBEDDINGS=false` or absent `@huggingface/transformers`), `embedding` is `null` and the column is written as SQL `NULL`. The schema is always compatible, so the feature can be enabled later without a migration.
+If embeddings are disabled (via `MEMOREE_EMBEDDINGS=false` or absent `@huggingface/transformers`), `embedding` is `null` and the column is written as SQL `NULL`. The schema is always compatible, so the feature can be enabled later without a migration.
 
 The embedding client auto-spawns the nomic daemon on first use. The daemon path is resolved relative to the bundle directory so each plugin version uses its own daemon binary. See [`embeddings-retrieval.md`](embeddings-retrieval.md) for the full daemon lifecycle.
 
@@ -102,12 +102,12 @@ The handler exits immediately under several conditions to avoid spurious writes 
 
 | Condition | Check |
 |---|---|
-| Capture disabled globally | `HIVEMIND_CAPTURE=false` |
-| Plugin disabled by the user | `isHivemindPluginEnabled()` returns false |
+| Capture disabled globally | `MEMOREE_CAPTURE=false` |
+| Plugin disabled by the user | `isMemoreePluginEnabled()` returns false |
 | Agent CLI gate | `entrypointPassesOnlyCliGate()` returns false |
-| Inside the wiki worker itself | `HIVEMIND_WIKI_WORKER=1` (set by the worker on spawn) |
+| Inside the wiki worker itself | `MEMOREE_WIKI_WORKER=1` (set by the worker on spawn) |
 
-The wiki worker sets `HIVEMIND_CAPTURE=false` in its environment so that the `claude -p` call it makes to generate the summary does not itself trigger another capture, which would create an infinite loop.
+The wiki worker sets `MEMOREE_CAPTURE=false` in its environment so that the `claude -p` call it makes to generate the summary does not itself trigger another capture, which would create an infinite loop.
 
 ---
 
@@ -115,9 +115,9 @@ The wiki worker sets `HIVEMIND_CAPTURE=false` in its environment so that the `cl
 
 After the INSERT, capture does two more things before returning.
 
-**Periodic summary.** `maybeTriggerPeriodicSummary` increments a per-session counter stored in `~/.claude/hooks/summary-state/<sessionId>.json`. When the counter crosses the `HIVEMIND_SUMMARY_EVERY_N_MSGS` threshold (default 50) or the elapsed time exceeds `HIVEMIND_SUMMARY_EVERY_HOURS` (default 2), it acquires a lock and spawns the wiki worker as a detached background process. The lock prevents two concurrent periodic workers for the same session.
+**Periodic summary.** `maybeTriggerPeriodicSummary` increments a per-session counter stored in `~/.claude/hooks/summary-state/<sessionId>.json`. When the counter crosses the `MEMOREE_SUMMARY_EVERY_N_MSGS` threshold (default 50) or the elapsed time exceeds `MEMOREE_SUMMARY_EVERY_HOURS` (default 2), it acquires a lock and spawns the wiki worker as a detached background process. The lock prevents two concurrent periodic workers for the same session.
 
-**Stop-triggered skillify.** When `hook_event_name === "Stop"`, capture calls `tryStopCounterTrigger`, which increments a per-project counter and, every `HIVEMIND_SKILLIFY_EVERY_N_TURNS` turns (default 20), spawns the skillify worker. See [`skillify-pipeline.md`](skillify-pipeline.md) for what that worker does.
+**Stop-triggered skillify.** When `hook_event_name === "Stop"`, capture calls `tryStopCounterTrigger`, which increments a per-project counter and, every `MEMOREE_SKILLIFY_EVERY_N_TURNS` turns (default 20), spawns the skillify worker. See [`skillify-pipeline.md`](skillify-pipeline.md) for what that worker does.
 
 ```mermaid
 flowchart TD
@@ -147,8 +147,8 @@ Marketplace auto-upgrades can leave the shared embeddings symlink pointing at a 
 
 | Env var | Default | Effect |
 |---|---|---|
-| `HIVEMIND_CAPTURE` | `true` | Set to `false` to disable all capture |
-| `HIVEMIND_EMBEDDINGS` | `true` | Set to `false` to skip embedding and write `NULL` |
-| `HIVEMIND_SUMMARY_EVERY_N_MSGS` | `50` | Message threshold for periodic summary trigger |
-| `HIVEMIND_SUMMARY_EVERY_HOURS` | `2` | Time threshold for periodic summary trigger |
-| `HIVEMIND_SKILLIFY_EVERY_N_TURNS` | `20` | Turn threshold for skillify worker trigger |
+| `MEMOREE_CAPTURE` | `true` | Set to `false` to disable all capture |
+| `MEMOREE_EMBEDDINGS` | `true` | Set to `false` to skip embedding and write `NULL` |
+| `MEMOREE_SUMMARY_EVERY_N_MSGS` | `50` | Message threshold for periodic summary trigger |
+| `MEMOREE_SUMMARY_EVERY_HOURS` | `2` | Time threshold for periodic summary trigger |
+| `MEMOREE_SKILLIFY_EVERY_N_TURNS` | `20` | Turn threshold for skillify worker trigger |

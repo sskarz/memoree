@@ -19,7 +19,7 @@
  * throws to us. The worker writes nothing to stdout/stderr — it's detached and
  * any output would go nowhere useful.
  *
- * The CLI paths (`hivemind graph init`, `installEmbeddings`) still call
+ * The CLI paths (`memoree graph init`, `installEmbeddings`) still call
  * ensureGraphDeps() inline: those run in the foreground where blocking is fine
  * and expected.
  */

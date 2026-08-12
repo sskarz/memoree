@@ -10,7 +10,7 @@ vi.mock("../../src/docs/stable-read.js", () => ({
 
 import { handleDocsVfs } from "../../src/docs/vfs-handler.js";
 
-const TBL = "hivemind_docs";
+const TBL = "memoree_docs";
 
 function metaRow(doc_id: string, over: Record<string, unknown> = {}) {
   return { id: `id-${doc_id}`, doc_id, version: 1, updated_at: "2026-07-01T10:00:00.000Z", status: "active", tier: "fast", ...over };
@@ -102,7 +102,7 @@ describe("handleDocsVfs", () => {
 
   it("serves THIS machine's private branch doc ahead of the cloud (and marks it private)", async () => {
     const privDir = mkdtempSync(join(tmpdir(), "vfs-priv-"));
-    process.env.HIVEMIND_DOCS_PRIVATE_DIR = privDir;
+    process.env.MEMOREE_DOCS_PRIVATE_DIR = privDir;
     try {
       const { writePrivateDoc } = await import("../../src/docs/private-store.js");
       writePrivateDoc("p", "b:feat", {
@@ -120,7 +120,7 @@ describe("handleDocsVfs", () => {
         expect(r.body).not.toContain("cloud main");
       }
     } finally {
-      delete process.env.HIVEMIND_DOCS_PRIVATE_DIR;
+      delete process.env.MEMOREE_DOCS_PRIVATE_DIR;
       rmSync(privDir, { recursive: true, force: true });
     }
   });

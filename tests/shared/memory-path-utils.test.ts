@@ -6,7 +6,7 @@ import {
   TILDE_PATH,
 } from "../../src/hooks/memory-path-utils.js";
 
-const MEM = TILDE_PATH; // ~/.deeplake/memory
+const MEM = TILDE_PATH; // ~/.memoree/memory
 
 describe("parseBashTokens", () => {
   it("splits a simple command into one stage of argv tokens", () => {

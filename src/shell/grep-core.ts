@@ -1,10 +1,10 @@
 /**
  * Shared grep core for the plugin. Used by:
  *   - src/hooks/grep-direct.ts  (fast-path from pre-tool-use)
- *   - src/shell/grep-interceptor.ts  (slow-path inside deeplake-shell)
+ *   - src/shell/grep-interceptor.ts  (slow-path inside memoree-shell)
  *
  * Responsibilities:
- *   1. searchDeeplakeTables: run one UNION ALL query across both the memory
+ *   1. searchMemoreeTables: run one UNION ALL query across both the memory
  *      table (summaries, column `summary`) AND the sessions table
  *      (raw dialogue, column `message` JSONB), returning {path, content}.
  *   2. normalizeSessionContent: when a row comes from a session path, turn the
@@ -17,7 +17,7 @@
 import type { StorageBackend } from "../storage/backend.js";
 import { sqlStr, sqlLike, sqlIdent } from "../utils/sql.js";
 import { scoreVectorRows, vectorScanLimit } from "../storage/vector-search.js";
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "../storage/schema.js";
 import { likeOperator, textExpression } from "../storage/sql-dialect.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ export interface SearchOptions {
   /** Scope docs search to one project (legacy '' rows always included). */
   project?: string;
   /**
-   * If set, switches to semantic (cosine) search via Deeplake's `<#>` operator
+   * If set, switches to semantic (cosine) search via Memoree's `<#>` operator
    * against `summary_embedding` / `message_embedding` FLOAT4[] columns. When
    * absent, the BM25/LIKE path runs. Callers compute this vector via the
    * EmbedClient; null means the daemon was unreachable and we should stick
@@ -191,7 +191,7 @@ function formatToolCall(obj: any): string {
 export function emptySessionBodyNotice(rowCount: number): string {
   const plural = rowCount === 1 ? "row" : "rows";
   return (
-    `[hivemind: this session has ${rowCount} stored ${plural} but the message ` +
+    `[memoree: this session has ${rowCount} stored ${plural} but the message ` +
     `body is empty — capture recorded metadata (size only) without content, so ` +
     `the transcript body is unavailable. This is not an empty file; there is ` +
     `nothing to read here.]`
@@ -308,7 +308,7 @@ function buildPathCondition(targetPath: string): string {
  * The lookup always goes through a single top-level SQL query so one grep
  * maps to one round-trip.
  */
-export async function searchDeeplakeTables(
+export async function searchMemoreeTables(
   api: StorageBackend,
   memoryTable: string,
   sessionsTable: string,
@@ -336,7 +336,7 @@ export async function searchDeeplakeTables(
       : (multiWordPatterns && multiWordPatterns.length > 1 ? multiWordPatterns : [escapedPattern]);
     const memFilter = buildContentFilter(textSummary, localLike, filterPatterns);
     const sessFilter = buildContentFilter(textMessage, localLike, filterPatterns);
-    const lexicalLimit = Math.min(limit, Number(process.env.HIVEMIND_HYBRID_LEXICAL_LIMIT ?? "20"));
+    const lexicalLimit = Math.min(limit, Number(process.env.MEMOREE_HYBRID_LEXICAL_LIMIT ?? "20"));
     const lexicalRows = (await Promise.all([
       api.query(`SELECT path, ${textSummary} AS content FROM "${memoryTable}" WHERE 1=1${pathFilter}${memFilter} LIMIT ${queryEmbedding ? lexicalLimit : limit}`),
       api.query(`SELECT path, ${textMessage} AS content FROM "${sessionsTable}" WHERE 1=1${pathFilter}${sessFilter} LIMIT ${queryEmbedding ? lexicalLimit : limit}`),
@@ -389,11 +389,11 @@ export async function searchDeeplakeTables(
     const vecLit = serializeFloat4Array(queryEmbedding);
     const semanticLimit = Math.min(
       limit,
-      Number(process.env.HIVEMIND_SEMANTIC_LIMIT ?? "20"),
+      Number(process.env.MEMOREE_SEMANTIC_LIMIT ?? "20"),
     );
     const lexicalLimit = Math.min(
       limit,
-      Number(process.env.HIVEMIND_HYBRID_LEXICAL_LIMIT ?? "20"),
+      Number(process.env.MEMOREE_HYBRID_LEXICAL_LIMIT ?? "20"),
     );
 
     // Single UNION ALL of lexical (LIKE/ILIKE substring) + semantic (cosine).
@@ -506,7 +506,7 @@ export async function searchDeeplakeTables(
 
 /**
  * Hybrid semantic+lexical search over the per-file docs table (`content` +
- * `content_embedding`, `status='active'`). Mirrors {@link searchDeeplakeTables}
+ * `content_embedding`, `status='active'`). Mirrors {@link searchMemoreeTables}
  * for a single source, reusing the same primitives (float serialization,
  * content filter, the `ARRAY_LENGTH(...) > 0` empty-vector guard, dedup-by-path)
  * — so semantic scoring/ordering stays byte-identical to memory grep. Kept a
@@ -517,7 +517,7 @@ export async function searchDocs(
   query: (sql: string) => Promise<Record<string, unknown>[]>,
   docsTable: string,
   opts: SearchOptions,
-  dialect: StorageDialect = "deeplake",
+  dialect: StorageDialect = "postgres",
 ): Promise<ContentRow[]> {
   const { pathFilter, contentScanOnly, likeOp, escapedPattern, prefilterPattern, prefilterPatterns, queryEmbedding, multiWordPatterns } = opts;
   const safeDocsTable = sqlIdent(docsTable);
@@ -541,8 +541,8 @@ export async function searchDocs(
 
   if (queryEmbedding && queryEmbedding.length > 0) {
     const vecLit = serializeFloat4Array(queryEmbedding);
-    const semanticLimit = Math.min(limit, Number(process.env.HIVEMIND_SEMANTIC_LIMIT ?? "20"));
-    const lexicalLimit = Math.min(limit, Number(process.env.HIVEMIND_HYBRID_LEXICAL_LIMIT ?? "20"));
+    const semanticLimit = Math.min(limit, Number(process.env.MEMOREE_SEMANTIC_LIMIT ?? "20"));
+    const lexicalLimit = Math.min(limit, Number(process.env.MEMOREE_HYBRID_LEXICAL_LIMIT ?? "20"));
     const filterPatternsForLex = contentScanOnly
       ? (prefilterPatterns && prefilterPatterns.length > 0 ? prefilterPatterns : (prefilterPattern ? [prefilterPattern] : []))
       : [escapedPattern];
@@ -551,7 +551,7 @@ export async function searchDocs(
       ? `SELECT doc_id AS path, ${textContent} AS content, 1.0 AS score ` +
         `FROM "${safeDocsTable}" WHERE 1=1${pathFilter}${active}${lexFilter} LIMIT ${lexicalLimit}`
       : null;
-    if (dialect !== "deeplake") {
+    if (dialect !== "postgres") {
       const lexicalRows = lexQuery ? await query(lexQuery) : [];
       const candidates = await query(
         `SELECT doc_id AS path, ${textContent} AS content, content_embedding ` +
@@ -727,7 +727,7 @@ export function buildGrepSearchOptions(params: GrepMatchParams, targetPath: stri
   return {
     pathFilter: buildPathFilter(targetPath),
     contentScanOnly: hasRegexMeta,
-    likeOp: process.env.HIVEMIND_GREP_LIKE === "case-sensitive" ? "LIKE" : "ILIKE",
+    likeOp: process.env.MEMOREE_GREP_LIKE === "case-sensitive" ? "LIKE" : "ILIKE",
     escapedPattern: sqlLike(params.pattern),
     prefilterPattern: literalPrefilter ? sqlLike(literalPrefilter) : undefined,
     prefilterPatterns: alternationPrefilters?.map((literal) => sqlLike(literal)),
@@ -815,7 +815,7 @@ export async function grepBothTables(
   queryEmbedding?: number[] | null,
 ): Promise<string[]> {
   const meta = { truncated: false };
-  const rows = await searchDeeplakeTables(api, memoryTable, sessionsTable, {
+  const rows = await searchMemoreeTables(api, memoryTable, sessionsTable, {
     ...buildGrepSearchOptions(params, targetPath),
     queryEmbedding,
   }, meta);
@@ -834,7 +834,7 @@ export async function grepBothTables(
   // line from the top-K rows, prefixed with the path so Claude can follow up
   // with Read. The downstream output-cap keeps the response bounded.
   if (queryEmbedding && queryEmbedding.length > 0) {
-    const emitAllLines = process.env.HIVEMIND_SEMANTIC_EMIT_ALL !== "false";
+    const emitAllLines = process.env.MEMOREE_SEMANTIC_EMIT_ALL !== "false";
     if (emitAllLines) {
       const lines: string[] = [];
       for (const r of normalized) {
@@ -859,7 +859,7 @@ export async function grepBothTables(
  * silent failure this change exists to remove.
  */
 export const TRUNCATION_NOTICE =
-  "[hivemind: results incomplete — a per-source row cap was hit, so more matches " +
+  "[memoree: results incomplete — a per-source row cap was hit, so more matches " +
   "likely exist. Narrow the path or use a more specific pattern to see them.]";
 
 export function withTruncationNotice(lines: string[], truncated: boolean): string[] {

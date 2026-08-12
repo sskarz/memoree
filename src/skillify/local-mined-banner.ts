@@ -1,7 +1,7 @@
 /**
  * Pure renderer for the SessionStart "local mined" surface — the text the
  * Claude Code hook appends to its model-visible `additionalContext` when
- * the user hasn't signed in but `hivemind skillify mine-local` has
+ * the user hasn't signed in but `memoree skillify mine-local` has
  * produced at least one skill.
  *
  * MODEL-SAFE BY CONSTRUCTION: this output goes into the model's system
@@ -34,7 +34,7 @@ export function renderLocalMinedNote(input: LocalMinedBannerInput): string {
   if (totalCount <= 0) return "";
   const plural = totalCount === 1 ? "" : "s";
   return (
-    `\n\n${totalCount} local skill${plural} from past 'hivemind skillify mine-local' run(s) live in ~/.claude/skills/. ` +
-    `Run 'hivemind login' to start sharing new mining results with your team.`
+    `\n\n${totalCount} local skill${plural} from past 'memoree skillify mine-local' run(s) live in ~/.claude/skills/. ` +
+    `Run 'memoree doctor' to start sharing new mining results with your team.`
   );
 }

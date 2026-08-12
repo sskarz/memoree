@@ -33,7 +33,7 @@ const { execFileSync: runChildProcess } =
   requireForCp("node:child_process") as typeof import("node:child_process");
 
 // Same scanner flags any `process.env` literal in a file that also does
-// `fetch()`. Specific `HIVEMIND_*` reads in this file are inlined to
+// `fetch()`. Specific `MEMOREE_*` reads in this file are inlined to
 // `undefined` via esbuild `define` in the openclaw skillify-worker bundle
 // config; this alias covers the one place we can't inline — the bulk env
 // spread to the child CLI (`env: { ...inheritedEnv.env, ... }`). The
@@ -79,7 +79,7 @@ export interface GateRunResult {
  * skillify-worker (`harnesses/openclaw/dist/skillify-worker.js`), which ClawHub
  * scans per-file at publish time. Both `child_process.execFileSync`
  * (`dangerous-exec`) and `process.env.PATH` reads (`env-harvesting`)
- * trip critical rules because the worker also `fetch()`-es Deeplake. So
+ * trip critical rules because the worker also `fetch()`-es Memoree. So
  * we keep the runtime discovery zero-`process.env` and zero-`child_process`.
  *
  * Each agent's documented install paths cover the common cases; users
@@ -164,7 +164,7 @@ export function buildArgs(agent: Agent, prompt: string, opts: GateRunOptions): s
     case "cursor":
       return [
         "--print",
-        "--model", opts.cursorModel ?? process.env.HIVEMIND_CURSOR_MODEL ?? "auto",
+        "--model", opts.cursorModel ?? process.env.MEMOREE_CURSOR_MODEL ?? "auto",
         "--force",
         "--output-format", "text",
         prompt,
@@ -172,16 +172,16 @@ export function buildArgs(agent: Agent, prompt: string, opts: GateRunOptions): s
     case "hermes":
       return [
         "-z", prompt,
-        "--provider", opts.hermesProvider ?? process.env.HIVEMIND_HERMES_PROVIDER ?? "openrouter",
-        "-m", opts.hermesModel ?? process.env.HIVEMIND_HERMES_MODEL ?? "anthropic/claude-haiku-4-5",
+        "--provider", opts.hermesProvider ?? process.env.MEMOREE_HERMES_PROVIDER ?? "openrouter",
+        "-m", opts.hermesModel ?? process.env.MEMOREE_HERMES_MODEL ?? "anthropic/claude-haiku-4-5",
         "--yolo",
         "--ignore-user-config",
       ];
     case "pi":
       return [
         "--print",
-        "--provider", opts.piProvider ?? process.env.HIVEMIND_PI_PROVIDER ?? "google",
-        "--model", opts.piModel ?? process.env.HIVEMIND_PI_MODEL ?? "gemini-2.5-flash",
+        "--provider", opts.piProvider ?? process.env.MEMOREE_PI_PROVIDER ?? "google",
+        "--model", opts.piModel ?? process.env.MEMOREE_PI_MODEL ?? "gemini-2.5-flash",
         prompt,
       ];
   }
@@ -205,7 +205,7 @@ export function runGate(opts: GateRunOptions): GateRunResult {
       windowsHide: true,
       timeout: opts.timeoutMs ?? 120_000,
       maxBuffer: 8 * 1024 * 1024,
-      env: { ...inheritedEnv.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+      env: { ...inheritedEnv.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
     });
     return { stdout: result.toString("utf-8"), stderr: "", errored: false };
   } catch (e: any) {

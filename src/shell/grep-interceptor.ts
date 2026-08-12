@@ -1,7 +1,7 @@
 import type { StorageBackend } from "../storage/backend.js";
 import { defineCommand } from "just-bash";
 import yargsParser from "yargs-parser";
-import type { DeeplakeFs } from "./deeplake-fs.js";
+import type { MemoreeFs } from "./memoree-fs.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { EmbedClient } from "../embeddings/client.js";
@@ -10,7 +10,7 @@ import { embeddingsDisabled } from "../embeddings/disable.js";
 import {
   buildGrepSearchOptions,
   buildPathFilterForTargets,
-  searchDeeplakeTables,
+  searchMemoreeTables,
   normalizeContent,
   refineGrepMatches,
   withTruncationNotice,
@@ -18,8 +18,8 @@ import {
   type ContentRow,
 } from "./grep-core.js";
 
-const SEMANTIC_SEARCH_ENABLED = process.env.HIVEMIND_SEMANTIC_SEARCH !== "false" && !embeddingsDisabled();
-const SEMANTIC_EMBED_TIMEOUT_MS = Number(process.env.HIVEMIND_SEMANTIC_EMBED_TIMEOUT_MS ?? "500");
+const SEMANTIC_SEARCH_ENABLED = process.env.MEMOREE_SEMANTIC_SEARCH !== "false" && !embeddingsDisabled();
+const SEMANTIC_EMBED_TIMEOUT_MS = Number(process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS ?? "500");
 
 function resolveGrepEmbedDaemonPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), "..", "embeddings", "embed-daemon.js");
@@ -53,7 +53,7 @@ function patternIsSemanticFriendly(pattern: string, fixedString: boolean): boole
 const MAX_FALLBACK_CANDIDATES = 500;
 
 /**
- * grep implementation for the deeplake-shell (virtual bash). Two paths:
+ * grep implementation for the memoree-shell (virtual bash). Two paths:
  *   1. SQL-first: dual-table LIKE/ILIKE search via grep-core, with session
  *      JSON normalized to per-turn lines for sane output.
  *   2. Fallback: if SQL returns nothing (or races past a 3s timeout), scan
@@ -64,7 +64,7 @@ const MAX_FALLBACK_CANDIDATES = 500;
  */
 export function createGrepCommand(
   client: StorageBackend,
-  fs: DeeplakeFs,
+  fs: MemoreeFs,
   table: string,
   sessionsTable?: string,
 ) {
@@ -134,7 +134,7 @@ export function createGrepCommand(
         queryEmbedding,
       };
       const queryRows = await Promise.race([
-        searchDeeplakeTables(client, table, sessionsTable ?? "sessions", searchOptions, meta),
+        searchMemoreeTables(client, table, sessionsTable ?? "sessions", searchOptions, meta),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
       ]);
       rows.push(...queryRows);
@@ -154,7 +154,7 @@ export function createGrepCommand(
           limit: 100,
         };
         const lexicalRows = await Promise.race([
-          searchDeeplakeTables(client, table, sessionsTable ?? "sessions", lexicalOptions, meta),
+          searchMemoreeTables(client, table, sessionsTable ?? "sessions", lexicalOptions, meta),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
         ]);
         rows.push(...lexicalRows);
@@ -193,9 +193,9 @@ export function createGrepCommand(
     // In semantic mode, skip the regex refinement: cosine similarity has
     // already done the filtering, and dropping lines whose literal text
     // doesn't match the pattern would defeat the semantic retrieval.
-    // Toggle with HIVEMIND_SEMANTIC_EMIT_ALL=false to restore strict regex.
+    // Toggle with MEMOREE_SEMANTIC_EMIT_ALL=false to restore strict regex.
     let output: string[];
-    if (queryEmbedding && queryEmbedding.length > 0 && process.env.HIVEMIND_SEMANTIC_EMIT_ALL !== "false") {
+    if (queryEmbedding && queryEmbedding.length > 0 && process.env.MEMOREE_SEMANTIC_EMIT_ALL !== "false") {
       output = [];
       for (const r of normalized) {
         for (const line of r.content.split("\n")) {
@@ -217,7 +217,7 @@ export function createGrepCommand(
     if (backendError) {
       return {
         stdout: "",
-        stderr: `grep: hivemind search error: ${backendError.message} ` +
+        stderr: `grep: memoree search error: ${backendError.message} ` +
           `(backend unavailable — result is NOT a confirmed empty match)\n`,
         exitCode: 2,
       };

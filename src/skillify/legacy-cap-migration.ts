@@ -10,7 +10,7 @@
  * "invalid name: exceeds maximum length of 64 characters" for it.
  *
  * This pass fixes those installs WITHOUT touching the network: it scans the
- * pulled manifest (~/.deeplake/state/skillify/pulled.json), and for any GLOBAL
+ * pulled manifest (~/.memoree/state/skillify/pulled.json), and for any GLOBAL
  * managed entry whose installed frontmatter `name` exceeds the loader ceiling
  * it copies the install to the canonical capped dir, caps the name there,
  * refreshes the fan-out symlinks, records the canonical manifest entry, and

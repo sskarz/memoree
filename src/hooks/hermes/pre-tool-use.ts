@@ -2,8 +2,8 @@
  * Hermes pre_tool_call hook (matcher: "terminal").
  *
  * Defense-in-depth for memory recall accuracy. The agent's preferred path
- * is the hivemind_search MCP tool — but if it ignores the skill guidance
- * and runs `rg` / `grep` against ~/.deeplake/memory/ via terminal, we
+ * is the memoree_search MCP tool — but if it ignores the skill guidance
+ * and runs `rg` / `grep` against ~/.memoree/memory/ via terminal, we
  * intercept that here and return the same SQL fast-path result other
  * Tier 1 agents (Claude / Codex / Cursor) get from their PreToolUse
  * interceptors.
@@ -83,8 +83,8 @@ async function main(): Promise<void> {
     const message = [
       result,
       "",
-      "(Hivemind: blocked the slow grep against ~/.deeplake/memory/ and ran a single SQL query instead. " +
-        "For future recalls, prefer the hivemind_search MCP tool — same accuracy, no terminal round-trip.)",
+      "(Memoree: blocked the slow grep against ~/.memoree/memory/ and ran a single SQL query instead. " +
+        "For future recalls, prefer the memoree_search MCP tool — same accuracy, no terminal round-trip.)",
     ].join("\n");
 
     process.stdout.write(JSON.stringify({ action: "block", message }));

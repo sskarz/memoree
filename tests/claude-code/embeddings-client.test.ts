@@ -8,14 +8,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 
-const enqueueNotificationMock = vi.fn();
-vi.mock("../../src/notifications/queue.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/notifications/queue.js")>(
-    "../../src/notifications/queue.js",
-  );
-  return { ...actual, enqueueNotification: (...a: unknown[]) => enqueueNotificationMock(...a) };
-});
-
 import { EmbedClient, getEmbedClient, isTransformersMissingError, _resetClientStateForTesting } from "../../src/embeddings/client.js";
 import type { DaemonRequest, DaemonResponse } from "../../src/embeddings/protocol.js";
 import { _setEnabledReaderForTesting, _resetForTesting as _resetDisableForTesting } from "../../src/embeddings/disable.js";
@@ -38,7 +30,7 @@ function makeTmpDir(): string {
 
 async function startFakeDaemon(dir: string, handler: (req: DaemonRequest) => DaemonResponse): Promise<Server> {
   const uid = String(process.getuid?.() ?? "test");
-  const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+  const sockPath = join(dir, `memoree-embed-${uid}.sock`);
   const srv = createServer((sock: Socket) => {
     let buf = "";
     sock.setEncoding("utf-8");
@@ -123,7 +115,7 @@ describe("EmbedClient", () => {
     expect(b).toBeNull();
     // pidfile should have been cleaned up when spawn couldn't find the entry.
     const uid = String(process.getuid?.() ?? "test");
-    expect(existsSync(join(dir, `hivemind-embed-${uid}.pid`))).toBe(false);
+    expect(existsSync(join(dir, `memoree-embed-${uid}.pid`))).toBe(false);
   });
 
   itNix("round-trips multiple requests on the same client without leaking sockets", async () => {
@@ -169,7 +161,7 @@ describe("EmbedClient", () => {
   itNix("cleans up a stale pidfile (dead PID) before trying to spawn", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const pidPath = join(dir, `hivemind-embed-${uid}.pid`);
+    const pidPath = join(dir, `memoree-embed-${uid}.pid`);
     // Write a PID guaranteed-dead: 0x7FFFFFFF is not a plausible live PID on Linux.
     writeFileSync(pidPath, "2147483646");
 
@@ -188,7 +180,7 @@ describe("EmbedClient", () => {
   itNix("leaves an alive-PID pidfile alone (treats the daemon as still starting)", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const pidPath = join(dir, `hivemind-embed-${uid}.pid`);
+    const pidPath = join(dir, `memoree-embed-${uid}.pid`);
     // Our own PID is alive → isPidFileStale() should return false.
     writeFileSync(pidPath, String(process.pid));
 
@@ -207,7 +199,7 @@ describe("EmbedClient", () => {
   itNix("treats a garbage pidfile as stale and removes it", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const pidPath = join(dir, `hivemind-embed-${uid}.pid`);
+    const pidPath = join(dir, `memoree-embed-${uid}.pid`);
     writeFileSync(pidPath, "not-a-number");
 
     const client = new EmbedClient({
@@ -224,7 +216,7 @@ describe("EmbedClient", () => {
   itNix("returns null when the socket closes mid-request", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     const srv = createServer((sock: Socket) => {
       // Immediately destroy the connection after accept so sendAndWait errors.
       sock.destroy();
@@ -240,7 +232,7 @@ describe("EmbedClient", () => {
   itNix("returns null when the daemon writes malformed JSON", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     const srv = createServer((sock: Socket) => {
       sock.setEncoding("utf-8");
       sock.on("data", () => {
@@ -258,7 +250,7 @@ describe("EmbedClient", () => {
   itNix("returns null on request timeout (daemon accepts but never replies)", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     const srv = createServer((_sock: Socket) => {
       // Accept the connection but never send anything back.
     });
@@ -278,7 +270,7 @@ describe("EmbedClient", () => {
     // (silent hang) detectable as a test timeout if the fix regresses.
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     const srv = createServer((sock: Socket) => {
       // Accept, then half-close after the client sends — no response written.
       sock.on("data", () => sock.end());
@@ -320,23 +312,23 @@ describe("EmbedClient", () => {
     expect(kinds).toEqual(["document"]);
   });
 
-  it("falls back to HIVEMIND_EMBED_DAEMON env when daemonEntry option is absent", () => {
-    const prev = process.env.HIVEMIND_EMBED_DAEMON;
-    process.env.HIVEMIND_EMBED_DAEMON = "/from/env.js";
+  it("falls back to MEMOREE_EMBED_DAEMON env when daemonEntry option is absent", () => {
+    const prev = process.env.MEMOREE_EMBED_DAEMON;
+    process.env.MEMOREE_EMBED_DAEMON = "/from/env.js";
     try {
       const c = new EmbedClient({ socketDir: makeTmpDir(), autoSpawn: false });
       // We can't read the private field directly; just assert construction succeeded.
       expect(c).toBeInstanceOf(EmbedClient);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_EMBED_DAEMON;
-      else process.env.HIVEMIND_EMBED_DAEMON = prev;
+      if (prev === undefined) delete process.env.MEMOREE_EMBED_DAEMON;
+      else process.env.MEMOREE_EMBED_DAEMON = prev;
     }
   });
 
   itNix("warmup() succeeds after auto-spawning a fake daemon entry", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     // Write a tiny daemon script that binds the expected socket and answers pings.
     const daemonScript = join(dir, "fake-daemon.js");
     writeFileSync(daemonScript, `
@@ -389,14 +381,14 @@ describe("isTransformersMissingError", () => {
 
   it("matches the actionable wrapper thrown by defaultImportTransformers", () => {
     expect(isTransformersMissingError(
-      "@huggingface/transformers is not installed anywhere reachable. Run `hivemind embeddings install`...",
+      "@huggingface/transformers is not installed anywhere reachable. Run `memoree embeddings install`...",
     )).toBe(true);
   });
 
   it("does NOT match bare MODULE_NOT_FOUND for unrelated dependencies (regression for #10/#14)", () => {
     // The old matcher classified any MODULE_NOT_FOUND as a transformers
     // issue, so an onnxruntime-node / sharp / etc. missing-dep failure
-    // would falsely trigger the recycle + "run hivemind embeddings
+    // would falsely trigger the recycle + "run memoree embeddings
     // install" guidance — a command that can't fix non-transformers
     // problems. The matcher must require @huggingface/transformers OR
     // the actionable wrapper string to land.
@@ -418,14 +410,13 @@ describe("isTransformersMissingError", () => {
 // socket and drives the client over it. Windows can't bind/connect a
 // Unix-domain socket, so the suite is skipped.
 describe.skipIf(process.platform === "win32")("EmbedClient — transformers-missing handling (silent — no user banner)", () => {
-  // Previously this path enqueued a "Hivemind embeddings disabled — deps
-  // missing" notification telling the user to run `hivemind embeddings
+  // Previously this path enqueued a "Memoree embeddings disabled — deps
+  // missing" notification telling the user to run `memoree embeddings
   // install`. The notification was removed; the recycle-stuck-daemon
   // self-heal stays. These tests pin the contract that no user-visible
   // notification fires from this code path under any conditions.
 
   beforeEach(() => {
-    enqueueNotificationMock.mockReset();
     _resetClientStateForTesting();
     _resetDisableForTesting();
   });
@@ -440,12 +431,11 @@ describe.skipIf(process.platform === "win32")("EmbedClient — transformers-miss
     const dir = makeTmpDir();
     await startFakeDaemon(dir, (req) => {
       if (req.op === "hello") return { id: req.id, daemonPath: "/somewhere", pid: 1, protocolVersion: 1 };
-      return { id: req.id, error: "@huggingface/transformers is not installed anywhere reachable. Run `hivemind embeddings install`" };
+      return { id: req.id, error: "@huggingface/transformers is not installed anywhere reachable. Run `memoree embeddings install`" };
     });
     const client = new EmbedClient({ socketDir: dir, timeoutMs: 500, autoSpawn: false, daemonEntry: "" });
     const vec = await client.embed("hello");
     expect(vec).toBeNull();
-    expect(enqueueNotificationMock).not.toHaveBeenCalled();
   });
 
   it("does NOT enqueue when the user has disabled embeddings (no banner even pre-removal — guard still holds)", async () => {
@@ -457,7 +447,6 @@ describe.skipIf(process.platform === "win32")("EmbedClient — transformers-miss
     });
     const client = new EmbedClient({ socketDir: dir, timeoutMs: 500, autoSpawn: false });
     await client.embed("hello");
-    expect(enqueueNotificationMock).not.toHaveBeenCalled();
   });
 
   it("does NOT enqueue across two clients hitting the same broken daemon", async () => {
@@ -471,7 +460,6 @@ describe.skipIf(process.platform === "win32")("EmbedClient — transformers-miss
     const c2 = new EmbedClient({ socketDir: dir, timeoutMs: 500, autoSpawn: false, daemonEntry: "" });
     await c1.embed("a");
     await c2.embed("b");
-    expect(enqueueNotificationMock).not.toHaveBeenCalled();
   });
 
   it("does NOT enqueue on a generic daemon error unrelated to transformers", async () => {
@@ -483,7 +471,6 @@ describe.skipIf(process.platform === "win32")("EmbedClient — transformers-miss
     });
     const client = new EmbedClient({ socketDir: dir, timeoutMs: 500, autoSpawn: false });
     await client.embed("hello");
-    expect(enqueueNotificationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -492,7 +479,6 @@ describe.skipIf(process.platform === "win32")("EmbedClient — transformers-miss
 // bind/connect a Unix-domain socket, so the suite is skipped.
 describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake / stuck daemon recycle", () => {
   beforeEach(() => {
-    enqueueNotificationMock.mockReset();
     _resetClientStateForTesting();
   });
 
@@ -523,14 +509,14 @@ describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake /
     expect(lastReq).not.toBeNull();
     // pidfile / sockfile should be untouched (we created the sock via the fake daemon)
     const uid = String(process.getuid?.() ?? "test");
-    expect(existsSync(join(dir, `hivemind-embed-${uid}.sock`))).toBe(true);
+    expect(existsSync(join(dir, `memoree-embed-${uid}.sock`))).toBe(true);
   });
 
   it("recycles when the daemon returns 'unknown op' on hello (older protocol)", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
-    const pidPath = join(dir, `hivemind-embed-${uid}.pid`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
+    const pidPath = join(dir, `memoree-embed-${uid}.pid`);
     writeFileSync(pidPath, "1"); // init pid — kill will fail silently
 
     await startFakeDaemon(dir, (req) => {
@@ -557,8 +543,8 @@ describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake /
   it("recycles when the running daemon's path no longer exists on disk (GC'd marketplace bundle)", async () => {
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
-    const pidPath = join(dir, `hivemind-embed-${uid}.pid`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
+    const pidPath = join(dir, `memoree-embed-${uid}.pid`);
     writeFileSync(pidPath, "1");
 
     await startFakeDaemon(dir, (req) => {
@@ -588,7 +574,7 @@ describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake /
     // here would cause endless thrash between the agents.
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
 
     // Two real daemon-binary paths on disk (just empty files; we only
     // need existsSync(...) to return true).
@@ -726,7 +712,7 @@ describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake /
     // through the recycle path instead).
     const dir = makeTmpDir();
     const uid = String(process.getuid?.() ?? "test");
-    const sockPath = join(dir, `hivemind-embed-${uid}.sock`);
+    const sockPath = join(dir, `memoree-embed-${uid}.sock`);
     let helloAttempts = 0;
     let embedAttempts = 0;
     const srv = createServer((sock: Socket) => {
@@ -787,8 +773,8 @@ describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake /
     // Force the resolver to land on a falsy daemonEntry by setting the env
     // override to empty — env wins over the SHARED_DAEMON_PATH fallback,
     // and "" is falsy, so verifyDaemonOnce returns early.
-    const prev = process.env.HIVEMIND_EMBED_DAEMON;
-    process.env.HIVEMIND_EMBED_DAEMON = "";
+    const prev = process.env.MEMOREE_EMBED_DAEMON;
+    process.env.MEMOREE_EMBED_DAEMON = "";
     try {
       const dir = makeTmpDir();
       let helloCount = 0;
@@ -800,8 +786,8 @@ describe.skipIf(process.platform === "win32")("EmbedClient — hello handshake /
       await client.embed("hi");
       expect(helloCount).toBe(0);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_EMBED_DAEMON;
-      else process.env.HIVEMIND_EMBED_DAEMON = prev;
+      if (prev === undefined) delete process.env.MEMOREE_EMBED_DAEMON;
+      else process.env.MEMOREE_EMBED_DAEMON = prev;
     }
   });
 });

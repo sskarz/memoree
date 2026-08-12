@@ -24,7 +24,7 @@ const TRANSFORMERS_PKG: string = "@huggingface/transformers";
 // transformers via an injected importer (default goes through the canonical
 // shared-deps walk + bare fallback); we inject one that returns this mock so
 // the test env on developer machines doesn't accidentally load the real
-// installed copy at ~/.hivemind/embed-deps/.
+// installed copy at ~/.memoree/embed-deps/.
 vi.mock("@huggingface/transformers", () => {
   const embed = vi.fn((input: string | string[], _opts: Record<string, unknown>) => {
     const texts = Array.isArray(input) ? input : [input];
@@ -205,11 +205,11 @@ describe("defaultImportTransformers resolution", () => {
     expect(bare).toHaveBeenCalledTimes(1);
   });
 
-  it("throws an actionable error referencing `hivemind embeddings install` when both fail", async () => {
+  it("throws an actionable error referencing `memoree embeddings install` when both fail", async () => {
     const canonical = vi.fn().mockRejectedValue(new Error("ENOENT shared-deps"));
     const bare = vi.fn().mockRejectedValue(new Error("Cannot find package '@huggingface/transformers'"));
     await expect(defaultImportTransformers(canonical as any, bare as any)).rejects.toThrow(
-      /hivemind embeddings install/,
+      /memoree embeddings install/,
     );
   });
 
@@ -285,7 +285,7 @@ describe("_importFromBareSpecifier", () => {
 });
 
 describe("_importFromCanonicalSharedDeps", () => {
-  // Build a real on-disk fixture that looks like a hivemind-installed
+  // Build a real on-disk fixture that looks like a memoree-installed
   // shared-deps directory, then point the importer at it. Avoids any
   // mocking gymnastics around `createRequire` / dynamic `import()`.
 

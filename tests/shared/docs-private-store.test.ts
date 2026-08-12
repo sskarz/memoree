@@ -20,10 +20,10 @@ describe("private-store", () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "priv-store-"));
-    process.env.HIVEMIND_DOCS_PRIVATE_DIR = dir;
+    process.env.MEMOREE_DOCS_PRIVATE_DIR = dir;
   });
   afterEach(() => {
-    delete process.env.HIVEMIND_DOCS_PRIVATE_DIR;
+    delete process.env.MEMOREE_DOCS_PRIVATE_DIR;
     rmSync(dir, { recursive: true, force: true });
   });
 

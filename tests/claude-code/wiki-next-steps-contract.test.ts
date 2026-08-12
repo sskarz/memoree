@@ -29,7 +29,7 @@ import { WIKI_PROMPT_TEMPLATE as HERMES_TEMPLATE } from "../../src/hooks/hermes/
 // (always LF), but this one is read raw from disk, so a Windows checkout could
 // give it \r\n and break the LF-anchored nextStepsSection() parser below.
 const PI_TEMPLATE = readFileSync(
-  join(process.cwd(), "harnesses", "pi", "extension-source", "hivemind.ts"),
+  join(process.cwd(), "harnesses", "pi", "extension-source", "memoree.ts"),
   "utf-8",
 ).replace(/\r\n/g, "\n");
 

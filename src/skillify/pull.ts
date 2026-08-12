@@ -1,11 +1,11 @@
 /**
- * Fetch skills from the Deeplake `skills` table and write them to the
+ * Fetch skills from the Memoree `skills` table and write them to the
  * local filesystem (project-local or global), so a teammate can install
  * skills authored by other org members.
  *
  * Read path opposite of the worker's write path:
- *   worker: gate → skill-writer (local file) → insertSkillRow (Deeplake)
- *   pull:   query Deeplake → write local SKILL.md
+ *   worker: gate → skill-writer (local file) → insertSkillRow (Memoree)
+ *   pull:   query Memoree → write local SKILL.md
  *
  * Filtering:
  *   - by users:  --user X | --users a,b,c | --all-users (default)
@@ -61,7 +61,7 @@ export interface PullOptions {
   force?: boolean;
   /**
    * Optional existence predicate built from a trusted table list (see
-   * DeeplakeApi.knownTablesOrNull). When it reports the skills table absent
+   * MemoreeApi.knownTablesOrNull). When it reports the skills table absent
    * we skip the SELECT and treat it as empty — a fresh workspace lazily
    * creates `skills` on first INSERT, so reading it first otherwise logs a
    * 42P01 server-side on every SessionStart auto-pull. Omitted (or the list
@@ -161,7 +161,7 @@ export function isMissingContributorsColumnError(message: string | undefined): b
 }
 
 /**
- * Recognises the various error shapes Deeplake emits when the skills table
+ * Recognises the various error shapes Memoree emits when the skills table
  * doesn't exist yet. The table is created lazily on the first INSERT, so a
  * fresh workspace's first `pull` would otherwise crash here. We treat
  * "missing table" as an empty result set — the user has nothing to pull.
@@ -174,7 +174,7 @@ export function isMissingTableError(message: string | undefined): boolean {
   // below and get silently swallowed as an empty result set — masking
   // the legacy-table case that needs the contributors-column retry.
   if (/\bcolumn\b/i.test(message)) return false;
-  // Deeplake / Postgres-flavoured errors:
+  // Memoree / Postgres-flavoured errors:
   //   "Table does not exist: relation \"skills\" does not exist"
   //   "relation \"skills\" does not exist"
   //   SQLite/local fallback variants.
@@ -453,7 +453,7 @@ export function decideAction(args: {
  * Cross-project layout: when two projects ship a skill with the same name
  * (e.g. both have `deploy`), they're written to disjoint subdirectories
  * under the install root: `<root>/<project_key>/<name>/SKILL.md`. This
- * matches the (project_key, name) uniqueness of the Deeplake table and
+ * matches the (project_key, name) uniqueness of the Memoree table and
  * prevents cross-project overwrites.
  */
 export async function runPull(opts: PullOptions): Promise<PullSummary> {
@@ -508,7 +508,7 @@ export async function runPull(opts: PullOptions): Promise<PullSummary> {
   // Maps a resolved `<cappedName>--<author>` destination to the raw row name
   // that claimed it first. Capping is a lossy hash, so two distinct over-long
   // names could resolve to the same destination; the first wins and later
-  // colliders are skipped (their rows stay in Deeplake, re-pullable) rather
+  // colliders are skipped (their rows stay in Memoree, re-pullable) rather
   // than silently overwriting each other on disk.
   const claimedDirs = new Map<string, string>();
 
@@ -525,13 +525,13 @@ export async function runPull(opts: PullOptions): Promise<PullSummary> {
     // Same-author / same-name across two projects is the one regression vs
     // the legacy `<projectKey>/<name>/` layout: the more recently pulled
     // row clobbers the earlier one (with `.bak` of the prior SKILL.md).
-    // Acceptable trade-off — the row stays in Deeplake and is recoverable
+    // Acceptable trade-off — the row stays in Memoree and is recoverable
     // via re-pull from the project that authored it.
     //
     // Empty `author` would degrade the path to `<root>/<name>/` (the
     // locally-mined slot) and silently clobber the user's own skill of
     // the same name, breaking the coexistence guarantee above. Skip the
-    // row instead — Deeplake should always populate `author`, and
+    // row instead — Memoree should always populate `author`, and
     // ignoring an empty one is safer than guessing a placeholder.
     if (!author) {
       summary.entries.push({

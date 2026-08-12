@@ -1,7 +1,7 @@
 /**
- * Remove skills previously installed by `hivemind skillify pull`.
+ * Remove skills previously installed by `memoree skillify pull`.
  *
- * Source of truth: `~/.deeplake/state/skillify/pulled.json` (the manifest
+ * Source of truth: `~/.memoree/state/skillify/pulled.json` (the manifest
  * written by pull.ts). Entries on disk that are NOT in the manifest are
  * never touched by default — even if their directory name follows the
  * `<name>--<author>` convention. This protects user-authored skills that

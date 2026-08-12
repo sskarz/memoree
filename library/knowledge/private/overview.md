@@ -1,42 +1,42 @@
-# Hivemind Knowledge Base
+# Memoree Knowledge Base
 
 > Category: Overview | Version: 1.0 | Date: June 2026 | Status: Active
 
-The entry point for everyone working on Hivemind internals: what the product is, how its pieces fit together, and where to read next.
+The entry point for everyone working on Memoree internals: what the product is, how its pieces fit together, and where to read next.
 
 **Related:**
 - [`architecture/system-overview.md`](architecture/system-overview.md)
 - [`architecture/session-lifecycle.md`](architecture/session-lifecycle.md)
-- [`data/deeplake-tables-schema.md`](data/deeplake-tables-schema.md)
+- [`data/memoree-tables-schema.md`](data/memoree-tables-schema.md)
 - [`auth/auth-architecture.md`](auth/auth-architecture.md)
 - [`plugins/integration-model.md`](plugins/integration-model.md)
 - [`../../../docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md)
 
 ---
 
-## What Hivemind is
+## What Memoree is
 
-Hivemind is a shared, auto-learning memory layer for coding agents. It gives Claude Code, OpenClaw, Codex, Cursor, Hermes, and pi a single brain: one agent solves a problem on Monday, and every agent on the team can recall and reuse that work afterward. The pitch in the README is "one brain for all your agents," and the mechanics behind it are Capture, Codify, Propagate, Compound.
+Memoree is a shared, auto-learning memory layer for coding agents. It gives Claude Code, OpenClaw, Codex, Cursor, Hermes, and pi a single brain: one agent solves a problem on Monday, and every agent on the team can recall and reuse that work afterward. The pitch in the README is "one brain for all your agents," and the mechanics behind it are Capture, Codify, Propagate, Compound.
 
-The product is not a server with a UI. It is a monorepo of plugins, hooks, and a CLI that install into each supported assistant and quietly wire into that assistant's lifecycle events. Every prompt, tool call, and response is captured as a structured trace in Deeplake (a tensor-native database). A background worker mines those traces into reusable `SKILL.md` files, and codified skills propagate back into every connected agent's context at inference time. On the LoCoMo long-context memory benchmark, this approach is 25% cheaper, uses 1.7x fewer tokens, and reaches answers in 31% fewer turns than running with no shared memory.
+The product is not a server with a UI. It is a monorepo of plugins, hooks, and a CLI that install into each supported assistant and quietly wire into that assistant's lifecycle events. Every prompt, tool call, and response is captured as a structured trace in Memoree (a tensor-native database). A background worker mines those traces into reusable `SKILL.md` files, and codified skills propagate back into every connected agent's context at inference time. On the LoCoMo long-context memory benchmark, this approach is 25% cheaper, uses 1.7x fewer tokens, and reaches answers in 31% fewer turns than running with no shared memory.
 
-Installation is one command: `npm i -g @deeplake/hivemind && hivemind install` detects every supported assistant, wires its hooks, and runs a device-flow login. From then on, capture and recall happen automatically with no further user action.
+Installation is one command: `npm i -g memoree && memoree install` detects every supported assistant, wires its hooks, and runs a device-flow login. From then on, capture and recall happen automatically with no further user action.
 
 ---
 
 ## Top-level architecture
 
-Hivemind has four moving parts that recur across every domain.
+Memoree has four moving parts that recur across every domain.
 
 **Per-agent integration shims.** Each supported assistant exposes a different extension surface: Claude Code takes a marketplace plugin, Codex and Cursor take a `hooks.json`, OpenClaw takes a native extension, Hermes takes shell hooks plus an MCP server, and pi takes a TypeScript extension plus an `AGENTS.md` block. The shims translate each assistant's native lifecycle events into the same capture and recall calls.
 
-**The shared core (`src/`).** The Deeplake API client (`src/deeplake-api.ts`), the table schemas (`src/deeplake-schema.ts`), config loading (`src/config.ts`), credential handling (`src/commands/auth.ts`), and the SQL-safety utilities are all agent-agnostic. The per-agent hooks are thin wrappers over this core.
+**The shared core (`src/`).** The Memoree API client (`src/memoree-api.ts`), the table schemas (`src/storage/schema.ts`), config loading (`src/config.ts`), credential handling (`src/commands/auth.ts`), and the SQL-safety utilities are all agent-agnostic. The per-agent hooks are thin wrappers over this core.
 
-**Deeplake as the substrate.** All durable state lives in Deeplake tables: `sessions` (raw per-event traces), `memory` (wiki summaries plus the virtual filesystem), `skills`, `rules`, `goals`, `kpis`, and `codebase` (the code graph). Org and workspace boundaries are enforced at the storage layer, so two workspaces never share a row, partition, or index.
+**Memoree as the substrate.** All durable state lives in Memoree tables: `sessions` (raw per-event traces), `memory` (wiki summaries plus the virtual filesystem), `skills`, `rules`, `goals`, `kpis`, and `codebase` (the code graph). Org and workspace boundaries are enforced at the storage layer, so two workspaces never share a row, partition, or index.
 
-**The virtual filesystem (VFS).** Agents read and write memory through ordinary shell commands (`cat`, `ls`, `grep`) against `~/.deeplake/memory/`. A PreToolUse hook intercepts those commands and routes them to SQL queries instead of the real disk, which is how recall feels like browsing files while actually hitting a team-shared database.
+**The virtual filesystem (VFS).** Agents read and write memory through ordinary shell commands (`cat`, `ls`, `grep`) against `~/.memoree/memory/`. A PreToolUse hook intercepts those commands and routes them to SQL queries instead of the real disk, which is how recall feels like browsing files while actually hitting a team-shared database.
 
-External dependencies are intentionally few: Deeplake for storage, the host agent's own CLI (`claude -p`, `codex exec`, `pi --print`) for summary generation so no extra API key is needed, and an optional local nomic-embed daemon for semantic search.
+External dependencies are intentionally few: Memoree for storage, the host agent's own CLI (`claude -p`, `codex exec`, `pi --print`) for summary generation so no extra API key is needed, and an optional local nomic-embed daemon for semantic search.
 
 ---
 
@@ -47,7 +47,7 @@ External dependencies are intentionally few: Deeplake for storage, the host agen
 | Shared core | `src/` | API client, schemas, config, auth, SQL utils |
 | Claude Code hooks | `src/hooks/` | Reference implementation of every lifecycle hook |
 | Per-agent hooks | `src/hooks/{codex,cursor,hermes,pi}/` | Agent-specific capture, recall, and summary shims |
-| Unified CLI | `src/cli/` | `hivemind install` plus per-agent installers |
+| Unified CLI | `src/cli/` | `memoree install` plus per-agent installers |
 | Commands | `src/commands/` | auth, login, session-prune, goals, rules |
 | Embeddings | `src/embeddings/` | nomic embed daemon, protocol, SQL helpers |
 | MCP server | `src/mcp/` | Recall surface for Hermes and future MCP clients |
@@ -89,7 +89,7 @@ Read this overview first, then [`architecture/system-overview.md`](architecture/
 
 | Doc | Covers |
 |---|---|
-| [`data/deeplake-tables-schema.md`](data/deeplake-tables-schema.md) | Full table DDL for every Deeplake table |
+| [`data/memoree-tables-schema.md`](data/memoree-tables-schema.md) | Full table DDL for every Memoree table |
 | [`data/memory-virtual-filesystem.md`](data/memory-virtual-filesystem.md) | VFS path conventions and SQL dispatch |
 | [`data/codebase-graph.md`](data/codebase-graph.md) | Live graph build, push, and recall |
 
@@ -143,7 +143,7 @@ Read this overview first, then [`architecture/system-overview.md`](architecture/
 
 **Working on a specific assistant integration:** [`plugins/integration-model.md`](plugins/integration-model.md) and the matching `src/hooks/<agent>/` directory.
 
-**Investigating storage or schema:** [`data/deeplake-tables-schema.md`](data/deeplake-tables-schema.md) (canonical DDL); `src/deeplake-schema.ts` is the runtime source of truth.
+**Investigating storage or schema:** [`data/memoree-tables-schema.md`](data/memoree-tables-schema.md) (canonical DDL); `src/storage/schema.ts` is the runtime source of truth.
 
 **Auth, credentials, or tenancy:** [`auth/auth-architecture.md`](auth/auth-architecture.md), [`security/credential-storage.md`](security/credential-storage.md), [`multi-tenant/org-workspace-model.md`](multi-tenant/org-workspace-model.md).
 

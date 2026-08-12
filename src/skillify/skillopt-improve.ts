@@ -4,13 +4,13 @@
  *
  * Flow: an org skill X was invoked → the user reacted → judge X's window (the LLM is
  * the only evaluator now — a regex can't catch "you fucked up again") with the
- * just-submitted reaction appended (it lags Deeplake, so it's passed in straight from
+ * just-submitted reaction appended (it lags Memoree, so it's passed in straight from
  * the hook). If the judge says the task FAILED, read X's current body, propose a
  * bounded edit, and publish v+1 — right then. The meta-dedup stops re-publishing the
  * same edit when the next reaction re-judges the same window.
  *
  * Everything is injected (query, judge/proposer models, meta) so this is unit-tested
- * with no Deeplake / LLM.
+ * with no Memoree / LLM.
  */
 import { sqlStr, sqlIdent } from "../utils/sql.js";
 import {
@@ -82,8 +82,8 @@ export interface ImproveOpts {
   prior?: (name: string, author: string) => string[];
   alreadyProposed?: (name: string, author: string, edits: Edit[]) => boolean;
   recordEdit?: (name: string, author: string, edits: Edit[]) => void;
-  // Deeplake insert→read lag tolerance: the invocation row is written by a SEPARATE process
-  // (capture.js) and lands in Deeplake on a short visibility lag (expected, not a defect), so a
+  // Memoree insert→read lag tolerance: the invocation row is written by a SEPARATE process
+  // (capture.js) and lands in Memoree on a short visibility lag (expected, not a defect), so a
   // worker firing on a fast reaction can read stale. Poll findInvocation with linear backoff
   // before giving up. Injectable for tests.
   invocationRetries?: number;            // extra attempts after the first (default 5)
@@ -96,7 +96,7 @@ const DEFAULT_INVOCATION_BACKOFF_MS = 3000;
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * findInvocation, tolerant of Deeplake's insert→read visibility lag (expected latency, not a
+ * findInvocation, tolerant of Memoree's insert→read visibility lag (expected latency, not a
  * defect). The window's skill-invocation row is captured by a SEPARATE process and may not be queryable the instant the
  * worker fires on a fast reaction. The row is near-certain to land (capture is a reliable path), so
  * poll with linear backoff; but it's NOT guaranteed (capture may be disabled/errored), so the
@@ -125,7 +125,7 @@ export async function improveSkillIfFailed(opts: ImproveOpts): Promise<ImproveRe
   if (!inv) return none("invocation not found in session");
 
   let window = await windowAroundInvocation(opts.query, opts.sessionsTable, inv);
-  // The reaction is the freshest turn (lags Deeplake), so append it from the hook payload.
+  // The reaction is the freshest turn (lags Memoree), so append it from the hook payload.
   if (opts.reaction?.trim()) window += `\n\nUSER: ${opts.reaction.trim()}`;
 
   const verdict = await judgeSuccess(window, { model: opts.judge });

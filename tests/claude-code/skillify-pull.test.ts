@@ -30,7 +30,7 @@ beforeEach(() => {
   projectRoot = mkdtempSync(join(tmpdir(), "skillify-pull-"));
   projectSkillsRoot = join(projectRoot, ".claude", "skills");
   // Isolate HOME so the manifest written by recordPull lands in a temp
-  // directory instead of polluting the developer's real ~/.deeplake state.
+  // directory instead of polluting the developer's real ~/.memoree state.
   fakeHome = mkdtempSync(join(tmpdir(), "skillify-pull-home-"));
   originalHome = process.env.HOME;
   setFakeHome(fakeHome);
@@ -189,7 +189,7 @@ describe("selectLatestPerName (composite project_key + name key)", () => {
 });
 
 describe("isMissingTableError", () => {
-  it("matches Deeplake / Postgres relation-does-not-exist", () => {
+  it("matches Memoree / Postgres relation-does-not-exist", () => {
     expect(isMissingTableError(`Table does not exist: relation "skills" does not exist`)).toBe(true);
     expect(isMissingTableError(`relation "skills" does not exist`)).toBe(true);
     expect(isMissingTableError(`no such table: skills`)).toBe(true);
@@ -343,14 +343,14 @@ describe("renderSkillFile", () => {
     // table backfill.
     const text = renderSkillFile({
       name: "pg-crash",
-      description: "Diagnose pg-deeplake test-suite crashes",
+      description: "Diagnose pg-memoree test-suite crashes",
       trigger_text: "When task pg:test cascades after one crash",
       source_sessions: [], version: 5,
       source_agent: "codex", created_at: "t", updated_at: "t",
       body: "## Workflow\n\nDo it.",
     });
     expect(text).toContain(
-      `description: "Diagnose pg-deeplake test-suite crashes. Use this skill when task pg:test cascades after one crash"`,
+      `description: "Diagnose pg-memoree test-suite crashes. Use this skill when task pg:test cascades after one crash"`,
     );
   });
 
@@ -470,7 +470,7 @@ describe("runPull", () => {
     // Real offender codex dropped: 68-char frontmatter name. codex validates
     // the frontmatter `name` (not the dir length), so the write must truncate
     // it to <=64 rather than skip the row.
-    const longName = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const longName = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     const { fn } = makeMockQuery([sampleRow({ name: longName, author: "sasun" })]);
     const summary = await runPull({
       query: fn, tableName: "skills", install: "project", cwd: projectRoot,
@@ -498,7 +498,7 @@ describe("runPull", () => {
     // SAME version as remote — the normal upgrade case. Migration must still
     // fire (decide on the capped dir's own absence), else the invalid old dir
     // lingers forever and codex keeps warning.
-    const longName = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const longName = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     const staleDir = `${longName}--sasun`;
     mkdirSync(join(projectSkillsRoot, staleDir), { recursive: true });
     writeFileSync(join(projectSkillsRoot, staleDir, "SKILL.md"),
@@ -534,7 +534,7 @@ describe("runPull", () => {
     // Guards against discarding a newer/edited local copy: the stale content is
     // preserved and MOVED to the capped dir with the frontmatter name fixed —
     // not overwritten from the older remote row, and not left at the invalid dir.
-    const longName = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const longName = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     const staleDir = `${longName}--sasun`;
     mkdirSync(join(projectSkillsRoot, staleDir), { recursive: true });
     writeFileSync(join(projectSkillsRoot, staleDir, "SKILL.md"),
@@ -568,7 +568,7 @@ describe("runPull", () => {
   it("never deletes a `<rawName>--<author>` dir that is NOT pull-managed (no manifest entry)", async () => {
     // A user could coincidentally own a dir matching a long row's raw name.
     // Migration must only remove dirs we manage (present in the manifest).
-    const longName = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const longName = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     const userDir = `${longName}--sasun`;
     mkdirSync(join(projectSkillsRoot, userDir), { recursive: true });
     writeFileSync(join(projectSkillsRoot, userDir, "SKILL.md"),
@@ -670,7 +670,7 @@ describe("runPull", () => {
     // disk but unrecorded, and the stale managed dir still exists. This pull sees
     // the capped file at the remote version (→ skipped), so it must adopt the
     // canonical into the manifest and finish retiring the stale dir.
-    const longName = "pg-deeplake-multi-layer-issue-diagnosis-and-workaround-prioritization";
+    const longName = "pg-memoree-multi-layer-issue-diagnosis-and-workaround-prioritization";
     const cappedDir = `${capSkillName(longName)}--sasun`;
     const staleDir = `${longName}--sasun`;
 

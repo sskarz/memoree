@@ -4,15 +4,15 @@
  * CLI surface for skillify scope, team, install, and pull management.
  *
  * Usage:
- *   hivemind skillify                              — show current scope, team, status
- *   hivemind skillify scope <me|team>              — set the mining scope
- *   hivemind skillify install <project|global>     — set where new skills are written
- *   hivemind skillify promote <skill-name>         — move a project skill to global
- *   hivemind skillify team add <username>          — add a username to the team list
- *   hivemind skillify team remove <username>       — remove a username from the team list
- *   hivemind skillify team list                    — list current team members
- *   hivemind skillify pull [skill-name] [opts]     — fetch skills from Deeplake to local FS
- *   hivemind skillify status                       — show counter + per-project state
+ *   memoree skillify                              — show current scope, team, status
+ *   memoree skillify scope <me|team>              — set the mining scope
+ *   memoree skillify install <project|global>     — set where new skills are written
+ *   memoree skillify promote <skill-name>         — move a project skill to global
+ *   memoree skillify team add <username>          — add a username to the team list
+ *   memoree skillify team remove <username>       — remove a username from the team list
+ *   memoree skillify team list                    — list current team members
+ *   memoree skillify pull [skill-name] [opts]     — fetch skills from Memoree to local FS
+ *   memoree skillify status                       — show counter + per-project state
  *
  * The team list is consumed by the worker when scope=team: SQL filter
  * becomes `author IN (<team>)`. scope=me filters by current user only.
@@ -35,10 +35,10 @@ import { createStorageBackend } from "../storage/factory.js";
 import { runMineLocal } from "./mine-local.js";
 import { renderSubcommandUsageBlock } from "../cli/skillify-spec.js";
 
-// Route through the shared `getStateDir()` so `HIVEMIND_STATE_DIR`
+// Route through the shared `getStateDir()` so `MEMOREE_STATE_DIR`
 // redirects (tests, alternate installs) land in the same dir as the
-// worker's lock/state files. Without this the `hivemind skillify status`
-// CLI would still read real `~/.deeplake/state/skillify` while the rest
+// worker's lock/state files. Without this the `memoree skillify status`
+// CLI would still read real `~/.memoree/state/skillify` while the rest
 // of the subsystem honored the env override — split-brain status output.
 function stateDir(): string {
   return getStateDir();
@@ -106,7 +106,7 @@ function setScope(scope: string): void {
   saveScopeConfig({ ...cfg, scope: scope as Scope });
   console.log(`Scope set to '${scope}'.`);
   if (scope === "team" && cfg.team.length === 0) {
-    console.log(`Note: team list is empty. Use 'hivemind skillify team add <username>' to populate it.`);
+    console.log(`Note: team list is empty. Use 'memoree skillify team add <username>' to populate it.`);
   }
 }
 
@@ -122,7 +122,7 @@ function setInstall(loc: string): void {
 }
 
 function promoteSkill(name: string, cwd: string): void {
-  if (!name) { console.error("Usage: hivemind skillify promote <skill-name>"); process.exit(1); }
+  if (!name) { console.error("Usage: memoree skillify promote <skill-name>"); process.exit(1); }
   const projectPath = join(cwd, ".claude", "skills", name);
   const globalPath = join(homedir(), ".claude", "skills", name);
   if (!existsSync(join(projectPath, "SKILL.md"))) {
@@ -139,7 +139,7 @@ function promoteSkill(name: string, cwd: string): void {
 }
 
 function teamAdd(name: string): void {
-  if (!name) { console.error("Usage: hivemind skillify team add <username>"); process.exit(1); }
+  if (!name) { console.error("Usage: memoree skillify team add <username>"); process.exit(1); }
   const cfg = loadScopeConfig();
   if (cfg.team.includes(name)) {
     console.log(`'${name}' is already in the team list.`);
@@ -151,7 +151,7 @@ function teamAdd(name: string): void {
 }
 
 function teamRemove(name: string): void {
-  if (!name) { console.error("Usage: hivemind skillify team remove <username>"); process.exit(1); }
+  if (!name) { console.error("Usage: memoree skillify team remove <username>"); process.exit(1); }
   const cfg = loadScopeConfig();
   if (!cfg.team.includes(name)) {
     console.log(`'${name}' is not in the team list.`);
@@ -173,7 +173,7 @@ function teamList(): void {
 
 function usage(): void {
   // Body rendered from SKILLIFY_SPEC in src/cli/skillify-spec.ts. See that
-  // file to add a new subcommand or option — `hivemind --help` and the
+  // file to add a new subcommand or option — `memoree --help` and the
   // SessionStart inject blocks update automatically.
   console.log("Usage:");
   console.log(renderSubcommandUsageBlock());
@@ -224,7 +224,7 @@ async function pullSkills(args: string[]): Promise<void> {
 
   const config = loadRoutedConfig();
   if (!config) {
-    console.error("Not logged in. Run: hivemind login");
+    console.error("Memoree storage is unavailable. Run: memoree doctor");
     process.exit(1);
   }
   const api = createStorageBackend(config, config.skillsTableName);
@@ -281,12 +281,12 @@ async function pushSkills(args: string[]): Promise<void> {
     throw new Error(`Invalid --from '${fromRaw}'. Use 'project' or 'global'.`);
   }
   if (!skillName) {
-    throw new Error("Usage: hivemind skillify push <skill-name> [--from project|global] [--dry-run]");
+    throw new Error("Usage: memoree skillify push <skill-name> [--from project|global] [--dry-run]");
   }
 
   const config = loadRoutedConfig();
   if (!config) {
-    throw new Error("Not logged in. Run: hivemind login");
+    throw new Error("Memoree storage is unavailable. Run: memoree doctor");
   }
   const api = createStorageBackend(config, config.skillsTableName);
   const query = (sql: string) => api.query(sql) as Promise<Record<string, unknown>[]>;
@@ -317,7 +317,7 @@ async function pushSkills(args: string[]): Promise<void> {
   if (summary.action === "dryrun") {
     console.log("Dry run — nothing written to the org skills table.");
   } else {
-    console.log(`Pushed to org skills table as version ${summary.version}. Teammates get it on next \`hivemind skillify pull\`.`);
+    console.log(`Pushed to org skills table as version ${summary.version}. Teammates get it on next \`memoree skillify pull\`.`);
   }
 }
 
@@ -344,7 +344,7 @@ async function unpullSkills(args: string[]): Promise<void> {
   else if (usersMany) users = usersMany.split(",").map(s => s.trim()).filter(Boolean);
 
   // Unpull is a local filesystem operation: deleting `<root>/<dir>/` and
-  // pruning `pulled.json`. The Deeplake API is never queried. The only
+  // pruning `pulled.json`. The Memoree API is never queried. The only
   // reason we need credentials is `--not-mine`, which compares each
   // entry's author to `config.userName`. Skip the login check otherwise so
   // a user who's been bounced from the org can still clean up their disk.
@@ -352,7 +352,7 @@ async function unpullSkills(args: string[]): Promise<void> {
   if (notMine) {
     const config = loadConfig();
     if (!config) {
-      throw new Error("--not-mine requires a logged-in user. Run: hivemind login");
+      throw new Error("--not-mine requires a logged-in user. Run: memoree doctor");
     }
     myUsername = config.userName;
   }
@@ -436,7 +436,7 @@ export function runSkillifyCommand(args: string[]): void {
     if (action === "add")    { teamAdd(args[2] ?? ""); return; }
     if (action === "remove") { teamRemove(args[2] ?? ""); return; }
     if (action === "list")   { teamList(); return; }
-    console.error("Usage: hivemind skillify team <add|remove|list> [name]");
+    console.error("Usage: memoree skillify team <add|remove|list> [name]");
     process.exit(1);
   }
   if (sub === "mine-local") {

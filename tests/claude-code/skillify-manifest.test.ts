@@ -46,8 +46,8 @@ const sampleEntry = (over: Partial<PulledEntry> = {}): PulledEntry => ({
 });
 
 describe("manifestPath", () => {
-  it("resolves to ~/.deeplake/state/skillify/pulled.json under HOME", () => {
-    expect(manifestPath()).toBe(join(fakeHome, ".deeplake", "state", "skillify", "pulled.json"));
+  it("resolves to ~/.memoree/state/skillify/pulled.json under HOME", () => {
+    expect(manifestPath()).toBe(join(fakeHome, ".memoree", "state", "skillify", "pulled.json"));
   });
 });
 
@@ -137,9 +137,9 @@ describe("saveManifest", () => {
   });
 
   it("creates parent directories on first write", () => {
-    expect(existsSync(join(fakeHome, ".deeplake"))).toBe(false);
+    expect(existsSync(join(fakeHome, ".memoree"))).toBe(false);
     saveManifest({ version: 1, entries: [] });
-    expect(existsSync(join(fakeHome, ".deeplake", "state", "skillify"))).toBe(true);
+    expect(existsSync(join(fakeHome, ".memoree", "state", "skillify"))).toBe(true);
   });
 });
 

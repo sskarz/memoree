@@ -328,12 +328,12 @@ describe("runMineLocal: orchestrator branches", () => {
     extractPairs.mockReturnValue([{ prompt: "p", answer: "a" }]);
     spawnBehavior.stdout = JSON.stringify({
       reason: "ok",
-      skills: [{ name: "dupe", description: "deeplake schema migration alter table lazy column", body: "x" }],
+      skills: [{ name: "dupe", description: "memoree schema migration alter table lazy column", body: "x" }],
     });
     // Existing skill with overlapping description
     listSkills.mockReturnValueOnce([{ name: "existing", body: "frontmatter body" }]);
     parseFrontmatter.mockReturnValueOnce({
-      fm: { description: "deeplake schema migration alter table lazy column added" },
+      fm: { description: "memoree schema migration alter table lazy column added" },
       body: "",
     });
     const mod = await importOrch();
@@ -531,7 +531,7 @@ describe("runMineLocal: orchestrator branches", () => {
 
   it("releases lock on exit (via process.on('exit') handler)", async () => {
     // Plant a fake lock file
-    const fakeLockDir = join(tmpHome, ".claude", "hivemind");
+    const fakeLockDir = join(tmpHome, ".claude", "memoree");
     // We can't easily redirect LOCAL_MINE_LOCK_PATH (it's HOME-baked), but we
     // can at least exercise the runMineLocal wrapper code path and confirm
     // it doesn't throw. The actual unlink runs against the developer's HOME

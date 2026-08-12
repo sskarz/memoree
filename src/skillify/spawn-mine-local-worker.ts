@@ -1,5 +1,5 @@
 /**
- * Auto-trigger `hivemind skillify mine-local` from a SessionStart hook on
+ * Auto-trigger `memoree skillify mine-local` from a SessionStart hook on
  * fresh installs where the user hasn't signed in yet. Detached background
  * spawn — the hook returns immediately; the next SessionStart fire sees
  * the manifest and surfaces the "N skills mined, sign in to share"
@@ -30,7 +30,7 @@ import { fileURLToPath } from "node:url";
 import { LOCAL_MANIFEST_PATH, LOCAL_MINE_LOCK_PATH } from "./local-manifest.js";
 
 const HOME = homedir();
-const HIVEMIND_DIR = join(HOME, ".claude", "hivemind");
+const MEMOREE_DIR = join(HOME, ".claude", "memoree");
 const LOG_PATH = join(HOME, ".claude", "hooks", "mine-local.log");
 const CLAUDE_PROJECTS_DIR = join(HOME, ".claude", "projects");
 
@@ -41,17 +41,17 @@ const CLAUDE_PROJECTS_DIR = join(HOME, ".claude", "projects");
 const LOCK_STALE_MS = 15 * 60 * 1000;
 
 /**
- * How to invoke the `hivemind` CLI. Two flavours:
+ * How to invoke the `memoree` CLI. Two flavours:
  *   - `node-script`: run `node <path>` (path is a bundled cli.js inside the
  *     same plugin install as this hook). Preferred — guarantees the worker
  *     is the SAME version as the hook that spawned it, so a new subcommand
  *     introduced in this release can't go missing because the user has an
- *     older `hivemind` first on PATH.
- *   - `bin`: run the binary directly (resolved via `which hivemind`).
+ *     older `memoree` first on PATH.
+ *   - `bin`: run the binary directly (resolved via `which memoree`).
  *     Fallback for installs where the bundled cli.js is missing (e.g. a
  *     legacy install layout or a user who hand-trimmed the plugin tree).
  */
-export type HivemindLauncher =
+export type MemoreeLauncher =
   | { kind: "node-script"; path: string }
   | { kind: "bin"; path: string };
 
@@ -74,15 +74,15 @@ function findBundledCliPath(): string | null {
   }
 }
 
-export function findHivemindLauncher(): HivemindLauncher | null {
+export function findMemoreeLauncher(): MemoreeLauncher | null {
   const bundled = findBundledCliPath();
   if (bundled) return { kind: "node-script", path: bundled };
   try {
     // `which` is Unix-only; Windows uses `where`. The bundled-cli path above
     // is the common case, so this fallback rarely runs — but when it does it
-    // must resolve `hivemind` on the host platform.
+    // must resolve `memoree` on the host platform.
     const lookup = process.platform === "win32" ? "where" : "which";
-    const out = execFileSync(lookup, ["hivemind"], {
+    const out = execFileSync(lookup, ["memoree"], {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],
       // CREATE_NO_WINDOW: same reason as resolveCliBin — this runs from a
@@ -143,14 +143,14 @@ export interface AutoMineGuardReport {
     | "manifest-exists"
     | "lock-exists"
     | "no-claude-sessions"
-    | "no-hivemind-bin"
+    | "no-memoree-bin"
     | "lock-acquire-failed"
     | "spawn-failed";
 }
 
 /**
- * Spawn `hivemind skillify mine-local` in the background if and only if
- * every guard passes. The caller has already verified that no Deeplake
+ * Spawn `memoree skillify mine-local` in the background if and only if
+ * every guard passes. The caller has already verified that no Memoree
  * credentials are present (we only auto-mine for not-signed-in users).
  */
 export function maybeAutoMineLocal(opts: AutoMineOptions = {}): AutoMineGuardReport {
@@ -169,13 +169,13 @@ export function maybeAutoMineLocal(opts: AutoMineOptions = {}): AutoMineGuardRep
     catch { return { triggered: false, reason: "lock-exists" }; }
   }
   if (!hasLocalClaudeSessions()) return { triggered: false, reason: "no-claude-sessions" };
-  const launcher = findHivemindLauncher();
-  if (!launcher) return { triggered: false, reason: "no-hivemind-bin" };
+  const launcher = findMemoreeLauncher();
+  if (!launcher) return { triggered: false, reason: "no-memoree-bin" };
 
   // Acquire the lock as a courtesy sentinel against rapid double-fire.
   // The exclusive open (wx) is atomic on POSIX — only one caller can win.
   try {
-    mkdirSync(HIVEMIND_DIR, { recursive: true });
+    mkdirSync(MEMOREE_DIR, { recursive: true });
     const fd = openSync(LOCAL_MINE_LOCK_PATH, "wx");
     closeSync(fd);
   } catch {

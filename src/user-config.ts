@@ -1,140 +1,63 @@
-// Persistent user preferences for the plugin, stored at
-// `~/.deeplake/config.json`. Separate from `~/.deeplake/credentials.json`
-// (auth) — this file holds opt-in/out flags and other settings that survive
-// across sessions, agents, and machines.
-//
-// Currently the only setting is `embeddings.enabled`, which gates whether
-// capture / wiki / grep paths invoke the embed daemon. The previous
-// `HIVEMIND_EMBEDDINGS=false` env var is read EXACTLY ONCE — during the
-// first run of the new code on a machine that has no `embeddings.enabled`
-// key yet — to seed the config, then never consulted again.
-
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export interface UserConfig {
   storage?: {
-    provider?: "deeplake" | "sqlite" | "postgres";
+    provider?: "sqlite" | "postgres";
     sqlitePath?: string;
     postgresSchema?: string;
   };
-  autoupdate?: boolean;
-  embeddings?: {
-    enabled?: boolean;
-  };
-  docs?: {
-    /** Which host CLI authors the docs (claude | codex | pi | cursor). */
-    llmAgent?: string;
-  };
+  userName?: string;
+  capture?: { enabled?: boolean };
+  embeddings?: { enabled?: boolean };
+  docs?: { llmAgent?: string };
 }
 
 let _configPath: () => string = () =>
-  process.env.HIVEMIND_CONFIG_PATH ?? join(homedir(), ".deeplake", "config.json");
-
-// In-memory cache so the migration's env-var read and resulting write happen
-// at most once per process. The file on disk is the source of truth; the
-// cache only avoids re-parsing JSON on every call.
+  process.env.MEMOREE_CONFIG_PATH ?? join(homedir(), ".memoree", "config.json");
 let _cache: UserConfig | null = null;
-let _migrated = false;
 
 export function readUserConfig(): UserConfig {
   if (_cache !== null) return _cache;
   const path = _configPath();
-  if (!existsSync(path)) {
-    _cache = {};
-    return _cache;
-  }
+  if (!existsSync(path)) return (_cache = {});
   try {
-    const raw = readFileSync(path, "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    _cache = isPlainObject(parsed) ? (parsed as UserConfig) : {};
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
+    return (_cache = isPlainObject(parsed) ? parsed as UserConfig : {});
   } catch {
-    // Corrupt or unreadable — treat as empty, but DON'T overwrite (the user
-    // may want to fix it by hand). A subsequent write will overwrite.
-    _cache = {};
+    return (_cache = {});
   }
-  return _cache;
 }
 
 export function writeUserConfig(patch: Partial<UserConfig>): UserConfig {
-  const current = readUserConfig();
-  const merged = deepMerge(current, patch);
+  const merged = deepMerge(readUserConfig(), patch);
   const path = _configPath();
-  const dir = dirname(path);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.tmp.${process.pid}`;
-  writeFileSync(tmp, JSON.stringify(merged, null, 2) + "\n", "utf-8");
+  writeFileSync(tmp, JSON.stringify(merged, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
   renameSync(tmp, path);
-  _cache = merged;
-  return merged;
+  return (_cache = merged);
 }
 
-// Reads the embeddings-enabled flag, performing the one-shot env-var
-// migration if no value has ever been persisted. Returns the final boolean.
-//
-// Migration rule (per design):
-//   HIVEMIND_EMBEDDINGS=false OR unset → enabled: false
-//   HIVEMIND_EMBEDDINGS=true (or any other truthy) → enabled: true
-//
-// Subsequent calls read straight from config; the env var is never touched
-// again. `hivemind embeddings install/enable/disable/uninstall` mutate the
-// config via writeUserConfig().
 export function getEmbeddingsEnabled(): boolean {
-  const cfg = readUserConfig();
-  if (cfg.embeddings && typeof cfg.embeddings.enabled === "boolean") {
-    return cfg.embeddings.enabled;
-  }
-  if (_migrated) {
-    // Migration ran this process but couldn't persist (read-only fs etc.).
-    // Fall back to the env var directly to avoid spinning the migration on
-    // every call. Cached for the lifetime of the process.
-    return migrationValueFromEnv();
-  }
-  _migrated = true;
-  const enabled = migrationValueFromEnv();
-  try {
-    writeUserConfig({ embeddings: { enabled } });
-  } catch {
-    // Persist failed (perms, full disk, etc.) — keep the in-memory cache so
-    // the rest of the session sees a stable value.
-    _cache = { ...(cfg ?? {}), embeddings: { ...(cfg?.embeddings ?? {}), enabled } };
-  }
-  return enabled;
-}
-
-function migrationValueFromEnv(): boolean {
-  const raw = process.env.HIVEMIND_EMBEDDINGS;
-  if (raw === undefined) return false;
-  if (raw === "false") return false;
-  // Anything else (including "true", "1", etc.) → enabled.
-  return true;
+  const configured = readUserConfig().embeddings?.enabled;
+  if (typeof configured === "boolean") return configured;
+  const env = process.env.MEMOREE_EMBEDDINGS;
+  return env === undefined ? true : !["0", "false", "no", "off"].includes(env.toLowerCase());
 }
 
 export function setEmbeddingsEnabled(enabled: boolean): void {
   writeUserConfig({ embeddings: { enabled } });
 }
 
-export function getAutoupdateEnabled(): boolean {
-  return readUserConfig().autoupdate !== false;
-}
-
-export function setAutoupdateEnabled(enabled: boolean): void {
-  writeUserConfig({ autoupdate: enabled });
-}
-
-/**
- * The persisted host agent for doc generation, or undefined when unset (the
- * resolver then falls back to auto-detection). No env-var migration: the env
- * override `HIVEMIND_DOCS_LLM_AGENT` stays a separate, higher-priority knob.
- */
 export function getDocsLlmAgent(): string | undefined {
-  const v = readUserConfig().docs?.llmAgent;
-  return typeof v === "string" && v.trim() !== "" ? v : undefined;
+  const value = readUserConfig().docs?.llmAgent;
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function setDocsLlmAgent(agent: string): void {
-  writeUserConfig({ docs: { llmAgent: agent } });
+export function setDocsLlmAgent(llmAgent: string): void {
+  writeUserConfig({ docs: { llmAgent } });
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -144,28 +67,20 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function deepMerge(base: UserConfig, patch: Partial<UserConfig>): UserConfig {
   const out: UserConfig = { ...base };
   for (const key of Object.keys(patch) as Array<keyof UserConfig>) {
-    const patchVal = patch[key];
-    const baseVal = base[key];
-    if (isPlainObject(patchVal) && isPlainObject(baseVal)) {
-      (out as any)[key] = { ...(baseVal as object), ...(patchVal as object) };
-    } else if (patchVal !== undefined) {
-      (out as any)[key] = patchVal;
-    }
+    const next = patch[key];
+    const current = base[key];
+    if (isPlainObject(next) && isPlainObject(current)) (out as Record<string, unknown>)[key] = { ...current, ...next };
+    else if (next !== undefined) (out as Record<string, unknown>)[key] = next;
   }
   return out;
 }
 
-// ── Test helpers ────────────────────────────────────────────────────────────
-
 export function _setConfigPathForTesting(fn: () => string): void {
   _configPath = fn;
   _cache = null;
-  _migrated = false;
 }
 
 export function _resetUserConfigForTesting(): void {
-  _configPath = () =>
-    process.env.HIVEMIND_CONFIG_PATH ?? join(homedir(), ".deeplake", "config.json");
+  _configPath = () => process.env.MEMOREE_CONFIG_PATH ?? join(homedir(), ".memoree", "config.json");
   _cache = null;
-  _migrated = false;
 }

@@ -14,7 +14,7 @@
  * (default 3); the worker is fired on each until the budget is spent. A session that never
  * invokes an org skill never opens a window, so it never spawns anything — zero overhead.
  *
- * Opt-out: HIVEMIND_SKILLOPT_DISABLED=1.
+ * Opt-out: MEMOREE_SKILLOPT_DISABLED=1.
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -33,7 +33,7 @@ const log = (m: string) => _log("skillopt-trigger", m);
 function defaultHasCreds(): boolean {
   try {
     const config = loadConfig();
-    return Boolean(config && ((config.storage?.kind ?? "deeplake") !== "deeplake" || config.token));
+    return Boolean(config);
   } catch { return false; }
 }
 
@@ -98,7 +98,7 @@ export interface MarkDeps {
 /**
  * Open (or reset) a K-message judgment window for an ORG skill the session just
  * invoked. Called from PreToolUse on `Skill` tool_use. Org skills only — a bare local
- * skill or plugin (`hivemind:...`) is ignored. The newest org-skill call supersedes the
+ * skill or plugin (`memoree:...`) is ignored. The newest org-skill call supersedes the
  * pending one for that session (the next reaction is to the most recent skill). Returns
  * true if a window is now open.
  */

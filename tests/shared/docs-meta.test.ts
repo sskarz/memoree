@@ -8,7 +8,7 @@ import {
 } from "../../src/docs/meta.js";
 import { docRowId } from "../../src/docs/write.js";
 
-const T = "hivemind_docs";
+const T = "memoree_docs";
 const P = "github.com/acme/api";
 const noSleep = () => Promise.resolve();
 

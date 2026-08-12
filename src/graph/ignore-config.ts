@@ -4,7 +4,7 @@
  * Two layers keep dependency / build-output directories out of the code graph
  * (so a Python `venv/`, a JS `node_modules/`, etc. never pollute it):
  *
- *   1. A user-editable JSON at ~/.deeplake/graph-ignore.json listing directory
+ *   1. A user-editable JSON at ~/.memoree/graph-ignore.json listing directory
  *      NAMES to skip. Seeded with a broad default set on first build; the user
  *      (or their AI assistant) can edit it freely.
  *   2. The repo's own .gitignore, respected at discovery time via
@@ -54,7 +54,7 @@ const FILE_NAME = "graph-ignore.json";
 function defaultConfigObject(): Record<string, unknown> {
   return {
     _comment:
-      "Directory names skipped when building the hivemind code graph. Edit freely. " +
+      "Directory names skipped when building the memoree code graph. Edit freely. " +
       "When respectGitignore is true, the repo's .gitignore is also honored (anchoring-correct).",
     ignoreDirs: [...DEFAULT_IGNORE_DIRS],
     respectGitignore: true,
@@ -62,12 +62,12 @@ function defaultConfigObject(): Record<string, unknown> {
 }
 
 /**
- * Load ~/.deeplake/graph-ignore.json. Seeds it with the defaults on first call
+ * Load ~/.memoree/graph-ignore.json. Seeds it with the defaults on first call
  * (so there's a file to edit). Best-effort: any IO/parse error falls back to the
- * built-in defaults without throwing. `deeplakeDir` is injectable for tests.
+ * built-in defaults without throwing. `memoreeDir` is injectable for tests.
  */
-export function loadGraphIgnore(deeplakeDir: string = join(homedir(), ".deeplake")): GraphIgnoreConfig {
-  const path = join(deeplakeDir, FILE_NAME);
+export function loadGraphIgnore(memoreeDir: string = join(homedir(), ".memoree")): GraphIgnoreConfig {
+  const path = join(memoreeDir, FILE_NAME);
   // Read an existing config directly. Reading and reacting to the result (rather
   // than existsSync-then-read) avoids a check-then-use (TOCTOU) race.
   try {
@@ -84,7 +84,7 @@ export function loadGraphIgnore(deeplakeDir: string = join(homedir(), ".deeplake
   // atomically and fails if it already exists (e.g. a concurrent build just
   // seeded it), so we never clobber an existing file — no existsSync race.
   try {
-    mkdirSync(deeplakeDir, { recursive: true });
+    mkdirSync(memoreeDir, { recursive: true });
     writeFileSync(path, JSON.stringify(defaultConfigObject(), null, 2) + "\n", { flag: "wx" });
   } catch {
     // already exists (race) or unwritable — fine, fall through to defaults.

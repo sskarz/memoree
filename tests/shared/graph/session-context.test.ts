@@ -8,7 +8,7 @@ import { writeLastBuild } from "../../../src/graph/last-build.js";
 import { repoDir } from "../../../src/graph/snapshot.js";
 import { deriveProjectKey } from "../../../src/utils/repo-identity.js";
 
-// graphContextLine is anchored on ~/.hivemind/graphs/<key>/ via repoDir(key),
+// graphContextLine is anchored on ~/.memoree/graphs/<key>/ via repoDir(key),
 // not on the cwd. To exercise it we need a cwd whose deriveProjectKey gives a
 // repo key we can pre-populate. We mkdtemp a directory, init it as a git repo
 // is overkill — deriveProjectKey falls back to a path-based key for non-git
@@ -86,9 +86,9 @@ describe("graphContextLine", () => {
     expect(line).toContain("TypeScript / JavaScript / Python, AST-based");
     // v1.1 inject restructured to point at the VFS subdir instead of
     // raw-snapshot-only guidance. New assertions:
-    expect(line).toContain("~/.deeplake/memory/graph/find/<pattern>");
-    expect(line).toContain("~/.deeplake/memory/graph/show/<handle-or-pattern>");
-    expect(line).toContain("~/.deeplake/memory/graph/query/<pattern>"); // C7: primary entry advertised
+    expect(line).toContain("~/.memoree/memory/graph/find/<pattern>");
+    expect(line).toContain("~/.memoree/memory/graph/show/<handle-or-pattern>");
+    expect(line).toContain("~/.memoree/memory/graph/query/<pattern>"); // C7: primary entry advertised
     // v1.2 reframe: graph positioned as a navigation INDEX, then Read the source.
     expect(line).toContain("fast INDEX to locate");
     // Cross-file resolution wording (replaces the old "intra-file only" caveat).

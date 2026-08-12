@@ -10,9 +10,9 @@
 
 ## Overview
 
-This sub-feature is the keystone of PRD-005: it makes team skills actually reach the Cursor agent. Hivemind pulls every teammate's mined skills from the org `skills` table and writes a canonical `SKILL.md` per skill under `~/.claude/skills/<name>--<author>/` (global) or `<project>/.claude/skills/<name>--<author>/` (project), then fans each one out as a symlink into the skill directories of every other installed agent, Codex, Hermes, and pi (`src/skillify/pull.ts:579-585`, `src/skillify/agent-roots.ts:48-67`). Cursor is the one agent it deliberately skips, on an assumption the agent-roots module states in a comment: "Cursor has no native skill discovery (only hooks/rules), so it is not a candidate" (`src/skillify/agent-roots.ts:27-28`).
+This sub-feature is the keystone of PRD-005: it makes team skills actually reach the Cursor agent. Memoree pulls every teammate's mined skills from the org `skills` table and writes a canonical `SKILL.md` per skill under `~/.claude/skills/<name>--<author>/` (global) or `<project>/.claude/skills/<name>--<author>/` (project), then fans each one out as a symlink into the skill directories of every other installed agent, Codex, Hermes, and pi (`src/skillify/pull.ts:579-585`, `src/skillify/agent-roots.ts:48-67`). Cursor is the one agent it deliberately skips, on an assumption the agent-roots module states in a comment: "Cursor has no native skill discovery (only hooks/rules), so it is not a candidate" (`src/skillify/agent-roots.ts:27-28`).
 
-That assumption is now false. Cursor's active agent discovers skills in `.cursor/skills/` (per project) and `~/.cursor/skills-cursor/` (globally). Because Hivemind never writes to or links into those paths, a Cursor developer's agent silently lacks every team skill, even though the pull succeeded, the manifest recorded it, and the status bar is green. This sub-feature reverses the exclusion: it syncs pulled skills into Cursor's active directories so the Cursor agent discovers them immediately, reusing the exact fan-out, manifest, and auto-pull machinery that already serves the other agents rather than inventing a parallel writer.
+That assumption is now false. Cursor's active agent discovers skills in `.cursor/skills/` (per project) and `~/.cursor/skills-cursor/` (globally). Because Memoree never writes to or links into those paths, a Cursor developer's agent silently lacks every team skill, even though the pull succeeded, the manifest recorded it, and the status bar is green. This sub-feature reverses the exclusion: it syncs pulled skills into Cursor's active directories so the Cursor agent discovers them immediately, reusing the exact fan-out, manifest, and auto-pull machinery that already serves the other agents rather than inventing a parallel writer.
 
 The value is the difference between a shared brain that is configured and a shared brain that works. After this sub-feature, a skill a teammate mines is usable by a Cursor developer's agent on their next session, automatically, with no awareness that two different skill directories ever existed.
 
@@ -77,7 +77,7 @@ So the canonical bytes exist under `.claude/skills/`, the symlinks exist under `
 - Ride the existing SessionStart auto-pull (`src/skillify/auto-pull.ts:75-145`) so Cursor sync happens automatically on every session, bounded by the same timeout budget and with all failures swallowed; never introduce a new hot-path step that can block or break a Cursor session.
 - Backfill Cursor links for skills already pulled before Cursor was installed or before this bridge shipped, using the same `backfillSymlinks` pass that already serves the late-installed-agent case (`src/skillify/pull.ts:282-307`).
 - Produce a structured per-skill sync result the status bar (PRD-002c) and dashboard can read, so any skill that could not reach Cursor is surfaced rather than swallowed.
-- Honor the global opt-out (`HIVEMIND_AUTOPULL_DISABLED=1`) and the project/global scoping that keeps a project pull from leaking into user-global agent directories (`src/skillify/pull.ts:581-585`).
+- Honor the global opt-out (`MEMOREE_AUTOPULL_DISABLED=1`) and the project/global scoping that keeps a project pull from leaking into user-global agent directories (`src/skillify/pull.ts:581-585`).
 
 ## Non-Goals
 
@@ -166,7 +166,7 @@ The fan-out's refusal posture is correct (never clobber user data), but today a 
 | AC-6 | Given a Cursor link already points at the correct canonical directory, when the bridge runs again, then no write occurs (idempotent, fingerprint-preserving). |
 | AC-7 | Given one or more skills cannot reach Cursor, when the health/sync state is computed, then the PRD-002c status bar reflects a non-green skill-sync state rather than a false green. |
 | AC-8 | Given `unpull` is run, when it removes a pulled skill, then its Cursor link is removed through the same manifest-driven unlink pass as the Codex/Hermes/pi links. |
-| AC-9 | Given `HIVEMIND_AUTOPULL_DISABLED=1`, when a session starts, then neither the pull nor the Cursor sync runs. |
+| AC-9 | Given `MEMOREE_AUTOPULL_DISABLED=1`, when a session starts, then neither the pull nor the Cursor sync runs. |
 | AC-10 | Given the manifest, sync result, or any log is inspected, when its contents are examined, then no token or API key value appears. |
 
 ---

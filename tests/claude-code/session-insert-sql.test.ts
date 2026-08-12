@@ -52,7 +52,7 @@ describe("buildDirectSessionInsertSql", () => {
   });
 
   it("keeps the column prefix isSessionInsertQuery() relies on for retry routing", () => {
-    // deeplake-api.ts isSessionInsertQuery: ^insert into "..." (id, path, filename, message,
+    // memoree-api.ts isSessionInsertQuery: ^insert into "..." (id, path, filename, message,
     expect(sql).toMatch(/^INSERT INTO "sessions" \(\s*id, path, filename, message,/);
   });
 

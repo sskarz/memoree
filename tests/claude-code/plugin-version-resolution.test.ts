@@ -8,7 +8,7 @@ import { getInstalledVersion } from "../../src/utils/version-check.js";
  *
  * Every capture hook stamps a row's `plugin_version` column by calling
  * `getInstalledVersion(__bundleDir, <manifestDir>)` at module load. The
- * function has three lookup paths (manifest → .hivemind_version stamp →
+ * function has three lookup paths (manifest → .memoree_version stamp →
  * walk-up package.json) all covered by utils-version-check.test.ts.
  *
  * What that file does NOT cover: that each agent's actual on-disk layout
@@ -45,10 +45,10 @@ const AGENTS: AgentLayout[] = [
 
 describe("plugin_version stamps a non-empty value for every shipped agent", () => {
   it.each(AGENTS)("$agent resolves getInstalledVersion to a semver string", ({ bundleDir, manifestDir }) => {
-    // The repo-level package.json has name "@deeplake/hivemind" (in the
-    // HIVEMIND_PKG_NAMES set), so even agents without an in-repo manifest
+    // The repo-level package.json has name "memoree" (in the
+    // MEMOREE_PKG_NAMES set), so even agents without an in-repo manifest
     // (cursor/hermes/pi) resolve via the walk-up fallback — and at real
-    // install time their installer drops a .hivemind_version stamp, also
+    // install time their installer drops a .memoree_version stamp, also
     // covered. Either way the runtime must NOT see an empty string here.
     const version = getInstalledVersion(bundleDir, manifestDir);
     expect(version, `${manifestDir} from ${bundleDir} must resolve a version`).not.toBeNull();

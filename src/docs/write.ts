@@ -1,11 +1,11 @@
 /**
- * Write helpers for `hivemind_docs` — ONE row per doc, mutated in place.
+ * Write helpers for `memoree_docs` — ONE row per doc, mutated in place.
  *
  * A brand-new doc is INSERTed at version=1 (`insertDoc`); every later edit is a
  * single UPDATE of that same row (`updateInPlace`), bumping `version` as an
  * in-row counter. Reads (see ./read.ts) resolve one row per `doc_id`.
  *
- * History: this used to be INSERT-only version-append, to dodge a Deeplake
+ * History: this used to be INSERT-only version-append, to dodge a Memoree
  * backend bug that coalesced two rapid UPDATEs on the same row. F0 verified
  * (repro: sequential rapid single-row UPDATEs, 0 losses) that a SINGLE UPDATE
  * setting all columns at once is safe — the bug only bit *separate* rapid
@@ -27,7 +27,7 @@ import { getDocLatest, queryDialect } from "./read.js";
 import { escapedStringPrefix } from "../storage/sql-dialect.js";
 
 export interface InsertDocInput {
-  /** Documented source file path, e.g. `src/shell/deeplake-fs.ts`. Stable key. */
+  /** Documented source file path, e.g. `src/shell/memoree-fs.ts`. Stable key. */
   doc_id: string;
   /** VFS path the doc is read from, e.g. `/docs/<project>/<file>.md`. */
   path: string;
@@ -62,7 +62,7 @@ export function docRowId(project: string | undefined, scope: string | undefined,
 }
 
 export interface SetDocInput {
-  /** Documented source file path, e.g. `src/shell/deeplake-fs.ts`. Stable key. */
+  /** Documented source file path, e.g. `src/shell/memoree-fs.ts`. Stable key. */
   doc_id: string;
   /** VFS path the doc is read from, e.g. `/docs/<project>/<file>.md`. */
   path: string;
@@ -195,7 +195,7 @@ export interface ResilientWriteOpts {
 }
 
 /**
- * `insertDoc` hardened against the Deeplake backend's under-load write
+ * `insertDoc` hardened against the Memoree backend's under-load write
  * timeouts. A write can abort client-side at the 10s query timeout while the
  * backend actually committed the row — so on each retry, before re-inserting,
  * we read back the latest version (`getDocLatest`): if the row already landed
@@ -404,7 +404,7 @@ export async function archiveDoc(
 /**
  * Update a doc IN PLACE — one row per `doc_id`, mutated with a single UPDATE.
  *
- * This replaced the old INSERT-only version-append once the Deeplake backend's
+ * This replaced the old INSERT-only version-append once the Memoree backend's
  * UPDATE-coalescing bug was verified fixed for our access pattern (F0): a
  * single UPDATE that sets ALL columns at once, applied sequentially per doc, is
  * safe (0 losses over the repro). The historic bug only bit *two separate*

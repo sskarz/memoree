@@ -1,8 +1,8 @@
-# QA Report: Hivemind Reverse-Documentation Audit
+# QA Report: Memoree Reverse-Documentation Audit
 
 **Plan document:** reverse-document worktree spec (inline plan, no PRD file)
 **Audit date:** 2026-06-12
-**Worktree:** `/home/marioaldayuz/Desktop/GitHub/hivemind-doc-reverse-document`
+**Worktree:** `/home/marioaldayuz/Desktop/GitHub/memoree-doc-reverse-document`
 **Auditor:** quality-guardian
 
 ---
@@ -86,7 +86,7 @@ None.
 | 3 | `architecture/session-lifecycle.md` present | ✅ | `architecture/session-lifecycle.md` | Full Mermaid sequence diagram, all phases documented |
 | 4 | `plugins/` - 3 docs | ✅ | `plugins/integration-model.md`, `hook-lifecycle.md`, `mcp-and-extension-surfaces.md` | All 3 present with Related sections |
 | 5 | `ai/` - 4 docs | ✅ | `ai/session-capture.md`, `ai/wiki-summary-workers.md`, `ai/skillify-pipeline.md`, `ai/embeddings-retrieval.md` | All 4 present |
-| 6 | `data/` - 3 docs | ✅ | `data/deeplake-tables-schema.md`, `data/memory-virtual-filesystem.md`, `data/codebase-graph.md` | All 3 present |
+| 6 | `data/` - 3 docs | ✅ | `data/memoree-tables-schema.md`, `data/memory-virtual-filesystem.md`, `data/codebase-graph.md` | All 3 present |
 | 7 | `auth/` - 1 doc | ✅ | `auth/auth-architecture.md` | Present; numbered headings fixed (Warning W1) |
 | 8 | `security/` - 2 docs | ✅ | `security/credential-storage.md`, `security/trust-boundaries.md` | Both present; numbered headings fixed (Warning W1) |
 | 9 | `infrastructure/` - 1 doc | ✅ | `infrastructure/monorepo-build-release.md` | Present; Cursor citation format noted as Suggestion |
@@ -100,7 +100,7 @@ None.
 | 17 | Cross-links correct depth | ✅ | Spot-checked 12 cross-links | Relative depths verified for `../../`, `../../../`, `../../../../` |
 | 18 | Overview has reading guide | ✅ | `overview.md:62-145` | Full per-domain table + task-oriented "Where to start" section |
 | 19 | Narrative quality - "why" sections | ✅ | All 22 files | Every doc opens with a "Why this exists/looks like this" section |
-| 20 | Code grounding - file/function citations | ✅ | All 22 files | `src/hooks/capture.ts`, `src/deeplake-schema.ts`, etc. cited throughout; code snippets included |
+| 20 | Code grounding - file/function citations | ✅ | All 22 files | `src/hooks/capture.ts`, `src/storage/schema.ts`, etc. cited throughout; code snippets included |
 | 21 | No excluded domain: curriculum | ✅ | All 22 files | Not mentioned anywhere |
 | 22 | No excluded domain: container | ✅ | All 22 files | Not mentioned anywhere |
 | 23 | No excluded domain: monetization | ✅ | All 22 files | BYOC covered purely as storage boundary, not pricing/monetization |
@@ -126,7 +126,7 @@ Files audited but not modified (all passed):
 - `ai/wiki-summary-workers.md`
 - `collaboration/team-skills-sharing.md`
 - `data/codebase-graph.md`
-- `data/deeplake-tables-schema.md`
+- `data/memoree-tables-schema.md`
 - `data/memory-virtual-filesystem.md`
 - `frontend/cursor-extension-architecture.md`
 - `infrastructure/monorepo-build-release.md`

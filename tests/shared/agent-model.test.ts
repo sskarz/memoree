@@ -30,8 +30,8 @@ describe("agentModel — per-agent no-tools dispatch", () => {
     expect(argVal(a, "--model")).toBe("haiku");      // judge = cheap
     expect(out).toBe('{"success":0}');               // unwrapped from {result}
     // isolation env always set
-    expect(calls[0].env.HIVEMIND_CAPTURE).toBe("false");
-    expect(calls[0].env.HIVEMIND_WIKI_WORKER).toBe("1");
+    expect(calls[0].env.MEMOREE_CAPTURE).toBe("false");
+    expect(calls[0].env.MEMOREE_WIKI_WORKER).toBe("1");
     // no console window on Windows: the scorer runs inside a detached worker
     expect(calls[0].opts.windowsHide).toBe(true);
   });
@@ -78,7 +78,7 @@ describe("agentModel — per-agent no-tools dispatch", () => {
 
   it("env override sets the model per agent+role", async () => {
     const { spawnImpl, calls } = fakeSpawn("x");
-    const env = { HIVEMIND_SKILLOPT_CLAUDE_CODE_JUDGE_MODEL: "opus" } as unknown as NodeJS.ProcessEnv;
+    const env = { MEMOREE_SKILLOPT_CLAUDE_CODE_JUDGE_MODEL: "opus" } as unknown as NodeJS.ProcessEnv;
     await agentModel({ agent: "claude_code", role: "judge", bin: "/x/claude", spawnImpl, env })("S", "U");
     expect(argVal(calls[0].args, "--model")).toBe("opus");
   });
@@ -86,8 +86,8 @@ describe("agentModel — per-agent no-tools dispatch", () => {
   it("env provider+model override (e.g. AWS Bedrock) is applied together", async () => {
     const { spawnImpl, calls } = fakeSpawn("x");
     const env = {
-      HIVEMIND_SKILLOPT_HERMES_PROVIDER: "bedrock",
-      HIVEMIND_SKILLOPT_HERMES_MODEL: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      MEMOREE_SKILLOPT_HERMES_PROVIDER: "bedrock",
+      MEMOREE_SKILLOPT_HERMES_MODEL: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     } as unknown as NodeJS.ProcessEnv;
     await agentModel({ agent: "hermes", role: "judge", bin: "/x/hermes", spawnImpl, env })("S", "U");
     expect(argVal(calls[0].args, "--provider")).toBe("bedrock");
@@ -96,24 +96,24 @@ describe("agentModel — per-agent no-tools dispatch", () => {
 
   it("codex applies an explicit model override (-m) when one is configured", async () => {
     const { spawnImpl, calls } = fakeSpawn("raw");
-    const env = { HIVEMIND_SKILLOPT_CODEX_JUDGE_MODEL: "o3" } as unknown as NodeJS.ProcessEnv;
+    const env = { MEMOREE_SKILLOPT_CODEX_JUDGE_MODEL: "o3" } as unknown as NodeJS.ProcessEnv;
     await agentModel({ agent: "codex", role: "judge", bin: "/x/codex", spawnImpl, env })("S", "U");
     expect(argVal(calls[0].args, "-m")).toBe("o3"); // the `model ? ["-m", model] : []` present-branch
   });
 
   it("rejects a harnesses/hermes/pi provider override with NO model (the default id wouldn't match)", async () => {
     const { spawnImpl } = fakeSpawn("x");
-    const env = { HIVEMIND_SKILLOPT_HERMES_PROVIDER: "bedrock" } as unknown as NodeJS.ProcessEnv;
+    const env = { MEMOREE_SKILLOPT_HERMES_PROVIDER: "bedrock" } as unknown as NodeJS.ProcessEnv;
     await expect(agentModel({ agent: "hermes", role: "judge", bin: "/x/hermes", spawnImpl, env })("S", "U"))
       .rejects.toThrow(/without a model/);
   });
 
   it("propagates the injected env to the spawned child (not just global process.env)", async () => {
     const { spawnImpl, calls } = fakeSpawn("x");
-    const env = { MY_SCOPED: "1", HIVEMIND_SKILLOPT_CLAUDE_CODE_JUDGE_MODEL: "haiku" } as unknown as NodeJS.ProcessEnv;
+    const env = { MY_SCOPED: "1", MEMOREE_SKILLOPT_CLAUDE_CODE_JUDGE_MODEL: "haiku" } as unknown as NodeJS.ProcessEnv;
     await agentModel({ agent: "claude_code", role: "judge", bin: "/x/claude", spawnImpl, env })("S", "U");
     expect(calls[0].env.MY_SCOPED).toBe("1");
-    expect(calls[0].env.HIVEMIND_CAPTURE).toBe("false");
+    expect(calls[0].env.MEMOREE_CAPTURE).toBe("false");
   });
 
   it("rejects on non-zero exit (caller swallows → no-change)", async () => {
@@ -131,11 +131,11 @@ describe("agentModel — per-agent no-tools dispatch", () => {
 });
 
 describe("detectScorerAgent", () => {
-  it("explicit HIVEMIND_SKILLOPT_AGENT override wins", () => {
-    expect(detectScorerAgent({ HIVEMIND_SKILLOPT_AGENT: "hermes", CLAUDECODE: "1" } as never)).toBe("hermes");
+  it("explicit MEMOREE_SKILLOPT_AGENT override wins", () => {
+    expect(detectScorerAgent({ MEMOREE_SKILLOPT_AGENT: "hermes", CLAUDECODE: "1" } as never)).toBe("hermes");
   });
   it("ignores a bogus explicit value and falls through to detection", () => {
-    expect(detectScorerAgent({ HIVEMIND_SKILLOPT_AGENT: "nonsense", CODEX_HOME: "/h" } as never)).toBe("codex");
+    expect(detectScorerAgent({ MEMOREE_SKILLOPT_AGENT: "nonsense", CODEX_HOME: "/h" } as never)).toBe("codex");
   });
   it("detects claude_code and codex from their env signatures", () => {
     expect(detectScorerAgent({ CLAUDECODE: "1" } as never)).toBe("claude_code");

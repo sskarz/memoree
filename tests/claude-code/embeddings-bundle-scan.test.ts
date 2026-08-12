@@ -53,19 +53,19 @@ describe("shipped embed-daemon.js — explicit transformers resolver", () => {
 
       it(`embed-daemon.js loads transformers via the canonical shared-deps location`, () => {
         const src = readFileSync(a.embedDaemon, "utf-8");
-        // Positive: canonical shared-deps path (".hivemind" + "embed-deps"
+        // Positive: canonical shared-deps path (".memoree" + "embed-deps"
         // adjacent string literals survive esbuild's join() reformatting).
-        expect(src).toMatch(/\.hivemind/);
+        expect(src).toMatch(/\.memoree/);
         expect(src).toMatch(/embed-deps/);
         // Positive: createRequire-rooted resolve survived bundling.
         expect(src).toMatch(/createRequire/);
       });
 
-      it(`embed-daemon.js throws an actionable error pointing at "hivemind embeddings install"`, () => {
+      it(`embed-daemon.js throws an actionable error pointing at "memoree embeddings install"`, () => {
         const src = readFileSync(a.embedDaemon, "utf-8");
         // The wrapper error message must survive the bundle so the
         // client-side log line tells the user what to do.
-        expect(src).toContain("hivemind embeddings install");
+        expect(src).toContain("memoree embeddings install");
       });
     });
   }
@@ -88,13 +88,13 @@ describe("shipped capture.js — self-heal + visible-failure notification", () =
         // The notification was removed; if a future refactor reintroduces
         // the string, this test fails and forces a deliberate decision.
         expect(src).not.toContain("embed-deps-missing");
-        expect(src).not.toContain("Hivemind embeddings disabled");
+        expect(src).not.toContain("Memoree embeddings disabled");
       });
     });
   }
 });
 
-describe("shipped shell/deeplake-shell.js — embed daemon path resolves to an existing file", () => {
+describe("shipped shell/memoree-shell.js — embed daemon path resolves to an existing file", () => {
   // Regression guard for CodeRabbit #6/#7/#11: the in-bundle resolver
   // computed `dirname(import.meta.url) + "embeddings/embed-daemon.js"`,
   // which when run from `<agent>/bundle/shell/` pointed at the missing
@@ -105,13 +105,13 @@ describe("shipped shell/deeplake-shell.js — embed daemon path resolves to an e
   // bundled shell would look for it).
   const SHELL_BUNDLES: Array<[string, string, string]> = [
     ["claude-code",
-      join(repoRoot, "harnesses", "claude-code", "bundle", "shell", "deeplake-shell.js"),
+      join(repoRoot, "harnesses", "claude-code", "bundle", "shell", "memoree-shell.js"),
       join(repoRoot, "harnesses", "claude-code", "bundle", "embeddings", "embed-daemon.js")],
     ["codex",
-      join(repoRoot, "harnesses", "codex", "bundle", "shell", "deeplake-shell.js"),
+      join(repoRoot, "harnesses", "codex", "bundle", "shell", "memoree-shell.js"),
       join(repoRoot, "harnesses", "codex", "bundle", "embeddings", "embed-daemon.js")],
     ["cursor",
-      join(repoRoot, "harnesses", "cursor", "bundle", "shell", "deeplake-shell.js"),
+      join(repoRoot, "harnesses", "cursor", "bundle", "shell", "memoree-shell.js"),
       join(repoRoot, "harnesses", "cursor", "bundle", "embeddings", "embed-daemon.js")],
   ];
 
@@ -157,8 +157,8 @@ describe("shipped bundle/cli.js — full embeddings subcommand surface", () => {
     expect(src).toContain('"status"');
   });
 
-  it("CLI references ~/.deeplake/config.json so the model knows where state lives", () => {
+  it("CLI references ~/.memoree/config.json so the model knows where state lives", () => {
     const src = readFileSync(cliPath, "utf-8");
-    expect(src).toContain("~/.deeplake/config.json");
+    expect(src).toContain("~/.memoree/config.json");
   });
 });

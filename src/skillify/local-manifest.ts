@@ -1,9 +1,9 @@
 /**
  * Shared accessor for the `mine-local` manifest at
- * ~/.claude/hivemind/local-mined.json.
+ * ~/.claude/memoree/local-mined.json.
  *
  * The manifest does triple duty:
- *   1. One-shot sentinel — `hivemind skillify mine-local` refuses to
+ *   1. One-shot sentinel — `memoree skillify mine-local` refuses to
  *      re-run when the file exists (unless `--force` is passed).
  *   2. Provenance index — records every locally-mined skill's canonical
  *      path, source sessions, fan-out symlinks, and gate metadata for a
@@ -11,7 +11,7 @@
  *      sign-in).
  *   3. Read-only hint surface — the per-agent SessionStart hooks read
  *      the entry count when no credentials are present and surface it
- *      as part of the "not logged in" injection: "You have N local
+ *      as part of the "storage unavailable" injection: "You have N local
  *      skills. Sign in to share new ones."
  *
  * Pulled out of `src/commands/mine-local.ts` so the session-start hooks
@@ -60,14 +60,14 @@ export interface LocalManifest {
   entries: LocalManifestEntry[];
 }
 
-export const LOCAL_MANIFEST_PATH = join(homedir(), ".claude", "hivemind", "local-mined.json");
+export const LOCAL_MANIFEST_PATH = join(homedir(), ".claude", "memoree", "local-mined.json");
 
 /**
  * Sibling lock file used by maybeAutoMineLocal() (spawn-mine-local-worker.ts)
  * and released by runMineLocal() on exit. Exported here so both producers
  * agree on the path without circular imports.
  */
-export const LOCAL_MINE_LOCK_PATH = join(homedir(), ".claude", "hivemind", "local-mined.lock");
+export const LOCAL_MINE_LOCK_PATH = join(homedir(), ".claude", "memoree", "local-mined.lock");
 
 /**
  * Read the manifest. Returns null when the file doesn't exist or is

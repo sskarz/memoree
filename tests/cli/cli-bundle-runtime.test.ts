@@ -8,9 +8,9 @@ import { resolve, join } from "node:path";
 // Root cause: esbuild hoisted `import "tree-sitter"` to the top of
 // bundle/cli.js even though the module was only used inside commands/graph.js.
 // When the optional tree-sitter native addon failed to build (e.g. Node 24 +
-// arm64 where no prebuild exists), EVERY hivemind command — including `install`
+// arm64 where no prebuild exists), EVERY memoree command — including `install`
 // — crashed with ERR_MODULE_NOT_FOUND at load time. The installer would appear
-// to succeed, but hivemind was dead on first run.
+// to succeed, but memoree was dead on first run.
 //
 // Fix: lazy `import()` of commands/graph.js + esbuild `splitting: true`.
 // These tests exercise the bundle as a subprocess so they catch load-time
@@ -79,7 +79,7 @@ describe.skipIf(!bundleBuilt)(
         // Only `graph build` needs tree-sitter. Help, diff, and history stay
         // usable because the parser module is imported inside the build path.
         expect(r.status).toBe(0);
-        expect(r.stdout).toContain("hivemind graph");
+        expect(r.stdout).toContain("memoree graph");
         expect(r.stderr).not.toContain("ERR_MODULE_NOT_FOUND");
       });
     });

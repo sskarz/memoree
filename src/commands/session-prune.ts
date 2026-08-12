@@ -4,11 +4,11 @@
  * Session prune CLI — scoped cleanup of session data by the logged-in author.
  *
  * Usage:
- *   hivemind sessions prune                          — list pruneable sessions (dry run)
- *   hivemind sessions prune --before 2026-04-01      — delete sessions older than date
- *   hivemind sessions prune --session-id <id>        — delete a specific session
- *   hivemind sessions prune --all                    — delete all own sessions
- *   hivemind sessions prune ... --yes                — skip confirmation prompt
+ *   memoree sessions prune                          — list pruneable sessions (dry run)
+ *   memoree sessions prune --before 2026-04-01      — delete sessions older than date
+ *   memoree sessions prune --session-id <id>        — delete a specific session
+ *   memoree sessions prune --all                    — delete all own sessions
+ *   memoree sessions prune ... --yes                — skip confirmation prompt
  */
 
 import { loadConfig, type Config } from "../config.js";
@@ -59,7 +59,7 @@ function parseArgs(argv: string[]): {
 /**
  * Extract session ID from a session path.
  * Path format: /sessions/<user>/<user>_<org>_<workspace>_<sessionId>.jsonl
- * Uses the same regex as deeplake-fs.ts to handle underscores in user/org/workspace.
+ * Uses the same regex as memoree-fs.ts to handle underscores in user/org/workspace.
  */
 function extractSessionId(path: string): string {
   const m = path.match(/\/sessions\/[^/]+\/[^/]+_([^.]+)\.jsonl$/);
@@ -132,7 +132,7 @@ async function deleteSessions(
 export async function sessionPrune(argv: string[]): Promise<void> {
   const config = loadConfig();
   if (!config) {
-    console.error("Not logged in. Run: deeplake login");
+    console.error("Memoree storage is unavailable. Run: memoree doctor");
     process.exit(1);
   }
 

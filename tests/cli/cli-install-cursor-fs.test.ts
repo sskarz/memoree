@@ -7,7 +7,7 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 /**
  * Tests for the disk-side of src/cli/install-cursor.ts.
  *
- * Pure helpers (`isHivemindEntry`, `stripHooksFromConfig`) are covered in
+ * Pure helpers (`isMemoreeEntry`, `stripHooksFromConfig`) are covered in
  * install-helpers.test.ts. Here we drive installCursor / uninstallCursor
  * end-to-end against a tmp ~/.cursor and assert SHAPE AND COUNT of the
  * resulting hooks.json (CLAUDE.md rule 6) plus the marker-key contract.
@@ -55,8 +55,8 @@ describe("installCursor", () => {
     const { installCursor } = await importInstaller();
     installCursor();
 
-    expect(existsSync(join(tmpHome, ".cursor", "hivemind", "bundle", "capture.js"))).toBe(true);
-    expect(readFileSync(join(tmpHome, ".cursor", "hivemind", ".hivemind_version"), "utf-8")).toBe("9.9.9");
+    expect(existsSync(join(tmpHome, ".cursor", "memoree", "bundle", "capture.js"))).toBe(true);
+    expect(readFileSync(join(tmpHome, ".cursor", "memoree", ".memoree_version"), "utf-8")).toBe("9.9.9");
 
     const hooks = JSON.parse(readFileSync(join(tmpHome, ".cursor", "hooks.json"), "utf-8"));
     // Cursor events ship: sessionStart, beforeSubmitPrompt, preToolUse,
@@ -66,7 +66,7 @@ describe("installCursor", () => {
       "preToolUse", "sessionEnd", "sessionStart", "stop",
     ]);
     expect(hooks.version).toBe(1);
-    expect(hooks._hivemindManaged).toEqual({ version: "9.9.9" });
+    expect(hooks._memoreeManaged).toEqual({ version: "9.9.9" });
   });
 
   it("preToolUse entry carries the Shell matcher (intercepts grep against memory mount)", async () => {
@@ -78,7 +78,7 @@ describe("installCursor", () => {
     expect(preToolUseEntries[0].matcher).toBe("Shell");
   });
 
-  it("preserves a user hook on a hivemind-claimed event (re-install over existing config)", async () => {
+  it("preserves a user hook on a memoree-claimed event (re-install over existing config)", async () => {
     // CLAUDE.md rule 12 — fixture that the data-loss bug would have wiped.
     const userHook = { command: "/usr/local/bin/my-pre-tool.sh", timeout: 4 };
     writeFileSync(
@@ -95,8 +95,8 @@ describe("installCursor", () => {
     expect(hooks.customField).toBe("preserve me");
   });
 
-  it("re-install over a config with a stale hivemind entry replaces, not duplicates", async () => {
-    const stale = { command: `node "${join(tmpHome, ".cursor", "hivemind", "bundle", "old-capture.js")}"`, timeout: 99 };
+  it("re-install over a config with a stale memoree entry replaces, not duplicates", async () => {
+    const stale = { command: `node "${join(tmpHome, ".cursor", "memoree", "bundle", "old-capture.js")}"`, timeout: 99 };
     writeFileSync(
       join(tmpHome, ".cursor", "hooks.json"),
       JSON.stringify({ version: 1, hooks: { postToolUse: [stale] } }),
@@ -118,23 +118,23 @@ describe("installCursor", () => {
     expect(() => installCursor()).toThrow(/Cursor bundle missing/);
   });
 
-  it("creates embed-deps symlink when ~/.hivemind/embed-deps/node_modules exists", async () => {
-    const embedDepsNm = join(tmpHome, ".hivemind", "embed-deps", "node_modules");
+  it("creates embed-deps symlink when ~/.memoree/embed-deps/node_modules exists", async () => {
+    const embedDepsNm = join(tmpHome, ".memoree", "embed-deps", "node_modules");
     mkdirSync(embedDepsNm, { recursive: true });
 
     const { installCursor } = await importInstaller();
     installCursor();
 
-    const pluginNm = join(tmpHome, ".cursor", "hivemind", "node_modules");
+    const pluginNm = join(tmpHome, ".cursor", "memoree", "node_modules");
     const { lstatSync } = await import("node:fs");
     expect(lstatSync(pluginNm).isSymbolicLink()).toBe(true);
   });
 
   it("replaces an existing real directory at pluginNm with a symlink when embed-deps present", async () => {
-    const embedDepsNm = join(tmpHome, ".hivemind", "embed-deps", "node_modules");
+    const embedDepsNm = join(tmpHome, ".memoree", "embed-deps", "node_modules");
     mkdirSync(embedDepsNm, { recursive: true });
     // Pre-create a real directory where the symlink should go
-    const pluginNm = join(tmpHome, ".cursor", "hivemind", "node_modules");
+    const pluginNm = join(tmpHome, ".cursor", "memoree", "node_modules");
     mkdirSync(pluginNm, { recursive: true });
 
     const { installCursor } = await importInstaller();
@@ -144,18 +144,18 @@ describe("installCursor", () => {
     expect(lstatSync(pluginNm).isSymbolicLink()).toBe(true);
   });
 
-  it("skips embed-deps symlink when ~/.hivemind/embed-deps/node_modules is absent", async () => {
+  it("skips embed-deps symlink when ~/.memoree/embed-deps/node_modules is absent", async () => {
     const { installCursor } = await importInstaller();
     installCursor();
 
-    const pluginNm = join(tmpHome, ".cursor", "hivemind", "node_modules");
+    const pluginNm = join(tmpHome, ".cursor", "memoree", "node_modules");
     // No symlink should exist — embed-deps dir was never created
     expect(existsSync(pluginNm)).toBe(false);
   });
 });
 
 describe("uninstallCursor", () => {
-  it("removes hooks.json entirely when only hivemind hooks were present", async () => {
+  it("removes hooks.json entirely when only memoree hooks were present", async () => {
     const { installCursor, uninstallCursor } = await importInstaller();
     installCursor();
     uninstallCursor();
@@ -170,9 +170,9 @@ describe("uninstallCursor", () => {
     expect(writes.join("")).toContain("no hooks.json to clean");
   });
 
-  it("preserves user hooks while stripping hivemind ones (mixed config)", async () => {
+  it("preserves user hooks while stripping memoree ones (mixed config)", async () => {
     const userHook = { command: "/usr/local/bin/audit.sh", timeout: 3 };
-    const us = { command: `node "${join(tmpHome, ".cursor", "hivemind", "bundle", "capture.js")}"`, timeout: 15 };
+    const us = { command: `node "${join(tmpHome, ".cursor", "memoree", "bundle", "capture.js")}"`, timeout: 15 };
     writeFileSync(
       join(tmpHome, ".cursor", "hooks.json"),
       JSON.stringify({ version: 1, hooks: { postToolUse: [userHook, us] }, otherField: "stay" }),
@@ -185,13 +185,13 @@ describe("uninstallCursor", () => {
     expect(cfg.hooks.postToolUse).toHaveLength(1);
     expect(cfg.hooks.postToolUse[0]).toEqual(userHook);
     expect(cfg.otherField).toBe("stay");
-    expect(cfg._hivemindManaged).toBeUndefined();
+    expect(cfg._memoreeManaged).toBeUndefined();
   });
 
   it("removes the file when stripping leaves only the version field behind", async () => {
     // CLAUDE.md rule 7: cover both branches of the meaningfulKeys check —
     // the file must be removed even when version: 0 (falsy) sneaks through.
-    const us = { command: `node "${join(tmpHome, ".cursor", "hivemind", "bundle", "capture.js")}"` };
+    const us = { command: `node "${join(tmpHome, ".cursor", "memoree", "bundle", "capture.js")}"` };
     writeFileSync(
       join(tmpHome, ".cursor", "hooks.json"),
       JSON.stringify({ version: 0, hooks: { postToolUse: [us] } }),

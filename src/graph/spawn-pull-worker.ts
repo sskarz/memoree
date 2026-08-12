@@ -42,7 +42,7 @@ export function spawnGraphPullWorker(cwd: string, bundleDir: string, deps: Spawn
   // Hard gate: respect the same env var pullSnapshot itself respects.
   // Avoids spawning a process that would only do the skipped-disabled
   // dance — pure waste otherwise.
-  if (process.env.HIVEMIND_GRAPH_PULL === "0") return;
+  if (process.env.MEMOREE_GRAPH_PULL === "0") return;
 
   const workerPath = join(bundleDir, "graph-pull-worker.js");
   const opts: SpawnOptions = {

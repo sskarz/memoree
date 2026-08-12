@@ -1,20 +1,20 @@
 /**
- * Write helpers for `hivemind_rules` — INSERT-only against the immutable
+ * Write helpers for `memoree_rules` — INSERT-only against the immutable
  * skills-table pattern. Every edit appends a fresh row with version+1; we
  * never UPDATE. Reads (see ./read.ts) pick the latest version per rule_id.
  *
- * Why no UPDATEs: the Deeplake backend silently coalesces two rapid
+ * Why no UPDATEs: the Memoree backend silently coalesces two rapid
  * UPDATEs on the same row (see CLAUDE.md "UPDATE coalescing quirk").
  * INSERT-only sidesteps the bug entirely. `skills` table uses the same
- * shape — see `deeplake-api.ts:530` for the precedent and
- * `deeplake-schema.ts` RULES_COLUMNS for the column list.
+ * shape — see `memoree-api.ts:530` for the precedent and
+ * `storage/schema.ts` RULES_COLUMNS for the column list.
  */
 
 import { randomUUID } from "node:crypto";
 import { sqlIdent, sqlStr } from "../utils/sql.js";
 import type { RuleRow } from "./read.js";
 import { getRuleLatest } from "./read.js";
-import type { StorageDialect } from "../deeplake-schema.js";
+import type { StorageDialect } from "../storage/schema.js";
 import { escapedStringPrefix } from "../storage/sql-dialect.js";
 
 export type QueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
@@ -58,7 +58,7 @@ const MAX_TEXT_LENGTH = 2000;
  *
  * Newlines are rejected at write time as defense-in-depth against
  * the prompt-injection class: a rule body with `\n` followed by
- * fake "=== HIVEMIND HOW-TO ===" content would inject a section
+ * fake "=== MEMOREE HOW-TO ===" content would inject a section
  * into every SessionStart context. The renderer also sanitizes at
  * render time (handles already-persisted rows) but rejecting up
  * front means users see a clear error instead of silently-mangled
@@ -80,14 +80,13 @@ function assertValidText(text: string): void {
 
 /**
  * Insert a brand new rule. Generates a fresh `rule_id` (UUIDv4) and writes
- * version=1. Scope is hardcoded to 'team' — rules are always org-wide in v1
- * (see A3 in the plan).
+ * version=1. Scope is hardcoded to 'shared'.
  */
 export async function insertRule(
   query: QueryFn,
   tableName: string,
   input: InsertRuleInput,
-  dialect: StorageDialect = "deeplake",
+  dialect: StorageDialect = "postgres",
 ): Promise<WriteResult> {
   assertValidText(input.text);
   const safe = sqlIdent(tableName);
@@ -104,7 +103,7 @@ export async function insertRule(
     `'${sqlStr(rowId)}', ` +
     `'${sqlStr(ruleId)}', ` +
     `${escapedStringPrefix(dialect)}'${sqlStr(input.text)}', ` +
-    `'team', ` +
+    `'shared', ` +
     `'active', ` +
     `'${sqlStr(input.assigned_by)}', ` +
     `1, ` +
@@ -125,7 +124,7 @@ export async function editRule(
   query: QueryFn,
   tableName: string,
   input: EditRuleInput,
-  dialect: StorageDialect = "deeplake",
+  dialect: StorageDialect = "postgres",
 ): Promise<WriteResult> {
   const previous = await getRuleLatest(query, tableName, input.rule_id);
   if (!previous) {
@@ -150,7 +149,7 @@ export async function markRuleDone(
   query: QueryFn,
   tableName: string,
   input: { rule_id: string; assigned_by: string; agent?: string; plugin_version?: string },
-  dialect: StorageDialect = "deeplake",
+  dialect: StorageDialect = "postgres",
 ): Promise<WriteResult> {
   return editRule(query, tableName, { ...input, status: "done" }, dialect);
 }
@@ -185,7 +184,7 @@ async function appendVersion(
     `'${sqlStr(rowId)}', ` +
     `'${sqlStr(previous.rule_id)}', ` +
     `${escapedStringPrefix(dialect)}'${sqlStr(next.text)}', ` +
-    `'team', ` +
+    `'shared', ` +
     `'${sqlStr(next.status)}', ` +
     `'${sqlStr(next.assigned_by)}', ` +
     `${nextVersion}, ` +

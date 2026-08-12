@@ -63,10 +63,10 @@ export interface DocLlmSpec {
 //   - claude is pinned to haiku inside CLAUDE_FLAGS (wiki-worker-spawn).
 //   - codex model SLUGS are account-dependent (ChatGPT accounts reject the
 //     mini variants with a 400), so the safe default knob is reasoning
-//     effort; HIVEMIND_DOCS_CODEX_MODEL adds an explicit `-m` for API-key
+//     effort; MEMOREE_DOCS_CODEX_MODEL adds an explicit `-m` for API-key
 //     accounts that do have a cheap model available.
 function codexSpec(env: NodeJS.ProcessEnv): DocLlmSpec {
-  const model = env.HIVEMIND_DOCS_CODEX_MODEL;
+  const model = env.MEMOREE_DOCS_CODEX_MODEL;
   const flags = [
     "exec",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -98,8 +98,8 @@ const REGISTRY: Record<string, (env: NodeJS.ProcessEnv) => DocLlmSpec> = {
     build: (b, p) =>
       buildTrailingPromptInvocation(b, [
         "--print",
-        ...(env.HIVEMIND_PI_PROVIDER ? ["--provider", env.HIVEMIND_PI_PROVIDER] : []),
-        ...(env.HIVEMIND_PI_MODEL ? ["--model", env.HIVEMIND_PI_MODEL] : []),
+        ...(env.MEMOREE_PI_PROVIDER ? ["--provider", env.MEMOREE_PI_PROVIDER] : []),
+        ...(env.MEMOREE_PI_MODEL ? ["--model", env.MEMOREE_PI_MODEL] : []),
       ], p),
   }),
   cursor: (env) => ({
@@ -108,7 +108,7 @@ const REGISTRY: Record<string, (env: NodeJS.ProcessEnv) => DocLlmSpec> = {
     build: (b, p) =>
       buildTrailingPromptInvocation(b, [
         "--print",
-        "--model", env.HIVEMIND_CURSOR_MODEL ?? "auto",
+        "--model", env.MEMOREE_CURSOR_MODEL ?? "auto",
         "--force",
         "--output-format", "text",
       ], p),
@@ -127,7 +127,7 @@ export function detectHostAgent(resolve: (bin: string) => string | null = tryRes
   }
   throw new Error(
     "No host agent CLI found for doc generation (looked for: claude, codex, pi, cursor-agent). " +
-      "Install one, or set HIVEMIND_DOCS_LLM_AGENT / HIVEMIND_DOCS_LLM_BIN explicitly.",
+      "Install one, or set MEMOREE_DOCS_LLM_AGENT / MEMOREE_DOCS_LLM_BIN explicitly.",
   );
 }
 
@@ -158,19 +158,19 @@ export function detectAvailableAgents(
  * PAGE-AUTHORING spec: the wiki audit showed final-page writing is where
  * accuracy is won or lost, while note-taking survives the cheap model. So the
  * authoring step gets a stronger (still internal, no API key) configuration:
- *   - claude: sonnet instead of haiku (override: HIVEMIND_DOCS_PAGE_MODEL)
+ *   - claude: sonnet instead of haiku (override: MEMOREE_DOCS_PAGE_MODEL)
  *   - codex:  medium reasoning effort instead of low
  *   - custom bins: same as the default spec (no second knob to turn)
  */
 export function resolvePageLlmSpec(env: NodeJS.ProcessEnv = process.env): DocLlmSpec {
   const base = resolveDocLlmSpec(env);
   if (base.label === "claude") {
-    const model = env.HIVEMIND_DOCS_PAGE_MODEL ?? "sonnet";
+    const model = env.MEMOREE_DOCS_PAGE_MODEL ?? "sonnet";
     const flags = ["-p", "--no-session-persistence", "--model", model, "--permission-mode", "bypassPermissions"];
     return { label: `claude:${model}`, bin: base.bin, build: (b, p) => buildStdinPromptInvocation(b, flags, p) };
   }
   if (base.label === "codex") {
-    const model = env.HIVEMIND_DOCS_CODEX_MODEL;
+    const model = env.MEMOREE_DOCS_CODEX_MODEL;
     const flags = [
       "exec",
       "--dangerously-bypass-approvals-and-sandbox",
@@ -193,20 +193,20 @@ export function makeHostPageRunPrompt(timeoutMs = 300_000, env: NodeJS.ProcessEn
 
 /**
  * Resolve the doc-LLM spec from the environment:
- *   - `HIVEMIND_DOCS_LLM_BIN` (+ optional `HIVEMIND_DOCS_LLM_FLAGS`, comma-sep)
+ *   - `MEMOREE_DOCS_LLM_BIN` (+ optional `MEMOREE_DOCS_LLM_FLAGS`, comma-sep)
  *     → a fully custom CLI (prompt appended as the trailing arg). Escape hatch
  *     for any agent not in the registry.
- *   - `HIVEMIND_DOCS_LLM_AGENT` = claude | codex → a named registry entry.
+ *   - `MEMOREE_DOCS_LLM_AGENT` = claude | codex → a named registry entry.
  *   - default → claude (byte-identical to the previous behavior).
  */
 export function resolveDocLlmSpec(env: NodeJS.ProcessEnv = process.env): DocLlmSpec {
-  const customBin = env.HIVEMIND_DOCS_LLM_BIN;
+  const customBin = env.MEMOREE_DOCS_LLM_BIN;
   if (customBin && customBin.trim() !== "") {
-    const flags = (env.HIVEMIND_DOCS_LLM_FLAGS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const flags = (env.MEMOREE_DOCS_LLM_FLAGS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
     // Trailing-arg is the historical contract for custom CLIs, but argv has an
     // OS size limit (E2BIG) that wiki/doc prompts can exceed. Set
-    // HIVEMIND_DOCS_LLM_STDIN=1 if the custom CLI reads its prompt from stdin.
-    const viaStdin = env.HIVEMIND_DOCS_LLM_STDIN === "1";
+    // MEMOREE_DOCS_LLM_STDIN=1 if the custom CLI reads its prompt from stdin.
+    const viaStdin = env.MEMOREE_DOCS_LLM_STDIN === "1";
     return {
       label: `custom:${customBin}`,
       bin: customBin,
@@ -214,14 +214,14 @@ export function resolveDocLlmSpec(env: NodeJS.ProcessEnv = process.env): DocLlmS
     };
   }
   // Precedence: env override wins (one-off), then the persisted config choice
-  // (`hivemind docs agent <name>` / onboarding), then auto-detect from what is
+  // (`memoree docs agent <name>` / onboarding), then auto-detect from what is
   // installed — "on claude code it is claude, on codex it is codex".
-  const agent = (env.HIVEMIND_DOCS_LLM_AGENT ?? getDocsLlmAgent() ?? detectHostAgent()).toLowerCase();
+  const agent = (env.MEMOREE_DOCS_LLM_AGENT ?? getDocsLlmAgent() ?? detectHostAgent()).toLowerCase();
   const spec = REGISTRY[agent]?.(env);
   if (!spec) {
     throw new Error(
-      `Unknown HIVEMIND_DOCS_LLM_AGENT="${agent}". Known: ${Object.keys(REGISTRY).join(", ")}. ` +
-        `For any other CLI set HIVEMIND_DOCS_LLM_BIN (and HIVEMIND_DOCS_LLM_FLAGS).`,
+      `Unknown MEMOREE_DOCS_LLM_AGENT="${agent}". Known: ${Object.keys(REGISTRY).join(", ")}. ` +
+        `For any other CLI set MEMOREE_DOCS_LLM_BIN (and MEMOREE_DOCS_LLM_FLAGS).`,
     );
   }
   return spec;
@@ -234,7 +234,7 @@ export function runHostPrompt(spec: DocLlmSpec, bin: string, prompt: string, tim
     ...inv.options,
     encoding: "utf-8",
     timeout: timeoutMs,
-    env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+    env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
   });
   return unwrapModelOutput((out ?? "").toString());
 }

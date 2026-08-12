@@ -27,7 +27,7 @@ async function load(): Promise<Mod> {
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "sec-test-"));
-  delete process.env.HIVEMIND_SESSION_EVENT_CACHE;
+  delete process.env.MEMOREE_SESSION_EVENT_CACHE;
 });
 
 afterEach(() => {
@@ -76,7 +76,7 @@ describe("session-event-cache — append + read roundtrip", () => {
 
 describe("session-event-cache — opt-out flag", () => {
   it("append is a no-op and read returns null when disabled", async () => {
-    process.env.HIVEMIND_SESSION_EVENT_CACHE = "0";
+    process.env.MEMOREE_SESSION_EVENT_CACHE = "0";
     const m = await load();
     m.appendSessionEvent("sid", "{}");
     expect(existsSync(m.sessionEventCachePath("sid"))).toBe(false);
@@ -84,7 +84,7 @@ describe("session-event-cache — opt-out flag", () => {
   });
 
   it('"false" also disables', async () => {
-    process.env.HIVEMIND_SESSION_EVENT_CACHE = "false";
+    process.env.MEMOREE_SESSION_EVENT_CACHE = "false";
     const m = await load();
     m.appendSessionEvent("sid", "{}");
     expect(existsSync(m.sessionEventCachePath("sid"))).toBe(false);
@@ -94,10 +94,10 @@ describe("session-event-cache — opt-out flag", () => {
     const m1 = await load();
     m1.appendSessionEvent("sid", "{}");
     expect(m1.readSessionEventCache("sid")!).toHaveLength(1);
-    process.env.HIVEMIND_SESSION_EVENT_CACHE = "1"; // any non-off value keeps it on
+    process.env.MEMOREE_SESSION_EVENT_CACHE = "1"; // any non-off value keeps it on
     const m2 = await load();
     expect(m2.readSessionEventCache("sid")!).toHaveLength(1);
-    process.env.HIVEMIND_SESSION_EVENT_CACHE = "0";
+    process.env.MEMOREE_SESSION_EVENT_CACHE = "0";
     const m3 = await load();
     expect(m3.readSessionEventCache("sid")).toBeNull();
   });

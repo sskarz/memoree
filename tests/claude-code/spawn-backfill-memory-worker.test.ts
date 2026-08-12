@@ -53,8 +53,8 @@ describe("runBackfillGuards", () => {
     expect(runBackfillGuards(deps({ hasAgents: () => false }))).toEqual({ triggered: false, reason: "no-local-sessions" });
   });
 
-  it("skips when the hivemind launcher is missing", () => {
-    expect(runBackfillGuards(deps({ hasLauncher: () => false }))).toEqual({ triggered: false, reason: "no-hivemind-bin" });
+  it("skips when the memoree launcher is missing", () => {
+    expect(runBackfillGuards(deps({ hasLauncher: () => false }))).toEqual({ triggered: false, reason: "no-memoree-bin" });
   });
 
   it("skips when the lock can't be acquired (lost the race)", () => {

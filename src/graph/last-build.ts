@@ -2,7 +2,7 @@
  * Last-build state file (Phase 1.5).
  *
  * Written by writeSnapshot after each successful build:
- *   ~/.hivemind/graphs/<repo-key>/.last-build.json
+ *   ~/.memoree/graphs/<repo-key>/.last-build.json
  *     { ts: epoch_ms, commit_sha: string | null, snapshot_sha256: string }
  *
  * Read by the SessionEnd auto-build hook (src/hooks/graph-on-stop.ts) to gate

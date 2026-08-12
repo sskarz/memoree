@@ -15,7 +15,7 @@ import { deriveProjectKey } from "../../../src/utils/repo-identity.js";
  *   - gate decides FIRE + lock acquired → runBuildCommand called → lock released
  *   - runBuildCommand throws → log + still release lock
  *   - decideGate throws → log + early return
- *   - HIVEMIND_GRAPH_ON_STOP=0 → envDisable propagated to ctx
+ *   - MEMOREE_GRAPH_ON_STOP=0 → envDisable propagated to ctx
  *
  * Build + lock helpers are injected via MainDeps so the test doesn't touch
  * real git state, doesn't fork the bundled build process, and never holds
@@ -32,7 +32,7 @@ describe("graph-on-stop main()", () => {
     const { key } = deriveProjectKey(workCwd);
     baseDir = repoDir(key);
     prevCwd = process.cwd();
-    prevEnv = process.env.HIVEMIND_GRAPH_ON_STOP;
+    prevEnv = process.env.MEMOREE_GRAPH_ON_STOP;
     process.chdir(workCwd);
     // Clean baseDir from any prior test run (the key depends on path, but
     // process.cwd() resolves to the same /private/tmp/... cousin on macOS).
@@ -41,8 +41,8 @@ describe("graph-on-stop main()", () => {
 
   afterEach(() => {
     process.chdir(prevCwd);
-    if (prevEnv === undefined) delete process.env.HIVEMIND_GRAPH_ON_STOP;
-    else process.env.HIVEMIND_GRAPH_ON_STOP = prevEnv;
+    if (prevEnv === undefined) delete process.env.MEMOREE_GRAPH_ON_STOP;
+    else process.env.MEMOREE_GRAPH_ON_STOP = prevEnv;
     try { rmSync(workCwd, { recursive: true, force: true }); } catch {}
     try { rmSync(baseDir, { recursive: true, force: true }); } catch {}
   });
@@ -163,8 +163,8 @@ describe("graph-on-stop main()", () => {
     }
   });
 
-  it("HIVEMIND_GRAPH_ON_STOP=0 → envDisable=true propagates into gate ctx", async () => {
-    process.env.HIVEMIND_GRAPH_ON_STOP = "0";
+  it("MEMOREE_GRAPH_ON_STOP=0 → envDisable=true propagates into gate ctx", async () => {
+    process.env.MEMOREE_GRAPH_ON_STOP = "0";
     let observedEnvDisable = false;
     await main({
       decideGate: (ctx) => {
@@ -175,8 +175,8 @@ describe("graph-on-stop main()", () => {
     expect(observedEnvDisable).toBe(true);
   });
 
-  it("HIVEMIND_GRAPH_ON_STOP unset → envDisable=false", async () => {
-    delete process.env.HIVEMIND_GRAPH_ON_STOP;
+  it("MEMOREE_GRAPH_ON_STOP unset → envDisable=false", async () => {
+    delete process.env.MEMOREE_GRAPH_ON_STOP;
     let observedEnvDisable = true;
     await main({
       decideGate: (ctx) => {

@@ -9,16 +9,16 @@ import { ensureMcpServerInstalled, buildMcpServerEntry } from "./install-mcp-sha
 // Claude Desktop app. It reads MCP connectors from the SAME file as
 // Claude Desktop chat — claude_desktop_config.json, `mcpServers` key
 // (https://support.claude.com/en/articles/11503834). Local stdio servers
-// are supported, so we register the shared hivemind MCP server (the one
-// already installed at ~/.hivemind/mcp/server.js) and Cowork gains the
-// hivemind_search / read / index tools with zero manual setup.
+// are supported, so we register the shared memoree MCP server (the one
+// already installed at ~/.memoree/mcp/server.js) and Cowork gains the
+// memoree_search / read / index tools with zero manual setup.
 //
 // Note: this is the Claude DESKTOP config dir, NOT ~/.claude (that's the
 // Claude Code CLI, handled by install-claude.ts).
 
 const CONFIG_DIR = claudeDesktopConfigDir();
 const CONFIG_PATH = join(CONFIG_DIR, "claude_desktop_config.json");
-const SERVER_KEY = "hivemind";
+const SERVER_KEY = "memoree";
 
 type Config = Record<string, unknown>;
 
@@ -45,7 +45,7 @@ function writeConfig(cfg: Config): void {
 }
 
 export function installCowork(): void {
-  // 1. Shared stdio MCP server binary at ~/.hivemind/mcp/server.js.
+  // 1. Shared stdio MCP server binary at ~/.memoree/mcp/server.js.
   ensureMcpServerInstalled();
 
   // 2. Register it in Claude Desktop's connector config (shared by Cowork).
@@ -81,5 +81,5 @@ export function uninstallCowork(): void {
   } else {
     writeConfig(cfg);
   }
-  log(`  Claude Cowork  hivemind entry removed from ${CONFIG_PATH}`);
+  log(`  Claude Cowork  memoree entry removed from ${CONFIG_PATH}`);
 }

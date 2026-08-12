@@ -5,7 +5,7 @@
  * runs `pi --print` to generate a wiki summary, and uploads it to the
  * memory table.
  *
- * Invoked by harnesses/pi/extension-source/hivemind.ts (periodic + session_shutdown
+ * Invoked by harnesses/pi/extension-source/memoree.ts (periodic + session_shutdown
  * triggers) as: node wiki-worker.js <config.json>. The extension itself
  * is shipped as raw .ts and can't import this file directly — that's why
  * this lives as a standalone bundle deposited next to the extension at
@@ -33,9 +33,7 @@ import { createWorkerStorage, queryWorkerStorage } from "../worker-storage.js";
 const dlog = (msg: string) => _log("pi-wiki-worker", msg);
 
 interface WorkerConfig {
-  storage?: { kind: "deeplake" | "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
-  apiUrl?: string;
-  token?: string;
+  storage?: { kind: "sqlite" | "postgres"; orgId?: string; workspaceId?: string };
   orgId?: string;
   workspaceId: string;
   memoryTable: string;
@@ -193,7 +191,7 @@ async function main(): Promise<void> {
     try {
       // pi --print is the non-interactive mode; it bypasses extension
       // discovery (modes/print-mode.js doesn't import ExtensionRunner),
-      // so spawning pi here can't recurse back into our hivemind.ts and
+      // so spawning pi here can't recurse back into our memoree.ts and
       // capture its own summary prompt.
       const inv = buildTrailingPromptInvocation(cfg.piBin, [
         "--print",
@@ -208,7 +206,7 @@ async function main(): Promise<void> {
         // The summary is written to a file, not read from stdout, so we only
         // need headroom to drain it.
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+        env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
       });
       execSucceeded = true;
       wlog("pi --print exited (code 0)");
@@ -241,11 +239,11 @@ async function main(): Promise<void> {
         let embedding: number[] | null = null;
         if (!embeddingsDisabled()) {
           try {
-            // Pi's wiki-worker lives at ~/.pi/agent/hivemind/wiki-worker.js —
+            // Pi's wiki-worker lives at ~/.pi/agent/memoree/wiki-worker.js —
             // there's no sibling embeddings/embed-daemon.js to resolve relative
             // to. Pass no daemonEntry so EmbedClient falls back to the canonical
-            // shared daemon at ~/.hivemind/embed-deps/embed-daemon.js (set up
-            // by `hivemind embeddings install`).
+            // shared daemon at ~/.memoree/embed-deps/embed-daemon.js (set up
+            // by `memoree embeddings install`).
             embedding = await new EmbedClient({}).embed(text, "document");
           } catch (e: any) {
             wlog(`summary embedding failed, writing NULL: ${e.message}`);
@@ -260,7 +258,7 @@ async function main(): Promise<void> {
           sessionId: cfg.sessionId,
           text,
           embedding,
-          dialect: cfg.storage?.kind ?? "deeplake",
+          dialect: cfg.storage?.kind ?? "sqlite",
           pluginVersion: cfg.pluginVersion ?? "",
         });
         wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);

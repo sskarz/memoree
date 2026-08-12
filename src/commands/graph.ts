@@ -3,10 +3,10 @@
 /**
  * CLI surface for the codebase-graph feature (Phase 1.5).
  *
- * hivemind graph build [--cwd <path>]
+ * memoree graph build [--cwd <path>]
  *   Walk the project for source files, run the tree-sitter extractor on each
  *   (TypeScript, JavaScript, Python, Go, Rust, Java, Ruby, C, C++), write a
- *   snapshot to ~/.hivemind/graphs/<repo-key>/.
+ *   snapshot to ~/.memoree/graphs/<repo-key>/.
  */
 
 import { execSync } from "node:child_process";
@@ -22,8 +22,8 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { getVersion } from "../cli/version.js";
 import { fileContentHash, readCache, writeCache } from "../graph/cache.js";
-import { pushSnapshot } from "../graph/deeplake-push.js";
-import { pullSnapshot } from "../graph/deeplake-pull.js";
+import { pushSnapshot } from "../graph/snapshot-push.js";
+import { pullSnapshot } from "../graph/snapshot-pull.js";
 import {
   diffSnapshots,
   loadSnapshotByCommit,
@@ -53,60 +53,60 @@ import type {
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { maybeSpawnDocsRefresh } from "../docs/auto-refresh-trigger.js";
 
-const USAGE = `hivemind graph — codebase-graph commands (Phase 1.5)
+const USAGE = `memoree graph — codebase-graph commands (Phase 1.5)
 
 Usage:
-  hivemind graph build [--cwd <path>]
+  memoree graph build [--cwd <path>]
       Walk the project for supported source files (TS, JS, Python, Go, Rust, Java, Ruby, C, C++), extract symbols + edges,
-      and write a snapshot to ~/.hivemind/graphs/<repo-key>/snapshots/<commit-sha>.json.
-      Also updates ~/.hivemind/graphs/<repo-key>/latest-commit.txt and the
+      and write a snapshot to ~/.memoree/graphs/<repo-key>/snapshots/<commit-sha>.json.
+      Also updates ~/.memoree/graphs/<repo-key>/latest-commit.txt and the
       per-repo .last-build.json (consumed by the SessionEnd auto-build hook).
 
-  hivemind graph diff <sha1> <sha2> [--cwd <path>] [--json] [--limit N]
+  memoree graph diff <sha1> <sha2> [--cwd <path>] [--json] [--limit N]
       Diff two snapshots by their git commit SHA. Prints added/removed
       counts for nodes and edges, plus up to N=10 (default) examples of each.
       --json: emit machine-readable JSON instead of the human format.
       --limit N: cap the per-category examples (human format only).
 
-  hivemind graph history [--cwd <path>] [-n N] [--json]
+  memoree graph history [--cwd <path>] [-n N] [--json]
       Print the last N (default 20) entries from the per-repo history.jsonl,
       newest last. Each entry shows ts, commit_sha (short), snapshot_sha256
       (short), node/edge counts, and the trigger that fired the build.
       --json: emit raw JSONL (one parsed entry per line, full fields).
 
-  hivemind graph init [--cwd <path>] [--force] [--no-initial-build]
+  memoree graph init [--cwd <path>] [--force] [--no-initial-build]
       Install a managed block in .git/hooks/post-commit that fires
-      \`hivemind graph build --trigger post-commit\` after each commit
+      \`memoree graph build --trigger post-commit\` after each commit
       (async, non-blocking, exit 0 always). Idempotent: re-running on
       an already-installed hook is a no-op. Refuses to clobber an
       existing non-managed hook unless --force is passed.
-      Also runs an initial \`hivemind graph build\` unless
+      Also runs an initial \`memoree graph build\` unless
       --no-initial-build is passed.
 
-  hivemind graph uninstall [--cwd <path>]
+  memoree graph uninstall [--cwd <path>]
       Remove our managed block from .git/hooks/post-commit. If our block
       was the only content, deletes the file; otherwise leaves the rest
       intact. Snapshots and history are NOT touched (\`rm -rf
-      ~/.hivemind/graphs/<key>\` if you really want them gone).
+      ~/.memoree/graphs/<key>\` if you really want them gone).
 
-  hivemind graph pull [--cwd <path>]
-      Download the freshest cloud snapshot for HEAD into the local graph
+  memoree graph pull [--cwd <path>]
+      Load the freshest backend snapshot for HEAD into the local graph
       dir (any worktree of this user counts). No-op if local already
-      matches cloud sha256 or local was built later than cloud. Requires
-      \`hivemind login\`. Best-effort: any network/auth failure leaves
-      the local files untouched. Disable via HIVEMIND_GRAPH_PULL=0.
+      matches backend sha256 or local was built later than the backend row.
+      Best-effort: any storage failure leaves
+      the local files untouched. Disable via MEMOREE_GRAPH_PULL=0.
 
-  hivemind graph --help
+  memoree graph --help
       Show this message.
 
   Future subcommands (Phase 1.5+): daemon, search, latest, push, pull, prune.
 `;
 
 // Which directories to skip during discovery lives in
-// src/graph/ignore-config.ts — a user-editable JSON (~/.deeplake/graph-ignore.json)
+// src/graph/ignore-config.ts — a user-editable JSON (~/.memoree/graph-ignore.json)
 // merged with the repo's own .gitignore (honored via git ls-files).
 
-/** Top-level dispatcher: invoked from src/cli/index.ts on `hivemind graph ...`. */
+/** Top-level dispatcher: invoked from src/cli/index.ts on `memoree graph ...`. */
 export function runGraphCommand(args: string[]): void | Promise<void> {
   const sub = args[0];
   if (sub === undefined || sub === "--help" || sub === "-h" || sub === "help") {
@@ -134,7 +134,7 @@ export function runGraphCommand(args: string[]): void | Promise<void> {
   if (sub === "pull") {
     return runPullCommand(args.slice(1));
   }
-  console.error(`hivemind graph: unknown subcommand '${sub}'`);
+  console.error(`memoree graph: unknown subcommand '${sub}'`);
   console.error(USAGE);
   process.exit(2);
 }
@@ -162,7 +162,7 @@ function parseInitArgs(args: string[]): InitOptions {
       console.log(USAGE);
       process.exit(0);
     } else {
-      console.error(`hivemind graph init: unknown argument '${a}'`);
+      console.error(`memoree graph init: unknown argument '${a}'`);
       console.error(USAGE);
       process.exit(2);
     }
@@ -178,10 +178,10 @@ async function runInitCommand(args: string[]): Promise<void> {
       console.log(`Installed post-commit hook at ${status.path}`);
       break;
     case "already-ours":
-      console.log(`Post-commit hook already managed by hivemind (no change): ${status.path}`);
+      console.log(`Post-commit hook already managed by memoree (no change): ${status.path}`);
       break;
     case "foreign-hook":
-      console.error(`hivemind graph init: ${status.hint}`);
+      console.error(`memoree graph init: ${status.hint}`);
       process.exit(1);
   }
   if (opts.initialBuild) {
@@ -190,7 +190,7 @@ async function runInitCommand(args: string[]): Promise<void> {
     await runBuildCommand(["--cwd", opts.cwd, "--trigger", "manual"]);
   } else {
     console.log("");
-    console.log("Skipped initial build (--no-initial-build). Run `hivemind graph build` when ready.");
+    console.log("Skipped initial build (--no-initial-build). Run `memoree graph build` when ready.");
   }
 
   // Docs onboarding — the one moment a human consents to LLM spend. The
@@ -212,9 +212,9 @@ async function runInitCommand(args: string[]): Promise<void> {
       const cliEntry = process.argv[1];
       if (cliEntry) {
         spawnDetachedNodeWorker(cliEntry, ["docs", "wiki", "--cwd", root]);
-        console.log("Generating wiki docs in the background — check with: hivemind docs list");
+        console.log("Generating wiki docs in the background — check with: memoree docs list");
       } else {
-        console.log("Run `hivemind docs wiki` to generate the corpus.");
+        console.log("Run `memoree docs wiki` to generate the corpus.");
       }
     }
   }
@@ -235,7 +235,7 @@ function parseUninstallArgs(args: string[]): UninstallOptions {
       console.log(USAGE);
       process.exit(0);
     } else {
-      console.error(`hivemind graph uninstall: unknown argument '${a}'`);
+      console.error(`memoree graph uninstall: unknown argument '${a}'`);
       console.error(USAGE);
       process.exit(2);
     }
@@ -261,7 +261,7 @@ function runUninstallCommand(args: string[]): void {
       );
       break;
     case "not-ours":
-      console.error(`hivemind graph uninstall: ${status.hint}`);
+      console.error(`memoree graph uninstall: ${status.hint}`);
       process.exit(1);
   }
 }
@@ -286,7 +286,7 @@ function parseHistoryArgs(args: string[]): HistoryOptions {
       // Validate the whole token before converting.
       const raw = args[i + 1]!;
       if (!/^\d+$/.test(raw)) {
-        console.error("hivemind graph history: -n must be a non-negative integer");
+        console.error("memoree graph history: -n must be a non-negative integer");
         process.exit(2);
       }
       n = Number(raw);
@@ -297,7 +297,7 @@ function parseHistoryArgs(args: string[]): HistoryOptions {
       console.log(USAGE);
       process.exit(0);
     } else {
-      console.error(`hivemind graph history: unknown argument '${a}'`);
+      console.error(`memoree graph history: unknown argument '${a}'`);
       console.error(USAGE);
       process.exit(2);
     }
@@ -318,7 +318,7 @@ function runHistoryCommand(args: string[]): void {
   }
 
   if (total === 0) {
-    console.log("No history yet. Run `hivemind graph build` to record one.");
+    console.log("No history yet. Run `memoree graph build` to record one.");
     return;
   }
   console.log(`history.jsonl: ${total} total entries; showing last ${entries.length}`);
@@ -355,7 +355,7 @@ function parseDiffArgs(args: string[]): DiffOptions {
     } else if (a === "--limit" && i + 1 < args.length) {
       const raw = args[i + 1]!;
       if (!/^\d+$/.test(raw)) {
-        console.error("hivemind graph diff: --limit must be a non-negative integer");
+        console.error("memoree graph diff: --limit must be a non-negative integer");
         process.exit(2);
       }
       limit = Number(raw);
@@ -366,13 +366,13 @@ function parseDiffArgs(args: string[]): DiffOptions {
     } else if (a !== undefined && !a.startsWith("--")) {
       positional.push(a);
     } else {
-      console.error(`hivemind graph diff: unknown argument '${a}'`);
+      console.error(`memoree graph diff: unknown argument '${a}'`);
       console.error(USAGE);
       process.exit(2);
     }
   }
   if (positional.length !== 2) {
-    console.error("hivemind graph diff: expected exactly two commit SHAs");
+    console.error("memoree graph diff: expected exactly two commit SHAs");
     console.error(USAGE);
     process.exit(2);
   }
@@ -386,14 +386,14 @@ function runDiffCommand(args: string[]): void {
 
   const from = loadSnapshotByCommit(baseDir, opts.sha1);
   if (from === null) {
-    console.error(`hivemind graph diff: snapshot not found for ${opts.sha1}`);
+    console.error(`memoree graph diff: snapshot not found for ${opts.sha1}`);
     console.error(`  expected: ${baseDir}/snapshots/${opts.sha1}.json`);
-    console.error("  hint: run 'hivemind graph build' on the relevant commit, or check the commit sha");
+    console.error("  hint: run 'memoree graph build' on the relevant commit, or check the commit sha");
     process.exit(1);
   }
   const to = loadSnapshotByCommit(baseDir, opts.sha2);
   if (to === null) {
-    console.error(`hivemind graph diff: snapshot not found for ${opts.sha2}`);
+    console.error(`memoree graph diff: snapshot not found for ${opts.sha2}`);
     console.error(`  expected: ${baseDir}/snapshots/${opts.sha2}.json`);
     process.exit(1);
   }
@@ -428,7 +428,7 @@ function parseBuildArgs(args: string[]): BuildOptions {
       if (v === "manual" || v === "session-end" || v === "post-commit" || v === "unknown") {
         trigger = v;
       } else {
-        console.error(`hivemind graph build: --trigger must be one of manual|session-end|post-commit|unknown (got '${v}')`);
+        console.error(`memoree graph build: --trigger must be one of manual|session-end|post-commit|unknown (got '${v}')`);
         process.exit(2);
       }
       i += 1;
@@ -436,7 +436,7 @@ function parseBuildArgs(args: string[]): BuildOptions {
       console.log(USAGE);
       process.exit(0);
     } else {
-      console.error(`hivemind graph build: unknown argument '${a}'`);
+      console.error(`memoree graph build: unknown argument '${a}'`);
       console.error(USAGE);
       process.exit(2);
     }
@@ -512,7 +512,7 @@ export async function runBuildCommand(args: string[]): Promise<void> {
 
   const metadata: GraphMetadata = {
     schema_version: 1,
-    generator: "hivemind-graph",
+    generator: "memoree-graph",
     commit_sha: commitSha,
     repo_key: repoKey,
   };
@@ -541,45 +541,45 @@ export async function runBuildCommand(args: string[]): Promise<void> {
   console.log(`Edges:         ${snapshot.links.length}`);
   console.log(`Files extracted: ${extractions.length} (skipped: ${skipped}, parse warnings: ${totalParseErrors}, cache hits: ${cacheHits}/${sourceFiles.length})`);
 
-  // Phase 3: push to Deeplake `codebase` table. Best-effort — any failure
+  // Phase 3: push to Memoree `codebase` table. Best-effort — any failure
   // logs and returns; the local snapshot is the source of truth. Skips
-  // silently when not authenticated (loadConfig returns null).
+  // silently when storage unavailable (loadConfig returns null).
   // worktreeId already computed above for the writeSnapshot call.
-  // Pass the resolved build cwd so `.hivemind` resolves against the target
+  // Pass the resolved build cwd so `.memoree` resolves against the target
   // tree (honors `--cwd`), not the process's invocation directory.
   const pushOutcome = await pushSnapshot(snapshot, worktreeId, { cwd });
   switch (pushOutcome.kind) {
     case "inserted":
-      console.log(`Cloud:         pushed to codebase table (commit ${pushOutcome.commitSha.slice(0, 7)})`);
+      console.log(`Backend:         pushed to codebase table (commit ${pushOutcome.commitSha.slice(0, 7)})`);
       break;
     case "inserted-with-duplicate-race":
-      console.warn(`Cloud:         pushed (commit ${pushOutcome.commitSha.slice(0, 7)}) but ${pushOutcome.rowCount} rows now share`);
+      console.warn(`Backend:         pushed (commit ${pushOutcome.commitSha.slice(0, 7)}) but ${pushOutcome.rowCount} rows now share`);
       console.warn(`               this identity key — a concurrent writer raced. v1.1 adds a server-side`);
       console.warn(`               UNIQUE constraint; until then, the older row(s) should be deleted manually.`);
       break;
     case "already-current":
-      console.log(`Cloud:         already up-to-date (commit ${pushOutcome.commitSha.slice(0, 7)})`);
+      console.log(`Backend:         already up-to-date (commit ${pushOutcome.commitSha.slice(0, 7)})`);
       break;
-    case "skipped-no-auth":
-      console.log(`Cloud:         skipped (not authenticated; run \`hivemind login\` to enable cloud sync)`);
+    case "skipped-no-config":
+      console.log(`Backend:         skipped (storage configuration unavailable; run \`memoree doctor\`)`);
       break;
     case "skipped-no-commit":
-      console.log(`Cloud:         skipped (no commit context — not in a git repo)`);
+      console.log(`Backend:         skipped (no commit context — not in a git repo)`);
       break;
     case "skipped-disabled":
-      console.log(`Cloud:         skipped (HIVEMIND_GRAPH_PUSH=0)`);
+      console.log(`Backend:         skipped (MEMOREE_GRAPH_PUSH=0)`);
       break;
     case "skipped-collect-disabled":
-      console.log(`Cloud:         skipped (.hivemind collect:false for this directory)`);
+      console.log(`Backend:         skipped (.memoree collect:false for this directory)`);
       break;
     case "drift":
-      console.warn(`Cloud:         DRIFT — commit ${pushOutcome.commitSha.slice(0, 7)} is in cloud with`);
-      console.warn(`               sha256=${pushOutcome.cloudSha256.slice(0, 12)}... but local rebuild produced`);
+      console.warn(`Backend:         DRIFT — commit ${pushOutcome.commitSha.slice(0, 7)} is in backend with`);
+      console.warn(`               sha256=${pushOutcome.backendSha256.slice(0, 12)}... but local rebuild produced`);
       console.warn(`               sha256=${pushOutcome.localSha256.slice(0, 12)}...`);
       console.warn(`               (probably extractor version drift; investigate before forcing.)`);
       break;
     case "error":
-      console.warn(`Cloud:         push error (non-fatal): ${pushOutcome.message}`);
+      console.warn(`Backend:         push error (non-fatal): ${pushOutcome.message}`);
       break;
   }
 
@@ -588,7 +588,7 @@ export async function runBuildCommand(args: string[]): Promise<void> {
   // graph-init onboarding). Detached, best-effort — never blocks the build.
   const autoCfg = loadConfig();
   if (autoCfg && maybeSpawnDocsRefresh(cwd, { orgId: autoCfg.orgId, project: deriveProjectKey(cwd).key })) {
-    console.log("Docs:          spawned auto sync (enabled for this repo — `hivemind docs list`)");
+    console.log("Docs:          spawned auto sync (enabled for this repo — `memoree docs list`)");
   }
 }
 
@@ -609,7 +609,7 @@ function parsePullArgs(args: string[]): PullOptions {
       console.log(USAGE);
       process.exit(0);
     } else {
-      console.error(`hivemind graph pull: unknown argument '${a}'`);
+      console.error(`memoree graph pull: unknown argument '${a}'`);
       console.error(USAGE);
       process.exit(2);
     }
@@ -625,30 +625,30 @@ export async function runPullCommand(args: string[]): Promise<void> {
       console.log(`Pulled commit ${outcome.commitSha.slice(0, 7)}`);
       console.log(`  sha256:  ${outcome.snapshotSha256.slice(0, 12)}...`);
       console.log(`  bytes:   ${outcome.bytes}`);
-      // CodeRabbit Minor: `sourceWorktreePath` is the cloud row's `worktree_id`
+      // CodeRabbit Minor: `sourceWorktreePath` is the backend row's `worktree_id`
       // column (a 16-char sha256 hex, NOT a filesystem path). Print the FULL
-      // value so the user can correlate cloud rows by id; truncating it was
+      // value so the user can correlate backend rows by id; truncating it was
       // misleading (also worktree_id is already short — no truncation needed).
       console.log(`  origin:  worktree_id=${outcome.sourceWorktreePath}`);
-      console.log(`  cloud ts: ${new Date(outcome.cloudTs).toISOString()}`);
+      console.log(`  backend ts: ${new Date(outcome.backendTs).toISOString()}`);
       break;
     case "up-to-date":
       console.log(`Already up-to-date (commit ${outcome.commitSha.slice(0, 7)}, sha256 ${outcome.snapshotSha256.slice(0, 12)}...)`);
       break;
     case "local-newer":
-      console.log(`Local is newer than cloud — not pulling.`);
+      console.log(`Local is newer than backend — not pulling.`);
       console.log(`  commit:   ${outcome.commitSha.slice(0, 7)}`);
       console.log(`  local ts: ${new Date(outcome.localTs).toISOString()}`);
-      console.log(`  cloud ts: ${new Date(outcome.cloudTs).toISOString()}`);
+      console.log(`  backend ts: ${new Date(outcome.backendTs).toISOString()}`);
       break;
-    case "no-cloud-row":
-      console.log(`No cloud snapshot for commit ${outcome.commitSha.slice(0, 7)} — run \`hivemind graph build\` to create one.`);
+    case "no-backend-row":
+      console.log(`No backend snapshot for commit ${outcome.commitSha.slice(0, 7)} — run \`memoree graph build\` to create one.`);
       break;
-    case "skipped-no-auth":
-      console.log(`Skipped: not authenticated (run \`hivemind login\`).`);
+    case "skipped-no-config":
+      console.log(`Skipped: storage configuration unavailable (run \`memoree doctor\`).`);
       break;
     case "skipped-disabled":
-      console.log(`Skipped: HIVEMIND_GRAPH_PULL=0.`);
+      console.log(`Skipped: MEMOREE_GRAPH_PULL=0.`);
       break;
     case "skipped-no-head":
       console.log(`Skipped: not in a git repo (\`git rev-parse HEAD\` failed).`);
@@ -664,7 +664,7 @@ export async function runPullCommand(args: string[]): Promise<void> {
  * Stable per-worktree identifier — sha256 of the absolute path, truncated to
  * 16 chars. Distinguishes two clones of the same repo on the same machine
  * (e.g., main checkout + git worktree for a feature branch). NOT cross-machine
- * stable; pair with user_id in the cloud PK to keep rows distinct across machines.
+ * stable; pair with user_id in the backend PK to keep rows distinct across machines.
  */
 // ─── Source-file discovery ─────────────────────────────────────────────────
 

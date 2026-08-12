@@ -5,7 +5,7 @@ import { buildSnapshot } from "../../../src/graph/snapshot.js";
 import type { GraphMetadata, GraphObservation } from "../../../src/graph/types.js";
 
 function meta(): GraphMetadata {
-  return { schema_version: 1, generator: "hivemind-graph", commit_sha: "c", repo_key: "k" };
+  return { schema_version: 1, generator: "memoree-graph", commit_sha: "c", repo_key: "k" };
 }
 function obs(): GraphObservation {
   return {

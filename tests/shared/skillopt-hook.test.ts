@@ -8,7 +8,7 @@ vi.mock("../../src/skillify/skillopt-trigger.js", () => ({
 import { markSkillPending, runEventTrigger } from "../../src/skillify/skillopt-trigger.js";
 import { armSkillOptOnSkillUse, reactSkillOpt, skillRefFromSkillFileRead } from "../../src/hooks/shared/skillopt-hook.js";
 
-beforeEach(() => { vi.clearAllMocks(); delete process.env.HIVEMIND_SKILLOPT_DISABLED; delete process.env.HIVEMIND_WIKI_WORKER; });
+beforeEach(() => { vi.clearAllMocks(); delete process.env.MEMOREE_SKILLOPT_DISABLED; delete process.env.MEMOREE_WIKI_WORKER; });
 
 describe("armSkillOptOnSkillUse", () => {
   it("arms on a Skill tool_use, passing the skill ref + tool_use_id", () => {
@@ -20,9 +20,9 @@ describe("armSkillOptOnSkillUse", () => {
     expect(markSkillPending).not.toHaveBeenCalled();
   });
   it("does nothing when disabled, or when the input has no skill string", () => {
-    process.env.HIVEMIND_SKILLOPT_DISABLED = "1";
+    process.env.MEMOREE_SKILLOPT_DISABLED = "1";
     armSkillOptOnSkillUse("s1", "Skill", { skill: "posthog--kamo" });
-    delete process.env.HIVEMIND_SKILLOPT_DISABLED;
+    delete process.env.MEMOREE_SKILLOPT_DISABLED;
     armSkillOptOnSkillUse("s1", "Skill", {});
     expect(markSkillPending).not.toHaveBeenCalled();
   });
@@ -67,8 +67,8 @@ describe("reactSkillOpt", () => {
     reactSkillOpt("s1", "   \n", "codex");
     expect(runEventTrigger).not.toHaveBeenCalled();
   });
-  it("does nothing inside an internal worker call (HIVEMIND_WIKI_WORKER=1)", () => {
-    process.env.HIVEMIND_WIKI_WORKER = "1";
+  it("does nothing inside an internal worker call (MEMOREE_WIKI_WORKER=1)", () => {
+    process.env.MEMOREE_WIKI_WORKER = "1";
     reactSkillOpt("s1", "hi", "claude_code");
     expect(runEventTrigger).not.toHaveBeenCalled();
   });

@@ -17,14 +17,14 @@ const bundlePath = resolve(process.cwd(), "harnesses", "claude-code", "bundle", 
 const bundleExists = existsSync(bundlePath);
 
 function makeFakeHome(): string {
-  const home = join(tmpdir(), `hivemind-gc-it-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(join(home, ".claude", "plugins", "cache", "hivemind", "hivemind"), { recursive: true });
-  mkdirSync(join(home, ".deeplake"), { recursive: true });
+  const home = join(tmpdir(), `memoree-gc-it-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  mkdirSync(join(home, ".claude", "plugins", "cache", "memoree", "memoree"), { recursive: true });
+  mkdirSync(join(home, ".memoree"), { recursive: true });
   return home;
 }
 
 function mkVersion(home: string, version: string): string {
-  const v = join(home, ".claude", "plugins", "cache", "hivemind", "hivemind", version);
+  const v = join(home, ".claude", "plugins", "cache", "memoree", "memoree", version);
   mkdirSync(join(v, "bundle"), { recursive: true });
   writeFileSync(join(v, "bundle", "marker.txt"), version);
   return v;
@@ -34,9 +34,9 @@ function writeManifest(home: string, version: string): void {
   const manifest = {
     version: 2,
     plugins: {
-      "hivemind@hivemind": [{
+      "memoree@memoree": [{
         scope: "user",
-        installPath: join(home, ".claude", "plugins", "cache", "hivemind", "hivemind", version),
+        installPath: join(home, ".claude", "plugins", "cache", "memoree", "memoree", version),
         version,
       }],
     },
@@ -49,7 +49,7 @@ function runGcBundle(home: string, bundleInsideHome: string): { stdout: string; 
     const stdout = execFileSync("node", [bundleInsideHome], {
       // homedir() reads HOME on POSIX and USERPROFILE on Windows — set both so
       // the GC bundle resolves the fake cache root on every platform.
-      env: { ...process.env, HOME: home, USERPROFILE: home, HIVEMIND_DEBUG: "0" },
+      env: { ...process.env, HOME: home, USERPROFILE: home, MEMOREE_DEBUG: "0" },
       input: "",
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -70,7 +70,7 @@ describe.skipIf(!bundleExists)("plugin-cache-gc shipped bundle", () => {
   it("keeps current + two previous, deletes older versions and dead-PID snapshots", () => {
     const home = makeFakeHome();
     try {
-      const versionsRoot = join(home, ".claude", "plugins", "cache", "hivemind", "hivemind");
+      const versionsRoot = join(home, ".claude", "plugins", "cache", "memoree", "memoree");
       mkVersion(home, "0.6.36");
       mkVersion(home, "0.6.37");
       mkVersion(home, "0.6.38");
@@ -97,7 +97,7 @@ describe.skipIf(!bundleExists)("plugin-cache-gc shipped bundle", () => {
   it("preserves live-PID snapshots", () => {
     const home = makeFakeHome();
     try {
-      const versionsRoot = join(home, ".claude", "plugins", "cache", "hivemind", "hivemind");
+      const versionsRoot = join(home, ".claude", "plugins", "cache", "memoree", "memoree");
       mkVersion(home, "0.6.38");
       const current = mkVersion(home, "0.6.39");
       // Our own PID is alive; the GC must not touch this snapshot.
@@ -117,7 +117,7 @@ describe.skipIf(!bundleExists)("plugin-cache-gc shipped bundle", () => {
   it("deletes nothing when manifest is missing (bail-safe)", () => {
     const home = makeFakeHome();
     try {
-      const versionsRoot = join(home, ".claude", "plugins", "cache", "hivemind", "hivemind");
+      const versionsRoot = join(home, ".claude", "plugins", "cache", "memoree", "memoree");
       mkVersion(home, "0.6.37");
       mkVersion(home, "0.6.38");
       const current = mkVersion(home, "0.6.39");
@@ -133,7 +133,7 @@ describe.skipIf(!bundleExists)("plugin-cache-gc shipped bundle", () => {
   });
 
   it("skips silently when bundle is in a local --plugin-dir layout (not under ~/.claude/plugins/cache)", () => {
-    const sandbox = join(tmpdir(), `hivemind-dev-it-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const sandbox = join(tmpdir(), `memoree-dev-it-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(join(sandbox, "harnesses", "claude-code", "bundle"), { recursive: true });
     try {
       cpSync(bundlePath, join(sandbox, "harnesses", "claude-code", "bundle", "plugin-cache-gc.js"));

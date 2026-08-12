@@ -2,7 +2,7 @@
  * Stage-only memory extractor for the install-time backfill (EXTRACT phase).
  *
  * Reuses the live SessionEnd knowledge extractor — the same WIKI_PROMPT_TEMPLATE
- * and the same local embed daemon — but WITHOUT any Deeplake auth:
+ * and the same local embed daemon — but WITHOUT any Memoree auth:
  *
  *   - The live wiki-worker fetches the session JSONL from the `sessions`
  *     table and uploads the summary to the `memory` table (both auth-gated).
@@ -133,9 +133,9 @@ function runClaude(claudeBin: string, prompt: string, timeoutMs: number): Promis
   return new Promise((resolve) => {
     const child = spawn(plan.file, plan.args, {
       stdio: plan.stdio,
-      // HIVEMIND_CAPTURE=false: our own extraction claude -p calls must
+      // MEMOREE_CAPTURE=false: our own extraction claude -p calls must
       // not re-trigger the capture/wiki hooks and recurse.
-      env: { ...process.env, HIVEMIND_WIKI_WORKER: "1", HIVEMIND_CAPTURE: "false" },
+      env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
       timeout: timeoutMs,
       shell: plan.shell,
       windowsHide: plan.windowsHide,
@@ -155,7 +155,7 @@ function runClaude(claudeBin: string, prompt: string, timeoutMs: number): Promis
 async function defaultEmbed(text: string): Promise<number[] | null> {
   if (embeddingsDisabled()) return null;
   // No daemonEntry: EmbedClient falls back to the canonical shared daemon
-  // (~/.hivemind/embed-deps/embed-daemon.js) + autospawn.
+  // (~/.memoree/embed-deps/embed-daemon.js) + autospawn.
   return new EmbedClient({ autoSpawn: true }).embed(text, "document");
 }
 

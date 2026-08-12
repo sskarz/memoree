@@ -33,7 +33,7 @@ import { EmbedClient } from "../embeddings/client.js";
 import { embeddingSqlLiteral } from "../embeddings/sql.js";
 import { buildDirectSessionInsertSql } from "./shared/session-insert-sql.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
-import { isHivemindPluginEnabled } from "../utils/plugin-state.js";
+import { isMemoreePluginEnabled } from "../utils/plugin-state.js";
 import { ensurePluginNodeModulesLink } from "../embeddings/self-heal.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -50,7 +50,7 @@ const PLUGIN_VERSION = getInstalledVersion(__bundleDir, ".claude-plugin") ?? "";
 
 // Self-heal the shared-deps symlink for this plugin version. Marketplace
 // auto-upgrades drop new versioned cache dirs without the symlink that
-// `hivemind embeddings install` originally created; this restores it on
+// `memoree embeddings install` originally created; this restores it on
 // first capture after each upgrade. No-op when the symlink already exists,
 // shared deps are not installed, or the user has disabled embeddings.
 if (!embeddingsDisabled()) {
@@ -78,14 +78,14 @@ interface HookInput {
   agent_transcript_path?: string;
 }
 
-const CAPTURE = process.env.HIVEMIND_CAPTURE !== "false";
+const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
 
 async function main(): Promise<void> {
   if (!CAPTURE) return;
-  if (!isHivemindPluginEnabled()) { log("plugin disabled, skipping capture"); return; }
+  if (!isMemoreePluginEnabled()) { log("plugin disabled, skipping capture"); return; }
   if (!entrypointPassesOnlyCliGate()) return;
   const input = await readStdin<HookInput>();
-  // Per-directory `.hivemind`: skip capture where opted out, and route to the
+  // Per-directory `.memoree`: skip capture where opted out, and route to the
   // configured org/workspace otherwise.
   const config = resolveCaptureConfig(input.cwd ?? process.cwd(), log);
   if (!config) return;
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   // Self-heal the owner record for sessions that were already open before this
   // shipped (SessionStart only records it for new sessions). One /proc walk on
   // the first event where the record is missing; a no-op thereafter.
-  if (input.session_id && process.env.HIVEMIND_WIKI_WORKER !== "1") {
+  if (input.session_id && process.env.MEMOREE_WIKI_WORKER !== "1") {
     ensureSessionOwner(input.session_id);
   }
 
@@ -247,7 +247,7 @@ async function main(): Promise<void> {
   reactSkillOpt(input.session_id, input.prompt, "claude_code");
 
   if (input.hook_event_name === "Stop") {
-    if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+    if (process.env.MEMOREE_WIKI_WORKER === "1") return;
     tryStopCounterTrigger({
       config,
       cwd: input.cwd ?? "",
@@ -260,7 +260,7 @@ async function main(): Promise<void> {
 
 /** Increment the event counter and, if the threshold is crossed, spawn a background wiki worker. */
 function maybeTriggerPeriodicSummary(sessionId: string, cwd: string, config: Config): void {
-  if (process.env.HIVEMIND_WIKI_WORKER === "1") return;
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
   try {
     const state = bumpTotalCount(sessionId);
@@ -312,7 +312,7 @@ main().catch((e) => {
   // <url>" notice there is a prompt-injection pattern (imperative text +
   // URL injected into the model's context) and external agents correctly
   // flag it. The credit-exhausted condition is surfaced to the USER via the
-  // SessionStart banner instead — deeplake-api.ts enqueues a
+  // SessionStart banner instead — memoree-api.ts enqueues a
   // `userVisibleOnly` `balance-exhausted` notification. Hard rule: nothing
   // user-facing is ever written into the model/agent prompt.
   process.exit(0);

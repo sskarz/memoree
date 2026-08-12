@@ -213,7 +213,7 @@ describe("redactSecrets — high-entropy backstop", () => {
 
   it("does NOT mask a long single-case word or a filesystem path", () => {
     expect(redactSecrets("abcdefghijklmnopqrstuvwxyzabc")).toBe("abcdefghijklmnopqrstuvwxyzabc");
-    const path = "/home/admin/sasun/work/deeplake-api/internal/workspaces";
+    const path = "/home/admin/sasun/work/memoree-api/internal/workspaces";
     expect(redactSecrets(path)).toBe(path);
   });
 

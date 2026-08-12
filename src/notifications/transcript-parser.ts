@@ -4,13 +4,13 @@
  *
  * Goal: compute the ONE load-bearing quantity for the weekly savings recap:
  *   `memorySearchBytes` = total bytes returned from Bash tool calls grep'ing
- *   `~/.deeplake/memory/` — i.e. the actual past-session content hivemind
+ *   `~/.memoree/memory/` — i.e. the actual past-session content memoree
  *   delivered into Claude's context this session.
  *
  * Mechanics. Each transcript line is a JSON object whose shape varies. We
  * walk the file in order and:
  *   1. When we see an assistant turn with a `tool_use` block where
- *      `name === "Bash"` AND the command references `.deeplake/memory`,
+ *      `name === "Bash"` AND the command references `.memoree/memory`,
  *      we record the `tool_use_id`.
  *   2. When we later see a user-role message carrying a `tool_result` whose
  *      `tool_use_id` is in our set, we count the byte length of its
@@ -94,7 +94,7 @@ export function parseTranscript(
     return empty;
   }
 
-  // tool_use_ids whose command targeted hivemind memory. The matching
+  // tool_use_ids whose command targeted memoree memory. The matching
   // tool_result lands on a later line, so we accumulate ids as we walk.
   const memoryLookupToolUseIds = new Set<string>();
 
@@ -156,13 +156,13 @@ export function parseTranscript(
 }
 
 /**
- * Match Bash commands that reference the hivemind memory store. We use
- * substring match on `.deeplake/memory` rather than enumerating verbs
+ * Match Bash commands that reference the memoree memory store. We use
+ * substring match on `.memoree/memory` rather than enumerating verbs
  * (grep, cat, rg, find, head, tail, ...) because pipeline shapes vary
  * and a path reference is itself strong signal.
  */
 export function isMemoryLookupCommand(command: string): boolean {
-  return command.includes(".deeplake/memory");
+  return command.includes(".memoree/memory");
 }
 
 /**

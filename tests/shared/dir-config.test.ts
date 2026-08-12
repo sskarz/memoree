@@ -1,190 +1,82 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "../../src/config.js";
-import {
-  findDirConfig,
-  parseDirConfig,
-  resolveDirConfig,
-} from "../../src/dir-config.js";
+import { configFromStorage, type SqliteStorageConfig } from "../../src/config.js";
+import { findDirConfig, parseDirConfig, resolveDirConfig } from "../../src/dir-config.js";
 
 let root: string;
 
-function base(): Config {
-  return {
-    token: "tok",
-    orgId: "global-org",
-    orgName: "global",
-    userName: "u",
+function base() {
+  const storage: SqliteStorageConfig = {
+    kind: "sqlite",
+    path: join(root, "memoree.sqlite3"),
+    orgId: "local",
+    orgName: "local",
+    userName: "alice",
     workspaceId: "default",
-    apiUrl: "https://api.deeplake.ai",
     tableName: "memory",
     sessionsTableName: "sessions",
     skillsTableName: "skills",
-    rulesTableName: "hivemind_rules",
-    goalsTableName: "hivemind_goals",
-    kpisTableName: "hivemind_kpis",
+    rulesTableName: "memoree_rules",
+    goalsTableName: "memoree_goals",
+    kpisTableName: "memoree_kpis",
+    docsTableName: "memoree_docs",
     codebaseTableName: "codebase",
-    docsTableName: "docs",
-    memoryPath: "/tmp/mem",
+    memoryPath: join(root, "memory"),
+    vectorScanLimit: 100,
   };
+  return configFromStorage(storage);
 }
 
-/** mkdir -p under the sandbox root and return the absolute path. */
-function dir(...segs: string[]): string {
-  const p = join(root, ...segs);
-  mkdirSync(p, { recursive: true });
-  return p;
+function directory(...parts: string[]): string {
+  const path = join(root, ...parts);
+  mkdirSync(path, { recursive: true });
+  return path;
 }
 
-function write(dirPath: string, name: string, body: unknown): void {
-  writeFileSync(join(dirPath, name), typeof body === "string" ? body : JSON.stringify(body));
+function writeConfig(path: string, name: ".memoree" | ".memoree.local", value: unknown): void {
+  writeFileSync(join(path, name), typeof value === "string" ? value : JSON.stringify(value));
 }
 
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "hivemind-dir-config-"));
-});
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), "memoree-dir-config-")); });
+afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
-describe("parseDirConfig", () => {
-  it("whitelists known fields and ignores the rest", () => {
-    expect(
-      parseDirConfig(JSON.stringify({ orgId: "a", workspaceId: "w", collect: false, junk: 1, token: "x" })),
-    ).toEqual({ orgId: "a", workspaceId: "w", collect: false });
+describe("directory configuration", () => {
+  it("accepts only repositoryKey and collect", () => {
+    expect(parseDirConfig(JSON.stringify({ repositoryKey: "repo-a", collect: false, token: "ignored" })))
+      .toEqual({ repositoryKey: "repo-a", collect: false });
+    expect(parseDirConfig("[]")).toBeNull();
+    expect(parseDirConfig("{bad")).toBeNull();
   });
 
-  it("drops fields of the wrong type", () => {
-    expect(parseDirConfig(JSON.stringify({ orgId: 5, collect: "no" }))).toEqual({});
+  it("walks upward and prefers the nearest configuration", () => {
+    writeConfig(directory("repo"), ".memoree", { repositoryKey: "outer" });
+    writeConfig(directory("repo", "packages", "app"), ".memoree", { repositoryKey: "inner" });
+    expect(findDirConfig(directory("repo", "packages", "app", "src"), root)?.raw.repositoryKey).toBe("inner");
   });
 
-  it("returns null for malformed JSON, arrays, and non-objects", () => {
-    expect(parseDirConfig("{not json")).toBeNull();
-    expect(parseDirConfig("[1,2]")).toBeNull();
-    expect(parseDirConfig('"a string"')).toBeNull();
-    expect(parseDirConfig("null")).toBeNull();
-  });
-});
-
-describe("findDirConfig", () => {
-  it("returns null when no file exists up to the boundary", () => {
-    const leaf = dir("a", "b");
-    expect(findDirConfig(leaf, root)).toBeNull();
+  it("prefers .memoree.local in the same directory", () => {
+    const repo = directory("repo");
+    writeConfig(repo, ".memoree", { repositoryKey: "shared" });
+    writeConfig(repo, ".memoree.local", { repositoryKey: "personal" });
+    expect(findDirConfig(repo, root)?.raw.repositoryKey).toBe("personal");
   });
 
-  it("finds a file in an ancestor directory (walk up)", () => {
-    write(dir("proj"), ".hivemind", { orgId: "acme" });
-    const found = findDirConfig(dir("proj", "svc", "deep"), root);
-    expect(found?.raw.orgId).toBe("acme");
-    expect(found?.path).toBe(join(root, "proj", ".hivemind"));
+  it("routes both the public config and nested storage config", () => {
+    const repo = directory("repo");
+    writeConfig(repo, ".memoree", { repositoryKey: "project-x" });
+    const result = resolveDirConfig(base(), repo);
+    expect(result.config.workspaceId).toBe("project-x");
+    expect(result.config.storage.workspaceId).toBe("project-x");
+    expect(result.collect).toBe(true);
   });
 
-  it("nearest directory wins over an ancestor", () => {
-    write(dir("proj"), ".hivemind", { orgId: "outer" });
-    write(dir("proj", "svc"), ".hivemind", { orgId: "inner" });
-    const found = findDirConfig(dir("proj", "svc", "x"), root);
-    expect(found?.raw.orgId).toBe("inner");
-  });
-
-  it("prefers .hivemind.local over .hivemind in the same directory", () => {
-    const d = dir("proj");
-    write(d, ".hivemind", { orgId: "committed" });
-    write(d, ".hivemind.local", { orgId: "personal" });
-    expect(findDirConfig(d, root)?.raw.orgId).toBe("personal");
-  });
-
-  it("skips an unparseable file and keeps walking up", () => {
-    write(dir("proj"), ".hivemind", { orgId: "valid-ancestor" });
-    write(dir("proj", "svc"), ".hivemind", "{ broken json");
-    const found = findDirConfig(dir("proj", "svc"), root);
-    expect(found?.raw.orgId).toBe("valid-ancestor");
-  });
-});
-
-describe("resolveDirConfig", () => {
-  it("passes through the global identity when no .hivemind applies", () => {
-    const res = resolveDirConfig(base(), dir("empty"));
-    expect(res.collect).toBe(true);
-    expect(res.found).toBeNull();
-    expect(res.config.orgId).toBe("global-org");
-  });
-
-  it("overlays org + workspace, leaving unset fields on the global default", () => {
-    write(dir("proj"), ".hivemind", { orgId: "acme", orgName: "Acme" });
-    const res = resolveDirConfig(base(), dir("proj"));
-    expect(res.collect).toBe(true);
-    expect(res.config.orgId).toBe("acme");
-    expect(res.config.orgName).toBe("Acme");
-    expect(res.config.workspaceId).toBe("default"); // untouched
-  });
-
-  it("derives orgName from orgId when only orgId is given", () => {
-    write(dir("proj"), ".hivemind", { orgId: "acme" });
-    expect(resolveDirConfig(base(), dir("proj")).config.orgName).toBe("acme");
-  });
-
-  it("routes the workspace independently of the org", () => {
-    write(dir("proj"), ".hivemind", { workspaceId: "client-work" });
-    const res = resolveDirConfig(base(), dir("proj"));
-    expect(res.config.orgId).toBe("global-org");
-    expect(res.config.workspaceId).toBe("client-work");
-  });
-
-  it("suppresses capture on collect:false, leaving a bare config untouched", () => {
-    write(dir("proj"), ".hivemind", { collect: false });
-    const res = resolveDirConfig(base(), dir("proj"));
-    expect(res.collect).toBe(false);
-    expect(res.config.orgId).toBe("global-org");
-    expect(res.found?.path).toBe(join(root, "proj", ".hivemind"));
-  });
-
-  it("collect:false suppresses capture but still applies the identity overlay", () => {
-    // `collect` governs WRITES only. org/workspace are identity and must still
-    // route reads — otherwise `{collect:false, orgId:...}` would silently drop
-    // orgId on the floor. "Read this workspace, never write to it" is valid.
-    write(dir("proj"), ".hivemind", { orgId: "acme", workspaceId: "client-work", collect: false });
-    const res = resolveDirConfig(base(), dir("proj"));
-    expect(res.collect).toBe(false);
-    expect(res.config.orgId).toBe("acme");
-    expect(res.config.workspaceId).toBe("client-work");
-  });
-});
-
-describe("resolveDirConfig — env precedence (env > .hivemind)", () => {
-  it("HIVEMIND_ORG_ID locks the org, but the workspace still routes", () => {
-    write(dir("proj"), ".hivemind", { orgId: "acme", workspaceId: "client-work" });
-    // base already reflects the env-pinned org (loadConfig folds it in).
-    const pinned = { ...base(), orgId: "env-org", orgName: "env-org" };
-    const res = resolveDirConfig(pinned, dir("proj"), { HIVEMIND_ORG_ID: "env-org" });
-    expect(res.config.orgId).toBe("env-org"); // .hivemind org ignored
-    expect(res.config.workspaceId).toBe("client-work"); // workspace still routes
-  });
-
-  it("HIVEMIND_WORKSPACE_ID locks the workspace, but the org still routes", () => {
-    write(dir("proj"), ".hivemind", { orgId: "acme", workspaceId: "client-work" });
-    const pinned = { ...base(), workspaceId: "env-ws" };
-    const res = resolveDirConfig(pinned, dir("proj"), { HIVEMIND_WORKSPACE_ID: "env-ws" });
-    expect(res.config.orgId).toBe("acme"); // org still routes
-    expect(res.config.workspaceId).toBe("env-ws"); // .hivemind workspace ignored
-  });
-
-  it("both env vars set → .hivemind routing is fully ignored", () => {
-    write(dir("proj"), ".hivemind", { orgId: "acme", workspaceId: "client-work" });
-    const pinned = { ...base(), orgId: "env-org", orgName: "env-org", workspaceId: "env-ws" };
-    const res = resolveDirConfig(pinned, dir("proj"), {
-      HIVEMIND_ORG_ID: "env-org",
-      HIVEMIND_WORKSPACE_ID: "env-ws",
-    });
-    expect(res.config.orgId).toBe("env-org");
-    expect(res.config.workspaceId).toBe("env-ws");
-  });
-
-  it("collect:false is a fail-safe opt-out — env does not force capture on", () => {
-    write(dir("proj"), ".hivemind", { collect: false });
-    const res = resolveDirConfig(base(), dir("proj"), { HIVEMIND_ORG_ID: "env-org" });
-    expect(res.collect).toBe(false);
+  it("supports repository-level capture opt-out without changing reads", () => {
+    const repo = directory("repo");
+    writeConfig(repo, ".memoree", { repositoryKey: "read-only", collect: false });
+    const result = resolveDirConfig(base(), repo);
+    expect(result.collect).toBe(false);
+    expect(result.config.workspaceId).toBe("read-only");
   });
 });

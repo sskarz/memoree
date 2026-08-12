@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * CLI surface for `hivemind rules`.
+ * CLI surface for `memoree rules`.
  *
  * Usage:
- *   hivemind rules add "<text>" [--scope team]
- *       Add a new team-wide rule. v1 hardcodes scope='team' (the only
+ *   memoree rules add "<text>" [--scope shared]
+ *       Add a new shared rule. The command hardcodes scope='shared' (the only
  *       supported value); the flag is accepted for forward compatibility.
- *   hivemind rules list [--status active|done|all] [--limit N]
+ *   memoree rules list [--status active|done|all] [--limit N]
  *       List rules. Default: active, latest 10.
- *   hivemind rules edit <rule-id> "<new text>"
+ *   memoree rules edit <rule-id> "<new text>"
  *       Edit an existing rule's text — INSERTs a fresh version row,
  *       preserves the rule_id, bumps version.
- *   hivemind rules done <rule-id>
+ *   memoree rules done <rule-id>
  *       Mark a rule done (status='done'). Audit-trail-preserving: a new
  *       version row is appended even if the rule is already done.
  *
@@ -33,16 +33,16 @@ import {
   listRules,
   type RuleRow,
 } from "../rules/index.js";
-import { isMissingTableError } from "../deeplake-schema.js";
+import { isMissingTableError } from "../storage/schema.js";
 
 const USAGE = `
-hivemind rules — manage team-wide rules
+memoree rules — manage shared rules
 
 Usage:
-  hivemind rules add "<text>" [--scope team]
-  hivemind rules list [--status active|done|all] [--limit N]
-  hivemind rules edit <rule-id> "<new text>"
-  hivemind rules done <rule-id>
+  memoree rules add "<text>" [--scope shared]
+  memoree rules list [--status active|done|all] [--limit N]
+  memoree rules edit <rule-id> "<new text>"
+  memoree rules done <rule-id>
 `.trim();
 
 function logUsageAndExit(code = 1): never {
@@ -56,7 +56,7 @@ function logUsageAndExit(code = 1): never {
 function requireConfig(): ReturnType<typeof loadRoutedConfig> & object {
   const cfg = loadRoutedConfig();
   if (!cfg) {
-    console.error("Not logged in. Run `hivemind login` first.");
+    console.error("Memoree storage is unavailable. Run `memoree doctor`.");
     process.exit(2);
     throw new Error("unreachable");
   }
@@ -67,16 +67,16 @@ function makeApi(cfg: NonNullable<ReturnType<typeof loadRoutedConfig>>): Storage
   return createStorageBackend(cfg, cfg.rulesTableName);
 }
 
-function parseScope(args: string[]): "team" | null {
+function parseScope(args: string[]): "shared" | null {
   const idx = args.findIndex(a => a === "--scope" || a.startsWith("--scope="));
-  if (idx === -1) return "team";
+  if (idx === -1) return "shared";
   const raw = args[idx].includes("=") ? args[idx].split("=", 2)[1] : args[idx + 1];
-  if (raw !== "team") {
-    console.error(`Invalid --scope value: ${raw}. Rules support 'team' only in v1.`);
+  if (raw !== "shared") {
+    console.error(`Invalid --scope value: ${raw}. Rules support 'shared' only.`);
     process.exit(1);
     throw new Error("unreachable");
   }
-  return "team";
+  return "shared";
 }
 
 function parseStatus(args: string[]): "active" | "done" | "all" {
@@ -127,7 +127,7 @@ function stripKnownFlags(args: string[]): string[] {
 
 function formatListRow(r: RuleRow): string {
   // Print the full rule_id (36-char UUID) so users can copy-paste it
-  // straight into `hivemind rules edit <id>` / `done <id>`. An earlier
+  // straight into `memoree rules edit <id>` / `done <id>`. An earlier
   // version truncated to 8 chars for readability, but edit/done do an
   // exact-match SELECT on rule_id, so a truncated copy failed with
   // "Rule not found". Codex review on S2 surfaced this — see commit
@@ -161,11 +161,11 @@ export async function runRulesCommand(args: string[]): Promise<void> {
     const positional = stripKnownFlags(args.slice(1));
     const text = positional[0];
     if (!text) {
-      console.error("Missing rule text. Usage: hivemind rules add \"<text>\" [--scope team]");
+      console.error("Missing rule text. Usage: memoree rules add \"<text>\" [--scope shared]");
       process.exit(1);
       throw new Error("unreachable");
     }
-    parseScope(args.slice(1)); // validate even though scope is hardcoded to 'team'
+    parseScope(args.slice(1));
     try {
       const out = await insertRule(api.query.bind(api), tableName, {
         text,
@@ -186,7 +186,7 @@ export async function runRulesCommand(args: string[]): Promise<void> {
 
     // Skip the SELECT entirely when we can prove the table doesn't exist.
     // `list` (unlike the write subcommands) never runs ensureRulesTable, so an
-    // org that has only ever listed rules has no hivemind_rules table. Firing
+    // org that has only ever listed rules has no memoree_rules table. Firing
     // the doomed SELECT logs a 42P01 ERROR on the server for every list and
     // SessionStart inject (fleet-wide: thousands/day), and because the server
     // streams query results the missing-table error can reach the client as an
@@ -222,7 +222,7 @@ export async function runRulesCommand(args: string[]): Promise<void> {
     const ruleId = positional[0];
     const newText = positional[1];
     if (!ruleId || !newText) {
-      console.error("Usage: hivemind rules edit <rule-id> \"<new text>\"");
+      console.error("Usage: memoree rules edit <rule-id> \"<new text>\"");
       process.exit(1);
       throw new Error("unreachable");
     }
@@ -245,7 +245,7 @@ export async function runRulesCommand(args: string[]): Promise<void> {
     const positional = stripKnownFlags(args.slice(1));
     const ruleId = positional[0];
     if (!ruleId) {
-      console.error("Usage: hivemind rules done <rule-id>");
+      console.error("Usage: memoree rules done <rule-id>");
       process.exit(1);
       throw new Error("unreachable");
     }

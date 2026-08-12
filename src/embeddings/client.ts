@@ -20,11 +20,11 @@ import {
 import { log as _log } from "../utils/debug.js";
 
 // Canonical location for the standalone daemon bundle, deposited by
-// `hivemind embeddings install`. Used as the auto-spawn fallback when
-// neither opts.daemonEntry nor HIVEMIND_EMBED_DAEMON is set — so any
+// `memoree embeddings install`. Used as the auto-spawn fallback when
+// neither opts.daemonEntry nor MEMOREE_EMBED_DAEMON is set — so any
 // agent (including pi, which has no bundled daemon of its own) can spawn
 // the same shared daemon process.
-const SHARED_DAEMON_PATH = join(homedir(), ".hivemind", "embed-deps", "embed-daemon.js");
+const SHARED_DAEMON_PATH = join(homedir(), ".memoree", "embed-deps", "embed-daemon.js");
 
 const log = (m: string) => _log("embed-client", m);
 
@@ -65,12 +65,12 @@ export class EmbedClient {
     this.pidPath = pidPathFor(uid, dir);
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_CLIENT_TIMEOUT_MS;
     // Resolution order: explicit opt → env override → canonical shared
-    // location (set up by `hivemind embeddings install`). The shared path
+    // location (set up by `memoree embeddings install`). The shared path
     // is checked at use-time, not here, so a missing file just means
     // "no auto-spawn" without preventing socket-only connects when
     // another agent has already spawned the daemon.
     this.daemonEntry = opts.daemonEntry
-      ?? process.env.HIVEMIND_EMBED_DAEMON
+      ?? process.env.MEMOREE_EMBED_DAEMON
       ?? (existsSync(SHARED_DAEMON_PATH) ? SHARED_DAEMON_PATH : undefined);
     this.autoSpawn = opts.autoSpawn ?? true;
     this.spawnWaitMs = opts.spawnWaitMs ?? 5000;
@@ -250,9 +250,9 @@ export class EmbedClient {
    * daemon (the bundle daemon that can't find its deps) and clear
    * sock/pid so the next call spawns fresh.
    *
-   * Previously this also enqueued a user-visible "Hivemind embeddings
+   * Previously this also enqueued a user-visible "Memoree embeddings
    * disabled — deps missing" notification telling the user to run
-   * `hivemind embeddings install`. The notification was removed because
+   * `memoree embeddings install`. The notification was removed because
    * (a) the recycle alone often fixes the issue silently, and (b) the
    * warning kept stacking on top of the primary session-start banner
    * which clashed with the single-slot priority model. The `detail`
@@ -459,20 +459,20 @@ function sleep(ms: number): Promise<void> {
  * Detect daemon-side errors that indicate `@huggingface/transformers` is
  * not resolvable from the daemon's bundle location. Matches:
  *   - The actionable wrapper we throw from `defaultImportTransformers`
- *     (contains the literal `hivemind embeddings install`), or
+ *     (contains the literal `memoree embeddings install`), or
  *   - A Node module-resolution error that specifically names
  *     `@huggingface/transformers`.
  *
  * Bare `MODULE_NOT_FOUND` (without the package name) used to fall here
  * too, but that overshoots — it also caught onnxruntime-node / sharp
  * / etc. missing-dep failures, recycled the daemon for problems
- * `hivemind embeddings install` can't fix, and surfaced the wrong user
+ * `memoree embeddings install` can't fix, and surfaced the wrong user
  * guidance. Any daemon-side import failure of an unrelated dependency
  * is a packaging bug we should hear about separately, not a request to
  * reinstall transformers.
  */
 export function isTransformersMissingError(err: string): boolean {
-  if (/hivemind embeddings install/i.test(err)) return true;
+  if (/memoree embeddings install/i.test(err)) return true;
   return /@huggingface\/transformers/i.test(err);
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 // The read-stability gate (stableUnionRows) re-reads with delays in production
-// to defeat the Deeplake partial-read bug. In these unit tests we stub it to a
+// to defeat the Memoree partial-read bug. In these unit tests we stub it to a
 // single pass-through query so call-count / SQL-shape assertions stay exact and
 // fast. The gate's own behavior is covered in docs-stable-read.test.ts.
 vi.mock("../../src/docs/stable-read.js", () => ({
@@ -43,19 +43,19 @@ function mockQuery(script: Array<(sql: string) => unknown>) {
   return { calls, query };
 }
 
-const TBL = "hivemind_docs";
+const TBL = "memoree_docs";
 
 /**
- * Build a fake row matching DOCS_COLUMNS shape as the Deeplake client
+ * Build a fake row matching DOCS_COLUMNS shape as the Memoree client
  * returns it — note `anchors` arrives as a JSON STRING (TEXT column).
  */
 function fakeRow(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     id: "row-uuid",
-    doc_id: "src/shell/deeplake-fs.ts",
-    path: "/docs/myproj/deeplake-fs.ts.md",
-    content: "# deeplake-fs\n\nThe VFS.",
-    anchors: JSON.stringify([{ symbol_id: "src/shell/deeplake-fs.ts:readFile:function", content_hash: "abc123" }]),
+    doc_id: "src/shell/memoree-fs.ts",
+    path: "/docs/myproj/memoree-fs.ts.md",
+    content: "# memoree-fs\n\nThe VFS.",
+    anchors: JSON.stringify([{ symbol_id: "src/shell/memoree-fs.ts:readFile:function", content_hash: "abc123" }]),
     tier: "fast",
     status: "active",
     project: "myproj",
@@ -78,22 +78,22 @@ describe("insertDoc", () => {
   it("INSERTs a v1 row, both timestamps equal, content + anchors as E-strings", async () => {
     const { calls, query } = mockQuery([() => []]);
     const result = await insertDoc(query, TBL, {
-      doc_id: "src/shell/deeplake-fs.ts",
-      path: "/docs/myproj/deeplake-fs.ts.md",
-      content: "# deeplake-fs",
-      anchors: [{ symbol_id: "src/shell/deeplake-fs.ts:readFile:function", content_hash: "abc123" }],
+      doc_id: "src/shell/memoree-fs.ts",
+      path: "/docs/myproj/memoree-fs.ts.md",
+      content: "# memoree-fs",
+      anchors: [{ symbol_id: "src/shell/memoree-fs.ts:readFile:function", content_hash: "abc123" }],
       project: "myproj",
     });
-    expect(result).toEqual({ doc_id: "src/shell/deeplake-fs.ts", version: 1 });
+    expect(result).toEqual({ doc_id: "src/shell/memoree-fs.ts", version: 1 });
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatch(/^INSERT INTO "hivemind_docs"/);
+    expect(calls[0]).toMatch(/^INSERT INTO "memoree_docs"/);
     // version literal is 1, never quoted
     expect(calls[0]).toMatch(/, 1, /);
     expect(calls[0]).toContain("'active'");
     expect(calls[0]).toContain("'myproj'");
     // content + anchors use E-string literals so backslashes / quotes stay safe
-    expect(calls[0]).toContain(`E'# deeplake-fs'`);
-    expect(calls[0]).toContain(`E'[{"symbol_id":"src/shell/deeplake-fs.ts:readFile:function","content_hash":"abc123"}]'`);
+    expect(calls[0]).toContain(`E'# memoree-fs'`);
+    expect(calls[0]).toContain(`E'[{"symbol_id":"src/shell/memoree-fs.ts:readFile:function","content_hash":"abc123"}]'`);
     // tier defaults to fast on first insert
     expect(calls[0]).toContain("'fast'");
     // created_at and updated_at are stamped identically at insert time
@@ -255,9 +255,9 @@ describe("upsertDoc", () => {
     // project's legacy row, or a SIBLING scope (a branch overlay / the canonical
     // main row) with the same bare doc_id, must survive in a shared table.
     expect(calls[0]).toBe(
-      `DELETE FROM "hivemind_docs" WHERE id = 'p|main|src/a.ts' OR (doc_id = 'src/a.ts' AND project = 'p' AND scope = 'main')`,
+      `DELETE FROM "memoree_docs" WHERE id = 'p|main|src/a.ts' OR (doc_id = 'src/a.ts' AND project = 'p' AND scope = 'main')`,
     );
-    expect(calls[1]).toMatch(/^INSERT INTO "hivemind_docs"/);
+    expect(calls[1]).toMatch(/^INSERT INTO "memoree_docs"/);
     // id column is the deterministic composite, NOT a random uuid
     expect(calls[1]).toContain(`'p|main|src/a.ts', 'src/a.ts',`);
     expect(calls[1]).toContain(`'p', 'main', E'{}', 1, `); // project, scope, source_fp, version 1
@@ -276,7 +276,7 @@ describe("upsertDoc", () => {
     // DELETE targets ONLY this overlay's id + same-scope duplicates. The main
     // row (scope='main') is not in the predicate, so it survives.
     expect(calls[0]).toBe(
-      `DELETE FROM "hivemind_docs" WHERE id = 'p|u:alice|b:feature|src/a.ts' ` +
+      `DELETE FROM "memoree_docs" WHERE id = 'p|u:alice|b:feature|src/a.ts' ` +
       `OR (doc_id = 'src/a.ts' AND project = 'p' AND scope = 'u:alice|b:feature')`,
     );
     expect(calls[0]).not.toContain("scope = 'main'");
@@ -314,12 +314,12 @@ describe("editDoc", () => {
       () => [fakeRow({ id: "row-1", version: 1, content: "old", created_at: "2026-05-20T10:00:00.000Z" })],
       () => [],
     ]);
-    const result = await editDoc(query, TBL, { doc_id: "src/shell/deeplake-fs.ts", content: "new" });
-    expect(result).toEqual({ doc_id: "src/shell/deeplake-fs.ts", version: 2 });
+    const result = await editDoc(query, TBL, { doc_id: "src/shell/memoree-fs.ts", content: "new" });
+    expect(result).toEqual({ doc_id: "src/shell/memoree-fs.ts", version: 2 });
     expect(calls).toHaveLength(2);
-    expect(calls[0]).toMatch(/^SELECT .* FROM "hivemind_docs" WHERE doc_id = 'src\/shell\/deeplake-fs.ts'$/);
+    expect(calls[0]).toMatch(/^SELECT .* FROM "memoree_docs" WHERE doc_id = 'src\/shell\/memoree-fs.ts'$/);
     // UPDATE-in-place, targeting the exact row by id.
-    expect(calls[1]).toMatch(/^UPDATE "hivemind_docs" SET/);
+    expect(calls[1]).toMatch(/^UPDATE "memoree_docs" SET/);
     expect(calls[1]).toContain(`E'new'`);
     expect(calls[1]).toContain("version = 2");
     expect(calls[1]).toContain(`WHERE id = 'row-1'`);
@@ -334,7 +334,7 @@ describe("editDoc", () => {
       () => [fakeRow({ version: 3, content: "preserve me" })],
       () => [],
     ]);
-    const result = await editDoc(query, TBL, { doc_id: "src/shell/deeplake-fs.ts", status: "archived" });
+    const result = await editDoc(query, TBL, { doc_id: "src/shell/memoree-fs.ts", status: "archived" });
     expect(result.version).toBe(4);
     expect(calls[1]).toContain(`E'preserve me'`);
     expect(calls[1]).toContain("'archived'");
@@ -348,9 +348,9 @@ describe("editDoc", () => {
       () => [],
     ]);
     await editDoc(query, TBL, {
-      doc_id: "src/shell/deeplake-fs.ts",
+      doc_id: "src/shell/memoree-fs.ts",
       content: "refreshed",
-      anchors: [{ symbol_id: "src/shell/deeplake-fs.ts:writeFile:function", content_hash: "def456" }],
+      anchors: [{ symbol_id: "src/shell/memoree-fs.ts:writeFile:function", content_hash: "def456" }],
     });
     expect(calls[1]).toContain("def456");
     expect(calls[1]).not.toContain("abc123");
@@ -370,7 +370,7 @@ describe("editDoc", () => {
       () => [],
     ]);
     await expect(
-      editDoc(query, TBL, { doc_id: "src/shell/deeplake-fs.ts", content: "" }),
+      editDoc(query, TBL, { doc_id: "src/shell/memoree-fs.ts", content: "" }),
     ).rejects.toThrow(/must not be empty/);
     expect(calls).toHaveLength(1); // SELECT only
   });
@@ -418,7 +418,7 @@ describe("setDoc", () => {
     expect(result).toEqual({ doc_id: "src/a.ts", version: 1 });
     expect(calls).toHaveLength(2);
     expect(calls[0]).toMatch(/^SELECT .* WHERE doc_id = 'src\/a.ts'/);
-    expect(calls[1]).toMatch(/^INSERT INTO "hivemind_docs"/);
+    expect(calls[1]).toMatch(/^INSERT INTO "memoree_docs"/);
     expect(calls[1]).toMatch(/, 1, /);
   });
 
@@ -451,7 +451,7 @@ describe("setDoc", () => {
     expect(result).toEqual({ doc_id: "src/a.ts", version: 5 });
     expect(calls).toHaveLength(2);
     // A single UPDATE of the existing row — one row per doc, no new INSERT.
-    expect(calls[1]).toMatch(/^UPDATE "hivemind_docs" SET/);
+    expect(calls[1]).toMatch(/^UPDATE "memoree_docs" SET/);
     expect(calls[1]).not.toMatch(/^INSERT/);
     expect(calls[1]).toContain("version = 5");
     expect(calls[1]).toContain(`WHERE id = 'row-9'`);
@@ -500,7 +500,7 @@ describe("listDocs", () => {
     expect(rows[0].content).toBe("A v2");
     expect(rows[0].version).toBe(2);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatch(/^SELECT .* FROM "hivemind_docs" ORDER BY version DESC, updated_at DESC, id DESC$/);
+    expect(calls[0]).toMatch(/^SELECT .* FROM "memoree_docs" ORDER BY version DESC, updated_at DESC, id DESC$/);
   });
 
   it("honors status='all'", async () => {
@@ -603,7 +603,7 @@ describe("listDocs", () => {
     const { query } = mockQuery([() => [fakeRow({ doc_id: "A", version: 1 })]]);
     const rows = await listDocs(query, TBL);
     expect(rows[0].anchors).toEqual([
-      { symbol_id: "src/shell/deeplake-fs.ts:readFile:function", content_hash: "abc123" },
+      { symbol_id: "src/shell/memoree-fs.ts:readFile:function", content_hash: "abc123" },
     ]);
   });
 });

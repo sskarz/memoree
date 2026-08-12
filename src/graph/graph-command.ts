@@ -2,7 +2,7 @@
  * Shared graph-read command parser for the VFS intercept.
  *
  * Several agents (Claude Code, Cursor, …) intercept shell commands that read
- * the `~/.deeplake/memory/graph/` subtree and synthesize the response from the
+ * the `~/.memoree/memory/graph/` subtree and synthesize the response from the
  * local snapshot instead of touching disk. The *path taxonomy* and the
  * dispatch to `handleGraphVfs()` are identical across agents — only the
  * per-agent decision wrapper (echo vs read-cache) differs. This module owns
@@ -10,7 +10,7 @@
  * parsing (and drift apart).
  *
  * Input is the command AFTER rewritePaths() has mapped host paths
- * (`~/.deeplake/memory/...`, `$HOME/...`, absolute) onto the virtual mount root
+ * (`~/.memoree/memory/...`, `$HOME/...`, absolute) onto the virtual mount root
  * "/", so a graph read looks like `cat /graph/index.md`.
  */
 

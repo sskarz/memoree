@@ -22,9 +22,9 @@ export const INDEX_LIMIT_PER_SECTION = 50;
 
 /**
  * Pure renderer for the virtual /index.md. Single source of truth shared by
- * the deeplake-shell REPL (src/shell/deeplake-fs.ts) and the pre-tool-use
+ * the memoree-shell REPL (src/shell/memoree-fs.ts) and the pre-tool-use
  * hook path (readVirtualPathContents below). Both fetch their rows
- * separately — the shell from its DeeplakeFs cache flow, the hook one-shot
+ * separately — the shell from its MemoreeFs cache flow, the hook one-shot
  * stateless — and pass them into this function for formatting.
  *
  * Each input row is expected to carry: path, project (memory only),
@@ -53,7 +53,7 @@ export function buildVirtualIndexContent(
     lines.push("AI-generated summaries per session. Read these first for topic-level overviews.");
     lines.push("");
     if (opts.summaryTruncated) {
-      lines.push(`_Showing ${INDEX_LIMIT_PER_SECTION} most-recent of many — older summaries reachable via \`Grep pattern=\"...\" path=\"~/.deeplake/memory\"\`._`);
+      lines.push(`_Showing ${INDEX_LIMIT_PER_SECTION} most-recent of many — older summaries reachable via \`Grep pattern=\"...\" path=\"~/.memoree/memory\"\`._`);
       lines.push("");
     }
     lines.push("| Session | Created | Last Updated | Project | Description |");
@@ -82,7 +82,7 @@ export function buildVirtualIndexContent(
     lines.push("Raw session records (dialogue, tool calls). Read for exact detail / quotes.");
     lines.push("");
     if (opts.sessionTruncated) {
-      lines.push(`_Showing ${INDEX_LIMIT_PER_SECTION} most-recent of many — older sessions reachable via \`Grep pattern=\"...\" path=\"~/.deeplake/memory\"\`._`);
+      lines.push(`_Showing ${INDEX_LIMIT_PER_SECTION} most-recent of many — older sessions reachable via \`Grep pattern=\"...\" path=\"~/.memoree/memory\"\`._`);
       lines.push("");
     }
     lines.push("| Session | Created | Last Updated | Description |");

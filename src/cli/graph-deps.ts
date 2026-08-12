@@ -145,10 +145,10 @@ export function ensureGraphDeps(deps: GraphDepsDeps = {}): void {
   } = deps;
   try {
     // Same disable switch the graph-on-stop auto-build hook honors
-    // (HIVEMIND_GRAPH_ON_STOP=0): if the graph feature is off there's nothing
+    // (MEMOREE_GRAPH_ON_STOP=0): if the graph feature is off there's nothing
     // to provision for, so skip the install entirely.
-    if (process.env.HIVEMIND_GRAPH_ON_STOP === "0") {
-      logFn(`  Graph          provisioning skipped (HIVEMIND_GRAPH_ON_STOP=0)`);
+    if (process.env.MEMOREE_GRAPH_ON_STOP === "0") {
+      logFn(`  Graph          provisioning skipped (MEMOREE_GRAPH_ON_STOP=0)`);
       return;
     }
     if (specs.length === 0) {
@@ -207,7 +207,7 @@ export function ensureGraphDeps(deps: GraphDepsDeps = {}): void {
       // transformers; the parsers are installed alongside.
       const pkgPath = join(sharedDir, "package.json");
       if (!existsSync(pkgPath)) {
-        writeJson(pkgPath, { name: "hivemind-embed-deps", version: "1.0.0", private: true, dependencies: {} });
+        writeJson(pkgPath, { name: "memoree-embed-deps", version: "1.0.0", private: true, dependencies: {} });
       }
       logFn(`  Graph          installing tree-sitter parsers into ${sharedDir} (code-graph; ~tens of MB)`);
       // Refresh the lock mtime immediately before npm so a genuinely long
@@ -367,7 +367,7 @@ function defaultRunNpm(specs: string[], cwd: string): void {
  *
  * Two correctness properties over a naive "run it if present":
  *
- * 1. STRICT mode (`HIVEMIND_STRICT_POSTINSTALL=1`) turns the script's final
+ * 1. STRICT mode (`MEMOREE_STRICT_POSTINSTALL=1`) turns the script's final
  *    bindings-load check into a non-zero exit. By DEFAULT that script exits 0
  *    even when the from-source rebuild's load check still fails (so end-user
  *    `npm install` never hard-breaks) — but here a silent heal "success" over
@@ -389,6 +389,6 @@ export function defaultRunHeal(cwd: string, healScript: string = join(pkgRoot(),
   execFileSync(process.execPath, [healScript], {
     cwd,
     stdio: "inherit",
-    env: { ...process.env, HIVEMIND_STRICT_POSTINSTALL: "1" },
+    env: { ...process.env, MEMOREE_STRICT_POSTINSTALL: "1" },
   });
 }

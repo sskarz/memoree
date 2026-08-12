@@ -58,11 +58,11 @@ describe("hermes spawn-wiki-worker source", () => {
     expect(SPAWN_SRC).not.toContain('resolveCliBin("codex"');
   });
 
-  it("config builder reads HIVEMIND_HERMES_PROVIDER (default openrouter) and HIVEMIND_HERMES_MODEL (default haiku-4-5)", () => {
-    expect(SPAWN_SRC).toContain("HIVEMIND_HERMES_PROVIDER");
-    expect(SPAWN_SRC).toContain("HIVEMIND_HERMES_MODEL");
-    expect(SPAWN_SRC).toMatch(/HIVEMIND_HERMES_PROVIDER.*\?\?\s*"openrouter"/);
-    expect(SPAWN_SRC).toMatch(/HIVEMIND_HERMES_MODEL.*\?\?\s*"anthropic\/claude-haiku-4-5"/);
+  it("config builder reads MEMOREE_HERMES_PROVIDER (default openrouter) and MEMOREE_HERMES_MODEL (default haiku-4-5)", () => {
+    expect(SPAWN_SRC).toContain("MEMOREE_HERMES_PROVIDER");
+    expect(SPAWN_SRC).toContain("MEMOREE_HERMES_MODEL");
+    expect(SPAWN_SRC).toMatch(/MEMOREE_HERMES_PROVIDER.*\?\?\s*"openrouter"/);
+    expect(SPAWN_SRC).toMatch(/MEMOREE_HERMES_MODEL.*\?\?\s*"anthropic\/claude-haiku-4-5"/);
   });
 
   it("hooksDir + wikiLog point at ~/.hermes/ (not ~/.codex/)", () => {

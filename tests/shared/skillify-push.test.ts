@@ -9,7 +9,7 @@ import {
 } from "../../src/skillify/push.js";
 
 /**
- * Tests for the manual local -> Deeplake skill push. The Deeplake query fn is
+ * Tests for the manual local -> Memoree skill push. The Memoree query fn is
  * the only mocked boundary: a spy captures every SQL statement so we assert on
  * the SELECT (version lookup) + INSERT (append-only row) the real code emits.
  *

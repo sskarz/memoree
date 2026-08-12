@@ -35,7 +35,7 @@ function snap(nodes: GraphNode[], links: GraphEdge[]): GraphSnapshot {
   return {
     directed: true,
     multigraph: true,
-    graph: { schema_version: 1, generator: "hivemind-graph", commit_sha: "x", repo_key: "k" },
+    graph: { schema_version: 1, generator: "memoree-graph", commit_sha: "x", repo_key: "k" },
     observation: {
       ts: "1970-01-01T00:00:00Z",
       branch: null,
@@ -214,16 +214,16 @@ describe("runDiffCommand — CLI integration", () => {
   let baseDir: string;
   let graphsHome: string;
   let workDir: string;
-  const prevHome = process.env.HIVEMIND_GRAPHS_HOME;
+  const prevHome = process.env.MEMOREE_GRAPHS_HOME;
 
   beforeEach(() => {
     graphsHome = mkdtempSync(join(tmpdir(), "graph-diff-home-"));
     workDir = mkdtempSync(join(tmpdir(), "graph-diff-work-"));
-    process.env.HIVEMIND_GRAPHS_HOME = graphsHome;
+    process.env.MEMOREE_GRAPHS_HOME = graphsHome;
   });
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HIVEMIND_GRAPHS_HOME;
-    else process.env.HIVEMIND_GRAPHS_HOME = prevHome;
+    if (prevHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
+    else process.env.MEMOREE_GRAPHS_HOME = prevHome;
     rmSync(graphsHome, { recursive: true, force: true });
     rmSync(workDir, { recursive: true, force: true });
   });

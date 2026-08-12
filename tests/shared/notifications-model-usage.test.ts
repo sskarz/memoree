@@ -18,7 +18,7 @@ import {
 let TEMP_DIR = "";
 
 beforeEach(() => {
-  TEMP_DIR = mkdtempSync(join(tmpdir(), "hivemind-model-usage-test-"));
+  TEMP_DIR = mkdtempSync(join(tmpdir(), "memoree-model-usage-test-"));
 });
 
 afterEach(() => {
@@ -53,7 +53,7 @@ function codexTokenCount(last: Record<string, number>, total: Record<string, num
 describe("parseClaudeTurnMeta", () => {
   it("returns null for missing path / no path", () => {
     expect(parseClaudeTurnMeta(undefined)).toBeNull();
-    expect(parseClaudeTurnMeta("/tmp/does-not-exist-hivemind.jsonl")).toBeNull();
+    expect(parseClaudeTurnMeta("/tmp/does-not-exist-memoree.jsonl")).toBeNull();
   });
 
   it("extracts model + normalized usage from the last assistant turn", () => {

@@ -53,8 +53,8 @@ function uid(): string {
 
 function pathsFor(dir: string): { socket: string; pid: string } {
   return {
-    socket: join(dir, `hivemind-embed-${uid()}.sock`),
-    pid: join(dir, `hivemind-embed-${uid()}.pid`),
+    socket: join(dir, `memoree-embed-${uid()}.sock`),
+    pid: join(dir, `memoree-embed-${uid()}.pid`),
   };
 }
 
@@ -92,7 +92,7 @@ async function startFakeDaemon(
 // paths, so the suite is skipped.
 describe.skipIf(process.platform === "win32")("tryEmbedStandalone", () => {
   it("exports SHARED_DAEMON_PATH under the canonical install location", () => {
-    expect(SHARED_DAEMON_PATH).toMatch(/\.hivemind\/embed-deps\/embed-daemon\.js$/);
+    expect(SHARED_DAEMON_PATH).toMatch(/\.memoree\/embed-deps\/embed-daemon\.js$/);
   });
 
   // Case 3 — socket alive, happy path.
@@ -618,7 +618,7 @@ describe.skipIf(process.platform === "win32")("tryEmbedStandalone", () => {
     // Exercises the `opts.x ?? default` plumbing — the point of this test is
     // the defaulting, not the daemon's presence. On a CI runner nothing is
     // listening at the canonical per-user socket, so the call returns null.
-    // On a dev box where `hivemind embeddings install` left a live daemon,
+    // On a dev box where `memoree embeddings install` left a live daemon,
     // the very same call returns a real vector. Both are valid; we assert
     // the *shape* (null, or a numeric vector) rather than probing the
     // filesystem — the daemon answers on a unix socket whose liveness is

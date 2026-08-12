@@ -8,7 +8,7 @@ import {
   extractRegexAlternationPrefilters,
   extractRegexLiteralPrefilter,
   refineGrepMatches,
-  searchDeeplakeTables,
+  searchMemoreeTables,
   grepBothTables,
   searchDocs,
 } from "../../src/shell/grep-core.js";
@@ -21,7 +21,7 @@ describe("searchDocs", () => {
   it("hybrid: UNIONs a semantic (content_embedding <#>) + lexical query, active-only", async () => {
     const calls: string[] = [];
     const query = vi.fn(async (sql: string) => { calls.push(sql); return [{ path: "a.ts", content: "# A" }]; });
-    const rows = await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: [0.1, 0.2, 0.3] });
+    const rows = await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: [0.1, 0.2, 0.3] });
     expect(calls).toHaveLength(1);
     const sql = calls[0];
     expect(sql).toContain("content_embedding <#> ");              // semantic branch
@@ -36,38 +36,38 @@ describe("searchDocs", () => {
     const calls: string[] = [];
     const query = vi.fn(async (sql: string) => { calls.push(sql); return []; });
     // contentScanOnly + prefilterPatterns → those anchors filter server-side.
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: null, contentScanOnly: true, prefilterPatterns: ["foo", "bar"] });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: null, contentScanOnly: true, prefilterPatterns: ["foo", "bar"] });
     expect(calls[0]).toContain("foo");
     expect(calls[0]).toContain("bar");
     // contentScanOnly + single prefilterPattern fallback.
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: null, contentScanOnly: true, prefilterPatterns: [], prefilterPattern: "solo" });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: null, contentScanOnly: true, prefilterPatterns: [], prefilterPattern: "solo" });
     expect(calls[1]).toContain("solo");
     // multi-word non-regex → per-word patterns.
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: null, multiWordPatterns: ["alpha", "beta"] });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: null, multiWordPatterns: ["alpha", "beta"] });
     expect(calls[2]).toContain("alpha");
     expect(calls[2]).toContain("beta");
     // hybrid + contentScanOnly: lexical arm uses the prefilter anchors too.
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: [0.1], contentScanOnly: true, prefilterPatterns: ["hyb"] });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: [0.1], contentScanOnly: true, prefilterPatterns: ["hyb"] });
     expect(calls[3]).toContain("hyb");
   });
 
   it("project scoping: filters to (project OR legacy '') when set, none when unset", async () => {
     const calls: string[] = [];
     const query = vi.fn(async (sql: string) => { calls.push(sql); return []; });
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: null, project: "abc123" });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: null, project: "abc123" });
     expect(calls[0]).toContain(`(project = 'abc123' OR project = '')`);
     // Unset → no project clause at all (single-project tables unchanged).
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: null });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: null });
     expect(calls[1]).not.toContain("project =");
     // Hybrid path carries the filter into BOTH union arms.
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: [0.1], project: "abc123" });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: [0.1], project: "abc123" });
     expect(calls[2].split("(project = 'abc123' OR project = '')").length - 1).toBe(2);
   });
 
   it("lexical-only when no query embedding: content ILIKE, no cosine operator", async () => {
     const calls: string[] = [];
     const query = vi.fn(async (sql: string) => { calls.push(sql); return []; });
-    await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: null });
+    await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: null });
     expect(calls).toHaveLength(1);
     expect(calls[0]).not.toContain("<#>");
     expect(calls[0]).toContain("status = 'active'");
@@ -80,7 +80,7 @@ describe("searchDocs", () => {
       { path: "dup.ts", content: "lexical" },
       { path: "b.ts", content: "b" },
     ]);
-    const rows = await searchDocs(query, "hivemind_docs", { ...baseOpts, queryEmbedding: [0.1] });
+    const rows = await searchDocs(query, "memoree_docs", { ...baseOpts, queryEmbedding: [0.1] });
     expect(rows.map(r => r.path)).toEqual(["dup.ts", "b.ts"]);
     expect(rows[0].content).toBe("semantic"); // first occurrence wins
   });
@@ -527,7 +527,7 @@ describe("buildPathFilter", () => {
   it("uses LIKE matching for glob targets instead of exact file matching", () => {
     // Fix #4 appends `ESCAPE '\'` so sqlLike-escaped underscores (`\_`) and
     // percent signs (`\%`) in the pattern match their literal characters on
-    // the Deeplake backend. Without the ESCAPE clause `\_` was treated as
+    // the Memoree backend. Without the ESCAPE clause `\_` was treated as
     // two literal characters and `/sessions/conv_0_session_*.json`-style
     // globs silently returned zero rows.
     expect(buildPathFilter("/summaries/projects/*.md")).toBe(
@@ -665,7 +665,7 @@ describe("refineGrepMatches", () => {
     expect(out).toContain("4:foo");
   });
 
-  // (searchDeeplakeTables + grepBothTables tests below)
+  // (searchMemoreeTables + grepBothTables tests below)
 
   it("skips rows with empty content", () => {
     const out = refineGrepMatches(
@@ -682,9 +682,9 @@ describe("refineGrepMatches", () => {
   });
 });
 
-// ── searchDeeplakeTables ─────────────────────────────────────────────────────
+// ── searchMemoreeTables ─────────────────────────────────────────────────────
 
-describe("searchDeeplakeTables", () => {
+describe("searchMemoreeTables", () => {
   function mockApi(rows: unknown[]) {
     const query = vi.fn()
       .mockImplementationOnce(async () => rows);
@@ -693,7 +693,7 @@ describe("searchDeeplakeTables", () => {
 
   it("issues one UNION ALL query with the escaped pattern and path filter", async () => {
     const api = mockApi([]);
-    await searchDeeplakeTables(api, "memory", "sessions", {
+    await searchMemoreeTables(api, "memory", "sessions", {
       pathFilter: " AND (path = '/x' OR path LIKE '/x/%')",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -712,7 +712,7 @@ describe("searchDeeplakeTables", () => {
 
   it("skips LIKE filter when contentScanOnly is true (regex-in-memory mode)", async () => {
     const api = mockApi([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: true,
       likeOp: "LIKE",
@@ -725,7 +725,7 @@ describe("searchDeeplakeTables", () => {
 
   it("uses a safe literal prefilter for regex scans when available", async () => {
     const api = mockApi([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: true,
       likeOp: "LIKE",
@@ -739,7 +739,7 @@ describe("searchDeeplakeTables", () => {
 
   it("expands alternation prefilters into OR clauses instead of literal pipes", async () => {
     const api = mockApi([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: true,
       likeOp: "LIKE",
@@ -758,7 +758,7 @@ describe("searchDeeplakeTables", () => {
       { path: "/summaries/a", content: "aaa" },
       { path: "/sessions/b", content: "bbb" },
     ]);
-    const rows = await searchDeeplakeTables(api, "m", "s", {
+    const rows = await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "LIKE", escapedPattern: "x",
     });
     expect(rows).toEqual([
@@ -769,7 +769,7 @@ describe("searchDeeplakeTables", () => {
 
   it("tolerates null content on memory row (coerces to empty string)", async () => {
     const api = mockApi([{ path: "/a", content: null }]);
-    const rows = await searchDeeplakeTables(api, "m", "s", {
+    const rows = await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "LIKE", escapedPattern: "x",
     });
     expect(rows[0]).toEqual({ path: "/a", content: "" });
@@ -777,7 +777,7 @@ describe("searchDeeplakeTables", () => {
 
   it("tolerates null content on sessions row too", async () => {
     const api = mockApi([{ path: "/b", content: null }]);
-    const rows = await searchDeeplakeTables(api, "m", "s", {
+    const rows = await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "LIKE", escapedPattern: "x",
     });
     expect(rows[0]).toEqual({ path: "/b", content: "" });
@@ -788,7 +788,7 @@ describe("searchDeeplakeTables", () => {
       query: vi.fn()
         .mockRejectedValueOnce(new Error("bad union"))
     } as any;
-    await expect(searchDeeplakeTables(api, "m", "s", {
+    await expect(searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "LIKE", escapedPattern: "x",
     })).rejects.toThrow("bad union");
     expect(api.query).toHaveBeenCalledTimes(1);
@@ -796,7 +796,7 @@ describe("searchDeeplakeTables", () => {
 
   it("defaults limit to 100 when omitted", async () => {
     const api = { query: vi.fn().mockResolvedValue([]) } as any;
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "LIKE", escapedPattern: "x",
     });
     const sql = api.query.mock.calls[0][0] as string;
@@ -807,7 +807,7 @@ describe("searchDeeplakeTables", () => {
     const rows = Array.from({ length: 5 }, (_, i) => ({ path: `/summaries/s${i}`, content: "x", source_order: 0 }));
     const api = { query: vi.fn().mockResolvedValue(rows) } as any;
     const meta = { truncated: false };
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "ILIKE", escapedPattern: "x", limit: 5,
     }, meta);
     expect(meta.truncated).toBe(true);
@@ -818,7 +818,7 @@ describe("searchDeeplakeTables", () => {
     const rows = Array.from({ length: 40 }, (_, i) => ({ path: `/s${i}`, content: "x", score: 0.5 }));
     const api = { query: vi.fn().mockResolvedValue(rows) } as any;
     const meta = { truncated: false };
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "ILIKE", escapedPattern: "x",
       queryEmbedding: [0.1, 0.2, 0.3],
     }, meta);
@@ -829,7 +829,7 @@ describe("searchDeeplakeTables", () => {
     const rows = Array.from({ length: 3 }, (_, i) => ({ path: `/s${i}`, content: "x", score: 0.5 }));
     const api = { query: vi.fn().mockResolvedValue(rows) } as any;
     const meta = { truncated: false };
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "", contentScanOnly: false, likeOp: "ILIKE", escapedPattern: "x",
       queryEmbedding: [0.1, 0.2, 0.3],
     }, meta);
@@ -902,7 +902,7 @@ describe("grepBothTables", () => {
     await grepBothTables(api, "m", "s", { ...baseParams, pattern: "foo.*bar" }, "/");
     const [sql] = api.query.mock.calls.map((c: unknown[]) => c[0] as string);
     // Default likeOp is ILIKE (case-insensitive) — buildGrepSearchOptions
-    // picks it unless HIVEMIND_GREP_LIKE=case-sensitive overrides.
+    // picks it unless MEMOREE_GREP_LIKE=case-sensitive overrides.
     expect(sql).toContain("summary::text ILIKE '%foo%'");
   });
 
@@ -913,9 +913,9 @@ describe("grepBothTables", () => {
     expect(sql).toContain("ILIKE");
   });
 
-  it("switches to LIKE when HIVEMIND_GREP_LIKE=case-sensitive", async () => {
-    const prev = process.env.HIVEMIND_GREP_LIKE;
-    process.env.HIVEMIND_GREP_LIKE = "case-sensitive";
+  it("switches to LIKE when MEMOREE_GREP_LIKE=case-sensitive", async () => {
+    const prev = process.env.MEMOREE_GREP_LIKE;
+    process.env.MEMOREE_GREP_LIKE = "case-sensitive";
     try {
       const api = mockApi([{ path: "/a", content: "hi" }]);
       await grepBothTables(api, "m", "s", baseParams, "/");
@@ -923,8 +923,8 @@ describe("grepBothTables", () => {
       expect(sql).toContain("summary::text LIKE");
       expect(sql).not.toMatch(/summary::text ILIKE/);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_GREP_LIKE;
-      else process.env.HIVEMIND_GREP_LIKE = prev;
+      if (prev === undefined) delete process.env.MEMOREE_GREP_LIKE;
+      else process.env.MEMOREE_GREP_LIKE = prev;
     }
   });
 
@@ -950,9 +950,9 @@ describe("grepBothTables", () => {
     expect(out).toContain("/summaries/a.md:trailing");
   });
 
-  it("falls back to refined output when HIVEMIND_SEMANTIC_EMIT_ALL=false even with an embedding", async () => {
-    const prev = process.env.HIVEMIND_SEMANTIC_EMIT_ALL;
-    process.env.HIVEMIND_SEMANTIC_EMIT_ALL = "false";
+  it("falls back to refined output when MEMOREE_SEMANTIC_EMIT_ALL=false even with an embedding", async () => {
+    const prev = process.env.MEMOREE_SEMANTIC_EMIT_ALL;
+    process.env.MEMOREE_SEMANTIC_EMIT_ALL = "false";
     try {
       const api = mockApi([{ path: "/a", content: "foo line\nunrelated" }]);
       const out = await grepBothTables(api, "m", "s", baseParams, "/", [0.1]);
@@ -960,8 +960,8 @@ describe("grepBothTables", () => {
       expect(out.some(l => l.includes("foo line"))).toBe(true);
       expect(out.some(l => l.includes("unrelated"))).toBe(false);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_SEMANTIC_EMIT_ALL;
-      else process.env.HIVEMIND_SEMANTIC_EMIT_ALL = prev;
+      if (prev === undefined) delete process.env.MEMOREE_SEMANTIC_EMIT_ALL;
+      else process.env.MEMOREE_SEMANTIC_EMIT_ALL = prev;
     }
   });
 });
@@ -1225,7 +1225,7 @@ describe("normalizeContent: single-turn shape { turn: {...} }", () => {
   });
 });
 
-describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
+describe("searchMemoreeTables: hybrid semantic + lexical branch", () => {
   function apiWithRows(rows: Record<string, unknown>[] = []) {
     const query = vi.fn().mockResolvedValue(rows);
     return { query, api: { query } as any };
@@ -1233,7 +1233,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
 
   it("issues a single UNION-ALL query mixing semantic + lexical on both tables", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "mem", "sess", {
+    await searchMemoreeTables(api, "mem", "sess", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -1251,7 +1251,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
 
   it("uses 1.0 sentinel on lexical sub-queries so they stay above cosine (0..1)", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -1266,7 +1266,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
 
   it("skips the lexical branch entirely when contentScanOnly=true and no prefilter", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: true,
       likeOp: "ILIKE",
@@ -1283,7 +1283,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
 
   it("falls back to prefilterPattern for regex grep with extractable literal", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: true,
       likeOp: "ILIKE",
@@ -1297,7 +1297,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
 
   it("uses prefilterPatterns alternation instead of a single prefilterPattern", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: true,
       likeOp: "ILIKE",
@@ -1318,7 +1318,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
       { path: "/a", content: "lex-dup" },
       { path: "/b", content: "other" },
     ]);
-    const out = await searchDeeplakeTables(api, "m", "s", {
+    const out = await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -1329,12 +1329,12 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
     expect(out[0].content).toBe("sem-first");
   });
 
-  it("honors HIVEMIND_SEMANTIC_LIMIT env override for the semantic sub-queries", async () => {
-    const prev = process.env.HIVEMIND_SEMANTIC_LIMIT;
-    process.env.HIVEMIND_SEMANTIC_LIMIT = "7";
+  it("honors MEMOREE_SEMANTIC_LIMIT env override for the semantic sub-queries", async () => {
+    const prev = process.env.MEMOREE_SEMANTIC_LIMIT;
+    process.env.MEMOREE_SEMANTIC_LIMIT = "7";
     try {
       const { query, api } = apiWithRows([]);
-      await searchDeeplakeTables(api, "m", "s", {
+      await searchMemoreeTables(api, "m", "s", {
         pathFilter: "",
         contentScanOnly: false,
         likeOp: "ILIKE",
@@ -1345,14 +1345,14 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
       // Semantic LIMIT is 7; lexical still 20 (default).
       expect(sql).toMatch(/summary_embedding <#> [^)]+\) AS score FROM "m" WHERE ARRAY_LENGTH\(summary_embedding, 1\) > 0 ORDER BY score DESC LIMIT 7/);
     } finally {
-      if (prev === undefined) delete process.env.HIVEMIND_SEMANTIC_LIMIT;
-      else process.env.HIVEMIND_SEMANTIC_LIMIT = prev;
+      if (prev === undefined) delete process.env.MEMOREE_SEMANTIC_LIMIT;
+      else process.env.MEMOREE_SEMANTIC_LIMIT = prev;
     }
   });
 
   it("skips the semantic branch entirely when queryEmbedding is an empty array", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -1366,7 +1366,7 @@ describe("searchDeeplakeTables: hybrid semantic + lexical branch", () => {
 
   it("skips the semantic branch when queryEmbedding is null", async () => {
     const { query, api } = apiWithRows([]);
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -1382,7 +1382,7 @@ describe("serializeFloat4Array (indirect)", () => {
   it("returns NULL when the embedding contains a non-finite value", async () => {
     const query = vi.fn().mockResolvedValue([]);
     const api = { query } as any;
-    await searchDeeplakeTables(api, "m", "s", {
+    await searchMemoreeTables(api, "m", "s", {
       pathFilter: "",
       contentScanOnly: false,
       likeOp: "ILIKE",
@@ -1390,7 +1390,7 @@ describe("serializeFloat4Array (indirect)", () => {
       queryEmbedding: [1, NaN, 0.3],
     });
     const sql = query.mock.calls[0][0] as string;
-    // Both semantic sub-queries degrade to NULL scoring; Deeplake accepts it
+    // Both semantic sub-queries degrade to NULL scoring; Memoree accepts it
     // and returns 0 rows for those two sub-queries so the hybrid still runs.
     expect(sql).toContain("<#> NULL");
   });
@@ -1399,5 +1399,5 @@ describe("serializeFloat4Array (indirect)", () => {
 // `bm25Term` was scaffolding for a BM25 lexical-ranker branch that was
 // dropped during the original hybrid-grep work (see commit 7b51043 — BM25
 // score scale was overpowering cosine in the UNION). The field was
-// destructured by `searchDeeplakeTables` but never read. Removed in the
+// destructured by `searchMemoreeTables` but never read. Removed in the
 // PR review follow-up — its tests would have locked dead code in place.

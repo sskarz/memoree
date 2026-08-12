@@ -2,13 +2,13 @@
 
 > Category: AI | Version: 1.0 | Date: June 2026 | Status: Active
 
-How Hivemind produces and stores 768-dimensional sentence embeddings for session messages and wiki summaries, and how those vectors enable hybrid semantic-plus-lexical recall from the VFS.
+How Memoree produces and stores 768-dimensional sentence embeddings for session messages and wiki summaries, and how those vectors enable hybrid semantic-plus-lexical recall from the VFS.
 
 **Related:**
 - [`session-capture.md`](session-capture.md)
 - [`wiki-summary-workers.md`](wiki-summary-workers.md)
 - [`../data/memory-virtual-filesystem.md`](../data/memory-virtual-filesystem.md)
-- [`../data/deeplake-tables-schema.md`](../data/deeplake-tables-schema.md)
+- [`../data/memoree-tables-schema.md`](../data/memoree-tables-schema.md)
 - [`../architecture/system-overview.md`](../architecture/system-overview.md)
 - [`../../../../docs/EMBEDDINGS.md`](../../../../docs/EMBEDDINGS.md)
 
@@ -16,18 +16,18 @@ How Hivemind produces and stores 768-dimensional sentence embeddings for session
 
 ## Why embeddings are optional
 
-Hivemind is designed to install in one command and work immediately. Bundling the nomic-embed model (`nomic-embed-text-v1.5`, ~130 MB) with `@huggingface/transformers` plus `onnxruntime-node` and `sharp` would add roughly 600 MB to the install. That is 60x the size of the core plugin for a feature most users do not need on day one. So embeddings are off by default and installed separately.
+Memoree is designed to install in one command and work immediately. Bundling the nomic-embed model (`nomic-embed-text-v1.5`, ~130 MB) with `@huggingface/transformers` plus `onnxruntime-node` and `sharp` would add roughly 600 MB to the install. That is 60x the size of the core plugin for a feature most users do not need on day one. So embeddings are off by default and installed separately.
 
-Without embeddings, every `Grep` call over `~/.deeplake/memory/` uses BM25 / `ILIKE` matching on the `message` and `summary` text columns. That is fast and good enough for keyword-based recall. When embeddings are enabled, the same queries also score against the `message_embedding` and `summary_embedding` vectors, promoting semantically similar content even when it uses different words.
+Without embeddings, every `Grep` call over `~/.memoree/memory/` uses BM25 / `ILIKE` matching on the `message` and `summary` text columns. That is fast and good enough for keyword-based recall. When embeddings are enabled, the same queries also score against the `message_embedding` and `summary_embedding` vectors, promoting semantically similar content even when it uses different words.
 
 ---
 
 ## Installation
 
-The install command deposits the shared dependencies once into `~/.hivemind/embed-deps/` and symlinks every detected agent plugin to that directory, so the 600 MB cost is paid one time regardless of how many agents are wired up:
+The install command deposits the shared dependencies once into `~/.memoree/embed-deps/` and symlinks every detected agent plugin to that directory, so the 600 MB cost is paid one time regardless of how many agents are wired up:
 
 ```bash
-hivemind embeddings install
+memoree embeddings install
 ```
 
 Re-running the command after adding a new agent adds the new symlink; the npm install is skipped because the packages are already cached. After installation, restart your agents. From the next session, captured messages and summaries will include embeddings.
@@ -42,7 +42,7 @@ The embedding computation runs in a long-lived daemon process. Running an ONNX m
 flowchart LR
     captureHook["capture.ts\n(or wiki-worker.ts)"]
     embedClient["EmbedClient\n(src/embeddings/client.ts)"]
-    unixSocket["Unix socket\n(/tmp/hivemind-embed-<uid>.sock)"]
+    unixSocket["Unix socket\n(/tmp/memoree-embed-<uid>.sock)"]
     daemon["EmbedDaemon\n(src/embeddings/daemon.ts)"]
     nomicModel["NomicEmbedder\n(nomic-embed-text-v1.5)"]
 
@@ -55,7 +55,7 @@ flowchart LR
     unixSocket -- "number[] | null" --> embedClient
 ```
 
-The socket path is `/tmp/hivemind-embed-<uid>.sock` and the pidfile is `/tmp/hivemind-embed-<uid>.pid`. Both are per-user (keyed by the process UID) so different users on the same machine never share a daemon.
+The socket path is `/tmp/memoree-embed-<uid>.sock` and the pidfile is `/tmp/memoree-embed-<uid>.pid`. Both are per-user (keyed by the process UID) so different users on the same machine never share a daemon.
 
 The daemon exits after `DEFAULT_IDLE_TIMEOUT_MS` (10 minutes) of inactivity so it does not consume RAM between sessions. The next embed call spawns a fresh one automatically.
 
@@ -69,7 +69,7 @@ The daemon exits after `DEFAULT_IDLE_TIMEOUT_MS` (10 minutes) of inactivity so i
 
 **Hello handshake and version check.** The first connection per `EmbedClient` instance sends a `hello` request. The daemon replies with `{ daemonPath, pid, protocolVersion }`. If the daemon's `daemonPath` file no longer exists on disk (the bundle that spawned it was garbage-collected by a marketplace upgrade), the client SIGTERMs the daemon, removes the sock and pid files, and lets the next call spawn a fresh one from the current bundle.
 
-**Transformers-missing recycle.** If the daemon is alive but cannot resolve `@huggingface/transformers` from its bundle path (typical after an upgrade left an older daemon process alive without its node_modules), it returns an error message containing `hivemind embeddings install`. The client treats this as a stuck daemon, SIGTERMs it, and returns `null` for the current call. The next call spawns fresh.
+**Transformers-missing recycle.** If the daemon is alive but cannot resolve `@huggingface/transformers` from its bundle path (typical after an upgrade left an older daemon process alive without its node_modules), it returns an error message containing `memoree embeddings install`. The client treats this as a stuck daemon, SIGTERMs it, and returns `null` for the current call. The next call spawns fresh.
 
 **Non-blocking contract.** `embed()` always returns `number[] | null`. Hooks treat `null` as "skip the embedding column" and proceed with the INSERT. The embedding path never blocks or fails a capture.
 
@@ -91,7 +91,7 @@ Error responses always include `{ id, error: string }`. The client's timeout for
 
 ## Storing embeddings
 
-Two columns in the Deeplake schema carry embeddings:
+Two columns in the Memoree schema carry embeddings:
 
 | Table | Column | Populated by |
 |---|---|---|
@@ -100,15 +100,15 @@ Two columns in the Deeplake schema carry embeddings:
 
 Both columns are nullable. When embeddings are disabled, the schema is unchanged and the column stores `NULL`. Enabling embeddings later fills new rows; old rows stay `NULL` and fall back to lexical ranking automatically.
 
-The SQL helper `embeddingSqlLiteral(embedding)` in `src/embeddings/sql.ts` serializes the vector for insertion. When the input is `null`, it emits `NULL`; when it is a `number[]`, it emits the Deeplake tensor literal format.
+The SQL helper `embeddingSqlLiteral(embedding)` in `src/embeddings/sql.ts` serializes the vector for insertion. When the input is `null`, it emits `NULL`; when it is a `number[]`, it emits the Memoree tensor literal format.
 
 ---
 
 ## Lexical-only fallback
 
-If `@huggingface/transformers` is not present, Hivemind silently degrades to lexical-only mode. Capture continues, rows land in Deeplake, `Grep` works via BM25 and `ILIKE`, and the embedding columns stay `NULL`. The hook log notes `embeddings: no-transformers` once at session start.
+If `@huggingface/transformers` is not present, Memoree silently degrades to lexical-only mode. Capture continues, rows land in Memoree, `Grep` works via BM25 and `ILIKE`, and the embedding columns stay `NULL`. The hook log notes `embeddings: no-transformers` once at session start.
 
-You can force lexical-only mode explicitly with `HIVEMIND_EMBEDDINGS=false`. This is useful in CI or air-gapped environments where the model download is not feasible.
+You can force lexical-only mode explicitly with `MEMOREE_EMBEDDINGS=false`. This is useful in CI or air-gapped environments where the model download is not feasible.
 
 ---
 
@@ -116,7 +116,7 @@ You can force lexical-only mode explicitly with `HIVEMIND_EMBEDDINGS=false`. Thi
 
 | Env var | Default | Effect |
 |---|---|---|
-| `HIVEMIND_EMBEDDINGS` | `true` | Set to `false` to force lexical-only mode |
-| `HIVEMIND_EMBED_DAEMON` | unset | Override the daemon entry path; resolved automatically when unset |
-| `HIVEMIND_EMBED_DIMS` | `768` | Override output vector dimensionality (advanced) |
-| `HIVEMIND_EMBED_IDLE_MS` | `600000` (10 min) | Daemon idle timeout before self-exit |
+| `MEMOREE_EMBEDDINGS` | `true` | Set to `false` to force lexical-only mode |
+| `MEMOREE_EMBED_DAEMON` | unset | Override the daemon entry path; resolved automatically when unset |
+| `MEMOREE_EMBED_DIMS` | `768` | Override output vector dimensionality (advanced) |
+| `MEMOREE_EMBED_IDLE_MS` | `600000` (10 min) | Daemon idle timeout before self-exit |

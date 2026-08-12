@@ -30,7 +30,7 @@ const validConfig = {
 };
 
 async function runHook(env: Record<string, string | undefined> = {}): Promise<void> {
-  delete process.env.HIVEMIND_WIKI_WORKER;
+  delete process.env.MEMOREE_WIKI_WORKER;
   for (const [k, v] of Object.entries(env)) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
@@ -56,8 +56,8 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("cursor session-end hook (stub)", () => {
-  it("HIVEMIND_WIKI_WORKER=1 → no stdin read", async () => {
-    await runHook({ HIVEMIND_WIKI_WORKER: "1" });
+  it("MEMOREE_WIKI_WORKER=1 → no stdin read", async () => {
+    await runHook({ MEMOREE_WIKI_WORKER: "1" });
     expect(stdinMock).not.toHaveBeenCalled();
   });
 

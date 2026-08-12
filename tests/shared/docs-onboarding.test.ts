@@ -27,9 +27,9 @@ describe("runDocsOnboarding (the one consent moment — fail-closed everywhere)"
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "docs-onb-"));
     regFile = join(dir, "docs-auto.json");
-    process.env.HIVEMIND_DOCS_AUTO_FILE = regFile; // registry file isolation
+    process.env.MEMOREE_DOCS_AUTO_FILE = regFile; // registry file isolation
   });
-  afterEach(() => { delete process.env.HIVEMIND_DOCS_AUTO_FILE; rmSync(dir, { recursive: true, force: true }); });
+  afterEach(() => { delete process.env.MEMOREE_DOCS_AUTO_FILE; rmSync(dir, { recursive: true, force: true }); });
 
   // detectAgents: () => [] opts these tests out of the (separate) "which agent
   // writes the docs?" question — that gate is covered in docs-llm-agent.test.ts.
@@ -76,7 +76,7 @@ describe("runDocsOnboarding (the one consent moment — fail-closed everywhere)"
     const r = await runDocsOnboarding({ ...base, isGitRepo: false, io: t.io });
     expect(r.asked).toBe(false);
     expect(t.asked).toHaveLength(0);
-    expect(t.said.join("\n")).toContain("hivemind docs wiki");
+    expect(t.said.join("\n")).toContain("memoree docs wiki");
   });
 
   it("garbage input resolves to NO", async () => {

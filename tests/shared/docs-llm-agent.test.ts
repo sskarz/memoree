@@ -38,17 +38,17 @@ describe("resolveDocLlmSpec — config.json slots between env and auto-detect", 
     expect(spec.label).toBe("codex");
   });
 
-  it("env HIVEMIND_DOCS_LLM_AGENT wins over the config agent", () => {
+  it("env MEMOREE_DOCS_LLM_AGENT wins over the config agent", () => {
     setDocsLlmAgent("codex");
-    const spec = resolveDocLlmSpec({ HIVEMIND_DOCS_LLM_AGENT: "cursor" });
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "cursor" });
     expect(spec.label).toBe("cursor");
   });
 
-  it("HIVEMIND_DOCS_LLM_BIN wins over both env agent and config", () => {
+  it("MEMOREE_DOCS_LLM_BIN wins over both env agent and config", () => {
     setDocsLlmAgent("codex");
     const spec = resolveDocLlmSpec({
-      HIVEMIND_DOCS_LLM_AGENT: "cursor",
-      HIVEMIND_DOCS_LLM_BIN: "/opt/mytool",
+      MEMOREE_DOCS_LLM_AGENT: "cursor",
+      MEMOREE_DOCS_LLM_BIN: "/opt/mytool",
     });
     expect(spec.label).toBe("custom:/opt/mytool");
   });
@@ -203,7 +203,7 @@ describe("runDocsOnboarding — agent question gate", () => {
   });
 });
 
-// ── `hivemind docs agent` command (runs before requireConfig — no creds) ─────
+// ── `memoree docs agent` command (runs before requireConfig — no creds) ─────
 
 describe("runDocsCommand agent — show / set / validate", () => {
   let dir: string;
@@ -233,7 +233,7 @@ describe("runDocsCommand agent — show / set / validate", () => {
   it("no arg → shows current (auto when unset) + installed + how to set", async () => {
     await runDocsCommand(["agent"]);
     expect(logs.join("\n")).toMatch(/Docs LLM agent:/);
-    expect(logs.join("\n")).toMatch(/Set with: hivemind docs agent/);
+    expect(logs.join("\n")).toMatch(/Set with: memoree docs agent/);
   });
 
   it("no arg after a pin → shows the pinned agent", async () => {

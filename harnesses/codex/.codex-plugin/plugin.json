@@ -1,36 +1,36 @@
 {
-  "name": "hivemind",
+  "name": "memoree",
   "version": "0.7.145",
-  "description": "Cloud-backed persistent memory powered by Deeplake — read, write, and share memory across Codex sessions and agents",
+  "description": "Cloud-backed persistent memory powered by Memoree — read, write, and share memory across Codex sessions and agents",
   "author": {
-    "name": "Activeloop",
-    "url": "https://deeplake.ai"
+    "name": "sskarz",
+    "url": "https://memoree.ai"
   },
-  "homepage": "https://deeplake.ai",
-  "repository": "https://github.com/activeloopai/hivemind",
+  "homepage": "https://memoree.ai",
+  "repository": "https://github.com/sskarz/memoree",
   "license": "Apache-2.0",
   "keywords": [
     "memory",
-    "deeplake",
+    "memoree",
     "persistent-memory",
     "session-capture",
     "search"
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Hivemind Memory",
-    "shortDescription": "Persistent shared memory for AI agents powered by Deeplake",
-    "longDescription": "Captures all session activity and provides cross-session, cross-agent memory search via ~/.deeplake/memory/. Memory is stored in Deeplake managed tables and shared across sessions, users, and agents in your organization.",
-    "developerName": "Activeloop",
+    "displayName": "Memoree Memory",
+    "shortDescription": "Persistent shared memory for AI agents powered by Memoree",
+    "longDescription": "Captures all session activity and provides cross-session, cross-agent memory search via ~/.memoree/memory/. Memory is stored in Memoree managed tables and shared across sessions, users, and agents in your organization.",
+    "developerName": "sskarz",
     "category": "Productivity",
     "capabilities": [
       "Persistent memory",
       "Session capture",
       "Semantic search"
     ],
-    "websiteURL": "https://deeplake.ai",
-    "privacyPolicyURL": "https://www.activeloop.ai/privacy/",
-    "termsOfServiceURL": "https://www.activeloop.ai/terms/",
+    "websiteURL": "https://memoree.ai",
+    "privacyPolicyURL": "https://www.sskarz.ai/privacy/",
+    "termsOfServiceURL": "https://www.sskarz.ai/terms/",
     "defaultPrompt": [
       "Recall what our team decided about this project recently.",
       "Save this as a memory for the team.",

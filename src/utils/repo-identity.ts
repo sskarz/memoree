@@ -2,7 +2,7 @@
  * Stable per-repo identity helpers.
  *
  * Used by skillify (per-project state directory) and the upcoming codebase-graph
- * feature (per-repo storage path + Deeplake row key). Lives in src/utils so
+ * feature (per-repo storage path + Memoree row key). Lives in src/utils so
  * both consumers can import without cross-feature coupling.
  *
  * The original implementation lived in src/skillify/state.ts; it was moved

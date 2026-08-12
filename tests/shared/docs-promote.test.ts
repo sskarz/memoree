@@ -95,7 +95,7 @@ describe("promoteMergedOverlays", () => {
       }
       return [];
     });
-    const out = await promoteMergedOverlays(query, "hivemind_docs", "p", git, GROUP_FILES);
+    const out = await promoteMergedOverlays(query, "memoree_docs", "p", git, GROUP_FILES);
     expect(out).toEqual([{ doc_id: "wiki/pkg/core", fromScope: "b:feat", action: "promoted" }]);
 
     // The promoted row is written at scope main with main's fingerprint...

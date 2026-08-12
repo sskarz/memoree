@@ -1,5 +1,5 @@
 /**
- * Allowlist gate for HIVEMIND_CAPTURE_ONLY_CLI.
+ * Allowlist gate for MEMOREE_CAPTURE_ONLY_CLI.
  *
  * When the env var is "true", only capture sessions launched from the
  * interactive terminal CLI, whose CLAUDE_CODE_ENTRYPOINT is EXACTLY "cli".
@@ -22,7 +22,7 @@
 export function entrypointPassesOnlyCliGate(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  const onlyCli = env.HIVEMIND_CAPTURE_ONLY_CLI === "true";
+  const onlyCli = env.MEMOREE_CAPTURE_ONLY_CLI === "true";
   if (!onlyCli) return true;
   const entrypoint = env.CLAUDE_CODE_ENTRYPOINT ?? "";
   return entrypoint === "cli";

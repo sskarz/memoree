@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   disableEmbeddings,
   enableEmbeddings,
-  findHivemindInstalls,
+  findMemoreeInstalls,
   installEmbeddings,
   isSharedDepsInstalled,
   killEmbedDaemon,
@@ -37,59 +37,59 @@ function fakeBundleAt(dir: string): void {
 }
 
 beforeEach(() => {
-  tmpHome = mkdtempSync(join(tmpdir(), "hivemind-embeddings-test-"));
+  tmpHome = mkdtempSync(join(tmpdir(), "memoree-embeddings-test-"));
 });
 
 afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true });
 });
 
-// ── findHivemindInstalls ──────────────────────────────────────────────────
+// ── findMemoreeInstalls ──────────────────────────────────────────────────
 
-describe("findHivemindInstalls", () => {
+describe("findMemoreeInstalls", () => {
   it("returns empty when nothing is installed", () => {
-    expect(findHivemindInstalls(tmpHome)).toEqual([]);
+    expect(findMemoreeInstalls(tmpHome)).toEqual([]);
   });
 
   it("detects codex/cursor/hermes when each has a bundle/ subdir", () => {
-    fakeBundleAt(join(tmpHome, ".codex", "hivemind"));
-    fakeBundleAt(join(tmpHome, ".cursor", "hivemind"));
-    fakeBundleAt(join(tmpHome, ".hermes", "hivemind"));
-    const installs = findHivemindInstalls(tmpHome);
+    fakeBundleAt(join(tmpHome, ".codex", "memoree"));
+    fakeBundleAt(join(tmpHome, ".cursor", "memoree"));
+    fakeBundleAt(join(tmpHome, ".hermes", "memoree"));
+    const installs = findMemoreeInstalls(tmpHome);
     expect(installs.map(i => i.id).sort()).toEqual(["codex", "cursor", "hermes"]);
     for (const i of installs) {
       expect(i.pluginDir).toContain(tmpHome);
-      expect(i.pluginDir).toMatch(/hivemind$/);
+      expect(i.pluginDir).toMatch(/memoree$/);
     }
   });
 
   it("ignores agent dirs that exist but lack a bundle/ subdir (incomplete install)", () => {
-    mkDir(join(tmpHome, ".codex", "hivemind")); // exists but no bundle/
-    expect(findHivemindInstalls(tmpHome)).toEqual([]);
+    mkDir(join(tmpHome, ".codex", "memoree")); // exists but no bundle/
+    expect(findMemoreeInstalls(tmpHome)).toEqual([]);
   });
 
-  it("detects every versioned Claude Code plugin in cache/hivemind/hivemind/", () => {
-    const cache = join(tmpHome, ".claude", "plugins", "cache", "hivemind", "hivemind");
+  it("detects every versioned Claude Code plugin in cache/memoree/memoree/", () => {
+    const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
     fakeBundleAt(join(cache, "0.7.0"));
     fakeBundleAt(join(cache, "0.7.1"));
-    const installs = findHivemindInstalls(tmpHome);
+    const installs = findMemoreeInstalls(tmpHome);
     expect(installs.map(i => i.id).sort()).toEqual(["claude (0.7.0)", "claude (0.7.1)"]);
   });
 
   it("supports the alternate <version>/harnesses/claude-code/bundle layout", () => {
-    const cache = join(tmpHome, ".claude", "plugins", "cache", "hivemind", "hivemind");
+    const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
     fakeBundleAt(join(cache, "0.7.0", "harnesses", "claude-code"));
-    const installs = findHivemindInstalls(tmpHome);
+    const installs = findMemoreeInstalls(tmpHome);
     expect(installs).toHaveLength(1);
     expect(installs[0].id).toBe("claude (0.7.0)");
   });
 
-  it("skips entries in cache/hivemind/hivemind/ that aren't directories with bundles", () => {
-    const cache = join(tmpHome, ".claude", "plugins", "cache", "hivemind", "hivemind");
+  it("skips entries in cache/memoree/memoree/ that aren't directories with bundles", () => {
+    const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
     mkDir(cache);
     writeFileSync(join(cache, "stray-file"), ""); // not a dir
     mkDir(join(cache, "0.7.0")); // dir, but no bundle
-    expect(findHivemindInstalls(tmpHome)).toEqual([]);
+    expect(findMemoreeInstalls(tmpHome)).toEqual([]);
   });
 });
 
@@ -123,15 +123,15 @@ describe("SHARED_DAEMON_PATH", () => {
 
 describe("linkStateFor", () => {
   it("returns no-node-modules when the install dir has no node_modules at all", () => {
-    fakeBundleAt(join(tmpHome, ".codex", "hivemind"));
-    const state = linkStateFor({ id: "codex", pluginDir: join(tmpHome, ".codex", "hivemind") });
+    fakeBundleAt(join(tmpHome, ".codex", "memoree"));
+    const state = linkStateFor({ id: "codex", pluginDir: join(tmpHome, ".codex", "memoree") });
     expect(state.kind).toBe("no-node-modules");
   });
 
   it("returns linked-to-shared when node_modules is a symlink to the canonical shared dir", () => {
     const sharedNm = join(tmpHome, "shared-nm");
     mkDir(sharedNm);
-    const pluginDir = join(tmpHome, ".codex", "hivemind");
+    const pluginDir = join(tmpHome, ".codex", "memoree");
     fakeBundleAt(pluginDir);
     symlinkSync(sharedNm, join(pluginDir, "node_modules"));
     const state = linkStateFor({ id: "codex", pluginDir }, sharedNm);
@@ -142,7 +142,7 @@ describe("linkStateFor", () => {
     const otherDir = join(tmpHome, "other");
     mkDir(otherDir);
     const sharedNm = join(tmpHome, "shared-nm");
-    const pluginDir = join(tmpHome, ".codex", "hivemind");
+    const pluginDir = join(tmpHome, ".codex", "memoree");
     fakeBundleAt(pluginDir);
     symlinkSync(otherDir, join(pluginDir, "node_modules"));
     const state = linkStateFor({ id: "codex", pluginDir }, sharedNm);
@@ -151,7 +151,7 @@ describe("linkStateFor", () => {
   });
 
   it("returns owns-own-node-modules when node_modules is a real directory", () => {
-    const pluginDir = join(tmpHome, ".codex", "hivemind");
+    const pluginDir = join(tmpHome, ".codex", "memoree");
     fakeBundleAt(pluginDir);
     mkDir(join(pluginDir, "node_modules"));
     const state = linkStateFor({ id: "codex", pluginDir });
@@ -173,14 +173,14 @@ describe("enableEmbeddings / disableEmbeddings — config flag mutation", () => 
     _resetUserConfigForTesting();
   });
 
-  it("enableEmbeddings writes embeddings.enabled:true to ~/.deeplake/config.json", () => {
+  it("enableEmbeddings writes embeddings.enabled:true to ~/.memoree/config.json", () => {
     enableEmbeddings();
     expect(existsSync(cfgPath)).toBe(true);
     expect(JSON.parse(readFileSync(cfgPath, "utf-8"))).toEqual({ embeddings: { enabled: true } });
     expect(getEmbeddingsEnabled()).toBe(true);
   });
 
-  it("disableEmbeddings writes embeddings.enabled:false to ~/.deeplake/config.json", () => {
+  it("disableEmbeddings writes embeddings.enabled:false to ~/.memoree/config.json", () => {
     enableEmbeddings();
     disableEmbeddings();
     expect(JSON.parse(readFileSync(cfgPath, "utf-8"))).toEqual({ embeddings: { enabled: false } });
@@ -203,7 +203,7 @@ describe("enableEmbeddings / disableEmbeddings — config flag mutation", () => 
 
 describe("killEmbedDaemon", () => {
   it("returns silently when there is no pidfile or socket (fresh machine)", () => {
-    // SOCKET_DIR defaults to /tmp/.hivemind-embed-<random>/ in production — we
+    // SOCKET_DIR defaults to /tmp/.memoree-embed-<random>/ in production — we
     // can't redirect that without monkey-patching. But the function only ever
     // reads + best-effort-deletes, so calling it when nothing exists is a
     // no-op by design.
@@ -217,7 +217,7 @@ describe("killEmbedDaemon — verifies socket before SIGTERM (#2)", () => {
   // Regression for CodeRabbit #2: previously killEmbedDaemon read the PID
   // from the pidfile and blindly SIGTERMed it. If the daemon had crashed
   // and the OS recycled that PID to an unrelated user process,
-  // `hivemind embeddings disable` would silently kill that process. The
+  // `memoree embeddings disable` would silently kill that process. The
   // fix gates the SIGTERM on `_isDaemonAliveOnSocket` — if the UDS path
   // doesn't accept a connect within a short timeout, the daemon is dead
   // and the PID in the file is stale, so we only clean up sock+pid.
@@ -233,7 +233,7 @@ describe("killEmbedDaemon — verifies socket before SIGTERM (#2)", () => {
     );
 
     // Test isolation: use a per-test tmp dir for the sock/pid files
-    // instead of the real /tmp/hivemind-embed-<uid>.* paths. Without
+    // instead of the real /tmp/memoree-embed-<uid>.* paths. Without
     // this, the test would clobber any real daemon's socket/pidfile
     // for the same uid on the dev machine or CI worker.
     const { pidPathFor, socketPathFor } = await import("../../src/embeddings/protocol.js");
@@ -273,10 +273,10 @@ describe("linkAgent — preserves real node_modules directory (#1)", () => {
   // through `symlinkForce` → `unlinkSync` on whatever existed at
   // `<plugin>/node_modules`. If the path was a real directory (a
   // marketplace plugin shipping its own deps, or a dev `npm install`),
-  // `unlinkSync` threw EISDIR and aborted `hivemind embeddings install`
+  // `unlinkSync` threw EISDIR and aborted `memoree embeddings install`
   // partway through, leaving some agents linked and others not.
   it("skips linking when a real node_modules directory already exists at the link path", () => {
-    const pluginDir = join(tmpHome, ".fake-agent", "hivemind");
+    const pluginDir = join(tmpHome, ".fake-agent", "memoree");
     mkDir(join(pluginDir, "bundle"));
     // Existing real `node_modules/` dir with content (simulates a
     // plugin that already shipped deps).
@@ -297,10 +297,10 @@ describe("linkAgent — preserves real node_modules directory (#1)", () => {
   });
 
   it("still replaces a stale symlink at the link path (normal install path unaffected)", () => {
-    const pluginDir = join(tmpHome, ".fake-agent2", "hivemind");
+    const pluginDir = join(tmpHome, ".fake-agent2", "memoree");
     mkDir(join(pluginDir, "bundle"));
     // Simulate a shared-deps target so symlinkForce has somewhere to point.
-    const fakeShared = join(tmpHome, ".hivemind", "embed-deps", "node_modules");
+    const fakeShared = join(tmpHome, ".memoree", "embed-deps", "node_modules");
     mkDir(fakeShared);
     // Pre-existing symlink to a stale location.
     const stale = join(tmpHome, "stale");
