@@ -1,10 +1,27 @@
 # Memoree
 
-Memoree is local-first memory for coding agents. A default installation uses SQLite at `~/.memoree/memoree.sqlite3`, runs embeddings locally, and installs the Claude Code plugin from the checkout. It requires no account, browser flow, or hosted service.
+Memoree gives coding agents persistent, local-first memory. The default setup uses SQLite at `~/.memoree/memoree.sqlite3`, runs embeddings on your machine, and installs the Claude Code plugin. It requires no Memoree account, browser flow, PostgreSQL server, or hosted memory service.
 
-## Install for Claude Code
+## Quick start with Claude Code
 
-Requirements: Node.js 22.13 or newer, Git, and the `claude` command on `PATH`.
+Requirements:
+
+- Node.js 22.13 or newer
+- Claude Code installed, authenticated, and available as `claude` on `PATH`
+
+The recommended installation is three commands:
+
+```sh
+npm install --global memoree
+memoree install
+memoree doctor
+```
+
+The first `memoree install` downloads the local embedding runtime and model, so it can take a few minutes. It then creates `~/.memoree/config.json`, initializes the SQLite database, registers the packaged Claude Code marketplace, and enables `memoree@memoree` for the current user. The command is safe to rerun after an update.
+
+Restart Claude Code after installation. Start it inside a Git repository and work normally: Memoree's hooks capture the session locally, synthesize a summary when the session ends normally, and make relevant context available to later sessions. Installation does not scan or import old Claude history.
+
+If npm reports that `memoree` is not found, its first public release is not live yet. Install this checkout from source instead:
 
 ```sh
 git clone https://github.com/sskarz/memoree.git
@@ -15,8 +32,6 @@ npm link
 memoree install
 memoree doctor
 ```
-
-`memoree install` is idempotent. It creates `~/.memoree/config.json`, initializes the SQLite schema, installs the local embedding runtime and model, registers this checkout as a Claude Code marketplace, and enables `memoree@memoree` at user scope. Restart Claude Code after installation.
 
 To avoid the model download and use lexical retrieval only:
 
@@ -46,6 +61,28 @@ memoree embeddings status
 ```
 
 History backfill, documentation ingestion, graph initialization, and skill mining are explicit operations; onboarding does not run them automatically. Run `memoree --help` and the relevant subcommand help for details.
+
+You do not need these commands for automatic session memory. They expose Memoree's optional, explicit workflows:
+
+```sh
+memoree rules add "Always run tests before committing"
+memoree goal add "Finish the authentication refactor"
+memoree docs index ./docs
+memoree graph build
+memoree context
+```
+
+## Update
+
+For an npm installation:
+
+```sh
+npm install --global memoree@latest
+memoree install
+memoree doctor
+```
+
+For a source installation, pull the checkout, run `npm ci`, `npm run build`, and `npm link`, then rerun `memoree install`. Restart Claude Code after either update path.
 
 ## Other agents
 
@@ -86,7 +123,7 @@ Run `memoree doctor` first. It checks the selected database, required schema, em
 
 - Database failure: verify permissions under `~/.memoree`, or check `MEMOREE_POSTGRES_URL` when PostgreSQL is selected.
 - Embedding failure: run `memoree embeddings install`; use `--no-embeddings` if lexical-only retrieval is acceptable.
-- Plugin failure: confirm `claude --version`, rebuild with `npm run build`, then rerun `memoree install`.
+- Plugin failure: confirm `claude --version` and authentication, then rerun `memoree install`. For a source checkout, rebuild first with `npm run build`.
 - Hook changes not visible: restart Claude Code.
 
 ## Remove
@@ -109,6 +146,8 @@ npm run pack:check
 ```
 
 SQLite tests run without credentials. PostgreSQL contract tests use `MEMOREE_TEST_POSTGRES_URL` in CI against PostgreSQL 16.
+
+Before an npm release, `npm run pack:check` verifies that the tarball contains the CLI, local embedding daemon, and Claude Code plugin without including repository credentials or CI metadata. Publishing is intentionally a separate maintainer action; preparing this repository does not publish a package.
 
 ## License
 

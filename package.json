@@ -1,18 +1,38 @@
 {
   "name": "memoree",
   "version": "0.7.145",
-  "description": "Persistent shared memory for AI agents with pluggable storage",
+  "description": "Local-first persistent memory for coding agents",
   "type": "module",
-  "private": true,
+  "license": "Apache-2.0",
+  "keywords": [
+    "ai",
+    "claude-code",
+    "coding-agent",
+    "local-first",
+    "memory",
+    "sqlite"
+  ],
+  "homepage": "https://github.com/sskarz/memoree#readme",
+  "bugs": {
+    "url": "https://github.com/sskarz/memoree/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sskarz/memoree.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "bin": {
     "memoree": "bundle/cli.js"
   },
   "files": [
     "bundle",
+    "embeddings",
+    "harnesses/claude-code/.claude-plugin",
+    "harnesses/claude-code/bundle",
+    "harnesses/claude-code/hooks",
+    "harnesses/claude-code/skills",
     "harnesses/codex/bundle",
     "harnesses/codex/skills",
     "harnesses/cursor/bundle",
