@@ -2,6 +2,8 @@
 
 import { execFileSync } from "node:child_process";
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -39,6 +41,27 @@ function status(message) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+export function claudeProfileRoot(env = process.env, home = homedir()) {
+  const configured = env.CLAUDE_CONFIG_DIR?.trim();
+  return configured ? resolve(configured) : home;
+}
+
+export function prepareIsolatedClaudeConfig(sourceRoot, targetRoot, autoMemoryDirectory) {
+  const sourceProfile = join(sourceRoot, ".claude.json");
+  if (!existsSync(sourceProfile)) {
+    throw new Error(
+      `Claude profile is missing at ${sourceProfile}; run \`claude auth login\` before runtime validation`,
+    );
+  }
+  mkdirSync(targetRoot, { recursive: true, mode: 0o700 });
+  const targetProfile = join(targetRoot, ".claude.json");
+  copyFileSync(sourceProfile, targetProfile);
+  chmodSync(targetProfile, 0o600);
+  const settingsPath = join(targetRoot, "settings.json");
+  writeFileSync(settingsPath, `${JSON.stringify({ autoMemoryDirectory }, null, 2)}\n`, { mode: 0o600 });
+  return settingsPath;
 }
 
 function vectorLength(value) {
@@ -181,14 +204,15 @@ export async function validateRuntime() {
   const state = join(root, "state");
   const isolatedHome = join(root, "home");
   const databasePath = join(state, "memoree.sqlite3");
-  const claudeSettings = join(state, "claude-settings.json");
   const realHome = homedir();
+  const sourceClaudeProfileRoot = claudeProfileRoot(process.env, realHome);
+  const isolatedClaudeConfig = join(state, "claude-config");
   const semanticFact = `the observatory lantern is ${crypto.randomUUID()}`;
   const lexicalToken = `memoree-lexical-${crypto.randomUUID()}`;
   const env = {
     ...process.env,
     HOME: isolatedHome,
-    CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR ?? join(realHome, ".claude"),
+    CLAUDE_CONFIG_DIR: isolatedClaudeConfig,
     CODEX_HOME: process.env.CODEX_HOME ?? join(realHome, ".codex"),
     MEMOREE_BACKEND: "sqlite",
     MEMOREE_SQLITE_PATH: databasePath,
@@ -210,9 +234,11 @@ export async function validateRuntime() {
   try {
     mkdirSync(state, { recursive: true });
     mkdirSync(isolatedHome, { recursive: true });
-    writeFileSync(claudeSettings, `${JSON.stringify({
-      autoMemoryDirectory: join(state, "claude-auto-memory"),
-    }, null, 2)}\n`);
+    const claudeSettings = prepareIsolatedClaudeConfig(
+      sourceClaudeProfileRoot,
+      isolatedClaudeConfig,
+      join(state, "claude-auto-memory"),
+    );
     run("git", ["init", repository], { env, capture: false });
     run("git", ["config", "user.email", "runtime-validation@memoree.local"], { cwd: repository, env });
     run("git", ["config", "user.name", "Memoree Runtime Validation"], { cwd: repository, env });
