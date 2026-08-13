@@ -44,54 +44,21 @@ interface WorkerConfig {
   projectKey: string;
   project: string;
   agent: string;
-  /**
-   * CLI dispatch label for the gate call. Optional. When unset, the gate falls
-   * back to `agent`. Used by host environments whose `agent` provenance label
-   * isn't itself a CLI we can shell out to (currently: openclaw — a gateway
-   * with no `openclaw -p <prompt>` CLI of its own). Letting `agent` stay
-   * "openclaw" keeps the source_agent provenance honest in the skills table
-   * while `gateAgent` points the gate-runner at a real CLI on the machine.
-   */
+  /** CLI dispatch label for the supported gate call. */
   gateAgent?: Agent;
   scope: "me" | "team";
   team: string[];
   install: "project" | "global";
   skillsTable: string;
   tmpDir: string;
-  /** CLI binary used to run the gate prompt — agent-specific (claude / codex / cursor-agent / hermes). */
+  /** CLI binary used to run the gate prompt (Claude Code or Codex). */
   gateBin: string;
-  /** Optional model/provider overrides for cursor / hermes. */
-  cursorModel?: string;
-  hermesProvider?: string;
-  hermesModel?: string;
-  piProvider?: string;
-  piModel?: string;
   skillifyLog: string;
   currentSessionId?: string;
-  /**
-   * Optional pre-built dispatch table that openclaw's spawn helper threads
-   * through so the worker bundle can repopulate its own
-   * `globalThis.__memoree_tuning__`. Each process has its own globalThis,
-   * so values populated in the openclaw plugin (the spawn's parent) don't
-   * survive the fork. esbuild's `define` rewrote `process.env.MEMOREE_X`
-   * reads in the openclaw worker bundle to look at that global, so we
-   * have to restore it here BEFORE any shared module function fires. The
-   * other agents' worker bundles read `process.env` at runtime as usual
-   * (this field stays undefined for them, the assignment below is a no-op).
-   * See PR #170 for the ClawHub-scan rewrite.
-   */
-  tuning?: Record<string, string | undefined>;
 }
 
 const cfg: WorkerConfig = JSON.parse(readFileSync(process.argv[2], "utf-8"));
 
-// Restore the tuning dispatch BEFORE any imported shared-module function
-// runs. Function-scoped env reads (every `process.env.MEMOREE_X` in this
-// bundle was rewritten to `globalThis.__memoree_tuning__?.X` for openclaw)
-// only fire from here onward, so an assignment at this point is sufficient.
-// On non-openclaw worker bundles `cfg.tuning` is undefined and this is a
-// no-op write of an empty object.
-(globalThis as Record<string, unknown>).__memoree_tuning__ = cfg.tuning ?? {};
 const tmpDir = cfg.tmpDir;
 const verdictPath = join(tmpDir, "verdict.json");
 const promptPath = join(tmpDir, "prompt.txt");
@@ -345,11 +312,6 @@ async function main(): Promise<void> {
       agent: gateAgent,
       prompt,
       bin: cfg.gateBin,
-      cursorModel: cfg.cursorModel,
-      hermesProvider: cfg.hermesProvider,
-      hermesModel: cfg.hermesModel,
-      piProvider: cfg.piProvider,
-      piModel: cfg.piModel,
       timeoutMs: 120_000,
     });
     // Always persist stdout/stderr for debugging

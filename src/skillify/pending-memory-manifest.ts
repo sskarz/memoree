@@ -45,7 +45,7 @@ import { dirname, join } from "node:path";
 export interface PendingMemoryEntry {
   /** Native session id (also the staged summary filename stem). */
   session_id: string;
-  /** Source agent the session came from: claude_code | codex | cursor | hermes. */
+  /** Source agent the session came from: claude_code | codex. */
   source_agent: string;
   /** Project/repo name derived from the session cwd, for org/project scoping at flush. */
   project: string;

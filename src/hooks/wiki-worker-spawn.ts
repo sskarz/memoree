@@ -50,8 +50,8 @@ export function buildClaudeInvocation(claudeBin: string, prompt: string): Claude
 
 /**
  * Build an `execFileSync` descriptor for an agent CLI that takes its prompt as
- * the LAST positional arg (codex `exec … <prompt>`, cursor `--print … <prompt>`,
- * pi `--print … <prompt>`). `flags` are everything BEFORE the prompt.
+ * the LAST positional arg (Codex `exec … <prompt>`). `flags` are everything
+ * BEFORE the prompt.
  *
  * Same Windows `.cmd` handling as {@link buildClaudeInvocation}: route the
  * prompt over stdin under a shell so it never hits the command line. Unix (and

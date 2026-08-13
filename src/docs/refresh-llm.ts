@@ -8,15 +8,14 @@
  *
  * This module is intentionally thin and side-effecting (subprocess); the
  * orchestration + gating it feeds (`./refresh.ts`, `./gate.ts`) is pure and
- * unit-tested. Per-agent variants (codex/cursor/hermes/pi) mirror the
- * wiki-worker forks and can wrap `buildTrailingPromptInvocation` the same way.
+ * unit-tested. Claude Code and Codex both use stdin so large prompts do not
+ * hit the operating system's argument-length limit.
  */
 
 import { execFileSync } from "node:child_process";
 import {
   buildClaudeStdinInvocation,
   buildStdinPromptInvocation,
-  buildTrailingPromptInvocation,
   type ClaudeInvocation,
 } from "../hooks/wiki-worker-spawn.js";
 import { resolveCliBin } from "../utils/resolve-cli-bin.js";
@@ -46,7 +45,7 @@ export function unwrapModelOutput(raw: string): string {
 
 /**
  * Which host CLI rewrites/authors docs. The auto-refresh runs from a host
- * agent's post-commit hook, so `claude -p` is wrong on a codex/cursor/… box.
+ * agent's post-commit hook, so `claude -p` is wrong on a Codex-only box.
  * A spec names the CLI to resolve on PATH and how to shape its invocation.
  */
 export interface DocLlmSpec {
@@ -78,55 +77,23 @@ function codexSpec(env: NodeJS.ProcessEnv): DocLlmSpec {
   return { label: "codex", bin: "codex", build: (b, p) => buildStdinPromptInvocation(b, flags, p) };
 }
 
-/**
- * pi and cursor read the prompt as a TRAILING ARG (their own wiki workers
- * prove the shape); stdin is not verified for either, so oversized prompts
- * can hit the OS argv limit — acceptable for now, matching their workers.
- * openclaw has NO prompt CLI (it is a gateway) and can never host doc
- * generation: on an openclaw box the auto-detection below picks whichever
- * real agent CLI is installed.
- */
 const REGISTRY: Record<string, (env: NodeJS.ProcessEnv) => DocLlmSpec> = {
   claude: () => ({ label: "claude", bin: "claude", build: (b, p) => buildClaudeStdinInvocation(b, p) }),
   codex: codexSpec,
-  pi: (env) => ({
-    label: "pi",
-    bin: "pi",
-    // No provider/model defaults: pi uses whatever the user logged into
-    // (forcing e.g. google would break an anthropic-OAuth login — verified
-    // live). Env overrides remain for explicit pinning.
-    build: (b, p) =>
-      buildTrailingPromptInvocation(b, [
-        "--print",
-        ...(env.MEMOREE_PI_PROVIDER ? ["--provider", env.MEMOREE_PI_PROVIDER] : []),
-        ...(env.MEMOREE_PI_MODEL ? ["--model", env.MEMOREE_PI_MODEL] : []),
-      ], p),
-  }),
-  cursor: (env) => ({
-    label: "cursor",
-    bin: "cursor-agent",
-    build: (b, p) =>
-      buildTrailingPromptInvocation(b, [
-        "--print",
-        "--model", env.MEMOREE_CURSOR_MODEL ?? "auto",
-        "--force",
-        "--output-format", "text",
-      ], p),
-  }),
 };
 
 /**
  * Pick the host agent by what is actually installed — no ambient env needed.
- * Order = stdin-safe first (claude, codex), then trailing-arg CLIs. Fails
+ * Order is Claude Code, then Codex. Fails
  * loud when nothing is found: silent fallbacks are how wrong bills happen.
  */
 export function detectHostAgent(resolve: (bin: string) => string | null = tryResolveCliBin): string {
-  for (const name of ["claude", "codex", "pi", "cursor"] as const) {
+  for (const name of ["claude", "codex"] as const) {
     const spec = REGISTRY[name]({});
     if (resolve(spec.bin) !== null) return name;
   }
   throw new Error(
-    "No host agent CLI found for doc generation (looked for: claude, codex, pi, cursor-agent). " +
+    "No host agent CLI found for doc generation (looked for: claude, codex). " +
       "Install one, or set MEMOREE_DOCS_LLM_AGENT / MEMOREE_DOCS_LLM_BIN explicitly.",
   );
 }
@@ -141,7 +108,7 @@ function tryResolveCliBin(bin: string): string | null {
 
 /** Registry agent names, in detection priority order. */
 export function knownDocsAgents(): string[] {
-  return ["claude", "codex", "pi", "cursor"];
+  return ["claude", "codex"];
 }
 
 /**
@@ -210,7 +177,9 @@ export function resolveDocLlmSpec(env: NodeJS.ProcessEnv = process.env): DocLlmS
     return {
       label: `custom:${customBin}`,
       bin: customBin,
-      build: (b, p) => (viaStdin ? buildStdinPromptInvocation(b, flags, p) : buildTrailingPromptInvocation(b, flags, p)),
+      build: (b, p) => viaStdin
+        ? buildStdinPromptInvocation(b, flags, p)
+        : { file: b, args: [...flags, p], options: { stdio: ["ignore", "pipe", "pipe"], windowsHide: true } },
     };
   }
   // Precedence: env override wins (one-off), then the persisted config choice

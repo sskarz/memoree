@@ -1,7 +1,7 @@
 /**
  * Spawn the detached graph-pull-worker.js — same pattern as
  * src/hooks/spawn-wiki-worker.ts. Called from every agent's SessionStart
- * (claude-code / codex / cursor / hermes) so the worker fires once per
+ * (Claude Code and Codex) so the worker fires once per
  * session open, on all agents, asynchronously.
  *
  * Async/detached: the parent SessionStart hook calls this, then continues

@@ -68,23 +68,9 @@ describe("resolveDocLlmSpec (per-agent LLM seam)", () => {
     expect(inv.options.input).toBe("PROMPT");
   });
 
-  it("pi and cursor specs mirror their production wiki workers (trailing prompt)", () => {
-    // pi: NO provider/model defaults — it must use whatever the user logged
-    // into (a forced provider broke a real OAuth login, verified live).
-    const pi = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "pi" });
-    expect(pi.build("/usr/bin/pi", "PROMPT").args).toEqual(["--print", "PROMPT"]);
-    const pinned = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "pi", MEMOREE_PI_PROVIDER: "google", MEMOREE_PI_MODEL: "gemini-2.5-flash" });
-    const inv = pinned.build("/usr/bin/pi", "PROMPT");
-    expect(inv.args).toEqual(["--print", "--provider", "google", "--model", "gemini-2.5-flash", "PROMPT"]);
-    const cursor = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "cursor" });
-    const cinv = cursor.build("/usr/bin/cursor-agent", "PROMPT");
-    expect(cinv.args).toEqual(["--print", "--model", "auto", "--force", "--output-format", "text", "PROMPT"]);
-  });
-
   it("auto-detects the host agent from installed CLIs, stdin-safe first, fail-loud on none", () => {
     expect(detectHostAgent((b) => (b === "codex" ? "/bin/codex" : null))).toBe("codex");
     expect(detectHostAgent((b) => (b === "claude" || b === "codex" ? `/bin/${b}` : null))).toBe("claude");
-    expect(detectHostAgent((b) => (b === "cursor-agent" ? "/bin/ca" : null))).toBe("cursor");
     expect(() => detectHostAgent(() => null)).toThrow(/No host agent CLI found/);
   });
 

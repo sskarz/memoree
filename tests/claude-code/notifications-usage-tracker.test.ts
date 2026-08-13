@@ -199,7 +199,7 @@ describe("countUserGeneratedSkills", () => {
     mkdirSync(join(dir, "skill-two--kamo.aghbalyan"));
     mkdirSync(join(dir, "skill-three--kamo.aghbalyan"));
     mkdirSync(join(dir, "other-skill--levon"));         // different author
-    mkdirSync(join(dir, "memoree-openclaw-capture"));  // no author suffix
+    mkdirSync(join(dir, "memoree-runtime-capture"));  // no author suffix
     const { countUserGeneratedSkills } = await import("../../src/notifications/usage-tracker.js");
     expect(countUserGeneratedSkills("kamo.aghbalyan")).toBe(3);
   });

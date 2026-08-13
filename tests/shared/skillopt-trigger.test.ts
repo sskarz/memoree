@@ -126,7 +126,7 @@ describe("default fileStore + spawnWorker (real implementations)", () => {
     expect(markSkillPending("fs-a", "posthog--kamo", "tuF", { isOrgSkill: () => true, env: {} as never })).toBe(true);
     expect(existsSync(join(tmp, "skillopt", "pending", "fs-a.json"))).toBe(true);
     // react via the REAL fileStore (load → decrement → save) + REAL spawnWorker (mocked spawn)
-    const r = runEventTrigger("fs-a", "no, mocking hides the failure", { agent: "hermes", deps: { canFire: () => true, env: {} as never } });
+    const r = runEventTrigger("fs-a", "no, mocking hides the failure", { agent: "codex", deps: { canFire: () => true, env: {} as never } });
     expect(r).toEqual({ fired: true, reason: "spawned" });
     expect(spawnMock).toHaveBeenCalledTimes(1);
   });

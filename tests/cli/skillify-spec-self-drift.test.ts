@@ -1,7 +1,7 @@
 /**
  * Self-drift detection: `SKILLIFY_SPEC` (hierarchical, used by the CLI help
  * renderers) and `SKILLIFY_COMMANDS` (flat, used by SessionStart inject
- * blocks and the pi mirror) must agree on every (subcommand + option)
+ * blocks) must agree on every (subcommand + option)
  * combination.
  *
  * If a developer adds a new subcommand or flag to one view but forgets the

@@ -2,11 +2,6 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { installClaude, uninstallClaude } from "./install-claude.js";
 import { installCodex, uninstallCodex } from "./install-codex.js";
-import { installOpenclaw, uninstallOpenclaw } from "./install-openclaw.js";
-import { installCursor, uninstallCursor } from "./install-cursor.js";
-import { installHermes, uninstallHermes } from "./install-hermes.js";
-import { installCowork, uninstallCowork } from "./install-cowork.js";
-import { installPi, uninstallPi } from "./install-pi.js";
 import { disableEmbeddings, enableEmbeddings, installEmbeddings, preloadEmbeddingModel, statusEmbeddings, uninstallEmbeddings } from "./embeddings.js";
 import { detectPlatforms, log, warn, type PlatformId } from "./util.js";
 import { getVersion } from "./version.js";
@@ -33,7 +28,7 @@ Usage:
   memoree doctor
   memoree status
   memoree uninstall [--all]
-  memoree <claude|codex|claw|cursor|hermes|pi|claude_cowork> install|uninstall
+  memoree <claude|codex> install|uninstall
   memoree backend status|check|use <sqlite|postgres>
   memoree embeddings install|enable|disable|status|uninstall [--prune]
   memoree rules|goal|kpi|docs|context ...
@@ -44,7 +39,7 @@ Usage:
   memoree --version
 
 Default installation initializes SQLite and embeddings, then installs the
-local Claude Code plugin. Use --all to install every detected integration.
+local Claude Code plugin. Use --all to install detected Claude Code and Codex integrations.
 PostgreSQL is opt-in through MEMOREE_POSTGRES_URL.
 `.trim();
 
@@ -55,22 +50,12 @@ function requireNode(): void {
 
 function installOne(id: PlatformId): void {
   if (id === "claude") installClaude();
-  else if (id === "codex") installCodex();
-  else if (id === "claw") installOpenclaw();
-  else if (id === "cursor") installCursor();
-  else if (id === "hermes") installHermes();
-  else if (id === "pi") installPi();
-  else installCowork();
+  else installCodex();
 }
 
 function uninstallOne(id: PlatformId): void {
   if (id === "claude") uninstallClaude();
-  else if (id === "codex") uninstallCodex();
-  else if (id === "claw") uninstallOpenclaw();
-  else if (id === "cursor") uninstallCursor();
-  else if (id === "hermes") uninstallHermes();
-  else if (id === "pi") uninstallPi();
-  else uninstallCowork();
+  else uninstallCodex();
 }
 
 async function initializeStorage(): Promise<string> {
@@ -165,7 +150,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const platforms: PlatformId[] = ["claude", "codex", "claw", "cursor", "hermes", "pi", "claude_cowork"];
+  const platforms: PlatformId[] = ["claude", "codex"];
   if (platforms.includes(command as PlatformId)) {
     if (args[1] === "install") installOne(command as PlatformId);
     else if (args[1] === "uninstall") uninstallOne(command as PlatformId);

@@ -1,10 +1,9 @@
 /**
  * Shared AGENTS.md memoree-block management.
  *
- * AGENTS.md is the global agent-instructions file that several harnesses
+ * AGENTS.md is the global agent-instructions file that Codex
  * auto-load into the model's context every session — SILENTLY, with no
  * user-visible TUI cell:
- *   - pi    → `~/.pi/agent/AGENTS.md`
  *   - Codex → `~/.codex/AGENTS.md`
  *
  * We manage only a marker-fenced block and never touch the user's own

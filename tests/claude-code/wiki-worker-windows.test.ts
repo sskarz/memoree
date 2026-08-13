@@ -165,7 +165,7 @@ describe("buildClaudeInvocation", () => {
   });
 });
 
-describe("buildTrailingPromptInvocation (codex / cursor / pi)", () => {
+describe("buildTrailingPromptInvocation (Codex)", () => {
   // Prompt is the LAST positional arg; `flags` are everything before it.
   const FLAGS = ["exec", "--dangerously-bypass-approvals-and-sandbox"];
 

@@ -114,7 +114,7 @@ describe("graph-on-stop main()", () => {
   });
 
   it("injected runBuildCommand that rejects with ERR_MODULE_NOT_FOUND (tree-sitter missing) → lock released, error logged, main() resolves", async () => {
-    // Simulates the codex/cursor case where the tree-sitter native extractor
+    // Simulates the Codex case where the tree-sitter native extractor
     // is not installed: the lazy `import("../commands/graph.js")` rejects.
     // main() must swallow it (log + release lock + resolve) so the Stop hook
     // exits 0 instead of crashing with a non-zero code.

@@ -37,7 +37,7 @@ export interface StageSessionInput {
   sessionId: string;
   /** Absolute path to the local session JSONL. */
   jsonlPath: string;
-  /** Source agent: claude_code | codex | cursor | hermes. */
+  /** Source agent: claude_code | codex. */
   agent: string;
   /** Project name for the summary header + later org/project scoping. */
   project: string;

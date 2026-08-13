@@ -45,8 +45,8 @@ export function parseMessage(m: unknown): ParsedMsg | null {
 }
 
 /** Match a path that loads a skill's SKILL.md anywhere in `s` → the `<dir>` ref (name--author),
- *  else null. Works on a bare path (pi `read` tool_input.path) or inside a shell command string
- *  (harnesses/codex/hermes `cat …/SKILL.md`). The dir class excludes whitespace/quotes so a command's
+ *  else null. Works on a bare `tool_input.path` or inside a Codex shell command.
+ *  The dir class excludes whitespace/quotes so a command's
  *  trailing args don't get swallowed into the ref. */
 export function pathToSkillRef(s: unknown): string | null {
   if (typeof s !== "string") return null;
@@ -61,7 +61,7 @@ export function pathToSkillRef(s: unknown): string | null {
 /**
  * The skill ref invoked by a tool_call message (e.g. "name--author"), else null. Recognises:
  *   - claude's first-class `Skill` tool (tool_input.skill)
- *   - pi/codex/hermes loading a skill by reading its SKILL.md — a `read` tool_input.path, or a
+ *   - Codex loading a skill by reading its SKILL.md — a `read` tool_input.path, or a
  *     shell tool_input.command that cats it (the worker windows around whichever it finds).
  */
 export function invokedSkillRef(msg: ParsedMsg): string | null {
@@ -92,7 +92,7 @@ export function splitOrgSkill(skill: string): { name: string; author: string } |
  * Org-skill invocations across captured sessions, newest first. Coarse prefilter then a precise
  * in-code check (invokedSkillRef), so a stray match in prose can't slip through. The prefilter
  * matches EITHER a first-class `Skill` tool_call OR a `SKILL.md` load (the read/shell path that
- * pi/codex/hermes use) — otherwise those newly-supported invocations get dropped before
+ * Codex uses) — otherwise those invocations get dropped before
  * invokedSkillRef can evaluate them.
  */
 export async function listSkillInvocations(

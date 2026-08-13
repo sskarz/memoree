@@ -248,7 +248,7 @@ export function normalizeContent(path: string, raw: string): string {
 
   // ── Production shape: single hook-event row (capture.ts output) ─────────
   //
-  // `<recalled-memories>` blocks are injected by OpenClaw as extra context
+  // `<recalled-memories>` blocks may be injected as extra context
   // before user prompts. They contain serialized JSON of past events which
   // already live as their own rows in the sessions table — keeping them
   // duplicates every hit and drowns the actual prompt. Greedy strip from

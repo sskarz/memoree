@@ -1,6 +1,6 @@
 /**
  * Agent-dispatched ModelCall for the engine's LLM steps (success-judge, proposer).
- * Generalises the former claude-only claude-model.ts so a Codex/Hermes/Cursor/pi
+ * Generalises the former claude-only claude-model.ts so a Codex
  * user — possibly with no `claude` on the machine — still gets SkillOpt. Mirrors
  * the wiki worker's per-agent dispatch, but with NO-TOOLS args: the scorer feeds
  * UNTRUSTED transcript text into the prompt, so each agent runs in its safest
@@ -18,7 +18,7 @@
  */
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { findAgentBin, type Agent } from "./gate-runner.js";
-import { SKILLOPT_ENV, modelEnvNames, providerEnvName } from "./skillopt-env.js";
+import { SKILLOPT_ENV, modelEnvNames } from "./skillopt-env.js";
 
 export type ModelCall = (systemPrompt: string, userPrompt: string) => Promise<string>;
 export type ScorerRole = "judge" | "proposer"; // judge = cheap/fast, proposer = capable
@@ -60,56 +60,12 @@ const DISPATCH: Record<Agent, AgentDispatch> = {
     parse: (out) => out,
     model: () => undefined, // codex uses its configured default model
   },
-  hermes: {
-    // -z oneshot via the user's provider; --ignore-user-config drops user MCP/skills,
-    // so an explicit -m/--provider is required (matches the wiki worker's defaults).
-    // NOTE: the openrouter-style default model below is only valid for openrouter.
-    // A user on another provider MUST set MEMOREE_SKILLOPT_HERMES_PROVIDER + _MODEL
-    // to a valid id — e.g. AWS Bedrock needs an INFERENCE-PROFILE id like
-    // `us.anthropic.claude-haiku-4-5-20251001-v1:0` (a bare model id, or a legacy
-    // one, is rejected by Bedrock and hermes swallows the error → empty output).
-    buildArgs: (model, provider, system, user) => [
-      "-z", fold(system, user),
-      "--provider", provider ?? "openrouter",
-      "-m", model ?? "anthropic/claude-haiku-4-5",
-      "--yolo", "--ignore-user-config",
-    ],
-    parse: (out) => out,
-    model: () => undefined, // falls back to the buildArgs default
-    provider: "openrouter",
-  },
-  cursor: {
-    buildArgs: (model, _p, system, user) => [
-      "--print", "--model", model ?? "auto", "--force", "--output-format", "text", fold(system, user),
-    ],
-    parse: (out) => out,
-    model: () => undefined,
-  },
-  pi: {
-    // The google/gemini default needs a Google API key. A user on another provider
-    // MUST set MEMOREE_SKILLOPT_PI_PROVIDER + _MODEL — e.g. AWS Bedrock uses provider
-    // `amazon-bedrock` and an inference-profile model id like
-    // `us.anthropic.claude-haiku-4-5-20251001-v1:0`. With a wrong default pi exits
-    // non-zero ("No API key found") → surfaced loudly via the exit-code guard, not silent.
-    buildArgs: (model, provider, system, user) => [
-      "--print", "--provider", provider ?? "google", "--model", model ?? "gemini-2.5-flash", fold(system, user),
-    ],
-    parse: (out) => out,
-    model: () => undefined,
-  },
 };
 
 /** Per-agent, per-role env override: MEMOREE_SKILLOPT_<AGENT>_<ROLE>_MODEL, then _<AGENT>_MODEL. */
 function envModel(agent: Agent, role: ScorerRole, env: NodeJS.ProcessEnv): string | undefined {
   const [specific, fallback] = modelEnvNames(agent, role);
   return env[specific] ?? env[fallback];
-}
-
-/** Per-agent provider override (harnesses/hermes/pi): MEMOREE_SKILLOPT_<AGENT>_PROVIDER. The
- *  openrouter default is wrong for a user on a different provider (e.g. AWS Bedrock),
- *  so the provider must be overridable per install. */
-function envProvider(agent: Agent, env: NodeJS.ProcessEnv): string | undefined {
-  return env[providerEnvName(agent)];
 }
 
 export function agentModel(opts: {
@@ -125,19 +81,13 @@ export function agentModel(opts: {
   const env = opts.env ?? process.env;
   const d = DISPATCH[opts.agent];
   const modelOverride = opts.model ?? envModel(opts.agent, opts.role, env);
-  const providerOverride = opts.provider ?? envProvider(opts.agent, env);
+  const providerOverride = opts.provider;
   const model = modelOverride ?? d.model(opts.role);
   const provider = providerOverride ?? d.provider;
   const timeoutMs = opts.timeoutMs ?? 120_000;
   const spawnFn = opts.spawnImpl ?? (nodeSpawn as unknown as SpawnFn);
   const bin = opts.bin ?? findAgentBin(opts.agent);
   return (system, user) => new Promise<string>((resolve, reject) => {
-    // Fail fast on a provider override without a matching model (harnesses/hermes/pi): the default
-    // model is provider-specific (openrouter-style ids), so a bare ..._PROVIDER=bedrock
-    // with no ..._MODEL would silently send a wrong model id. Surface it loudly.
-    if (providerOverride && !modelOverride && (opts.agent === "hermes" || opts.agent === "pi")) {
-      return reject(new Error(`${opts.agent}: provider overridden to '${provider}' without a model — set ${modelEnvNames(opts.agent, opts.role)[1]} to a valid id for that provider`));
-    }
     const args = d.buildArgs(model, provider, system, user);
     // MEMOREE_CAPTURE=false: these calls aren't real sessions. MEMOREE_WIKI_WORKER=1:
     // the spawned agent skips this package's SessionStart hook (no context injection /
@@ -159,7 +109,7 @@ export function agentModel(opts: {
       if (code !== 0) return reject(new Error(`${opts.agent} exit ${code}: ${err.slice(0, 200)}`));
       const text = d.parse(out);
       // Some agents exit 0 with EMPTY stdout while swallowing a provider error —
-      // e.g. hermes on a dead/legacy Bedrock model writes the error to a dump file
+      // A failed agent invocation may write the error to a dump file
       // and prints nothing. Treat empty as a failure so a misconfigured scorer
       // surfaces loudly (the caller catches → safe no-op: judge stays conservative,
       // proposer reports a failed call) instead of silently resolving "" into an
@@ -177,7 +127,7 @@ export function agentModel(opts: {
  */
 export function detectScorerAgent(env: NodeJS.ProcessEnv = process.env): Agent {
   const explicit = env[SKILLOPT_ENV.AGENT];
-  if (explicit && (["claude_code", "codex", "cursor", "hermes", "pi"] as const).includes(explicit as Agent)) {
+  if (explicit && (["claude_code", "codex"] as const).includes(explicit as Agent)) {
     return explicit as Agent;
   }
   if (env.CLAUDECODE === "1" || env.CLAUDE_CODE_ENTRYPOINT) return "claude_code";

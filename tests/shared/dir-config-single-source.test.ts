@@ -42,8 +42,6 @@ const ALLOWLIST: Record<string, string> = {
     "Account-level cleanup of the user's own sessions; not scoped to a directory's workspace.",
   "commands/docs.ts":
     "Docs use a separate per-(org,repo) consent + project-key model, not per-repository routing.",
-  "mcp/cowork-ingest.ts":
-    "Claude Cowork (desktop) has no directory context — a fixed COWORK_PROJECT, nothing to route on.",
 };
 
 const ROUTER_TOKENS = ["loadRoutedConfig", "resolveDirConfig", "resolveCaptureConfig"];

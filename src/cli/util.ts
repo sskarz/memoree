@@ -93,46 +93,16 @@ export function readVersionStamp(dir: string): string | null {
   try { return readFileSync(p, "utf-8").trim(); } catch { return null; }
 }
 
-export type PlatformId = "claude" | "codex" | "claw" | "cursor" | "hermes" | "pi" | "claude_cowork";
+export type PlatformId = "claude" | "codex";
 
 export interface DetectedPlatform {
   id: PlatformId;
   markerDir: string;
 }
 
-// Claude Desktop — host app for Claude Cowork — stores its connector config
-// in an OS-specific application-support dir, NOT in ~/.claude (that's the
-// Claude Code CLI). Cowork reads MCP servers from claude_desktop_config.json
-// inside this dir, shared with Claude Desktop chat.
-export function claudeDesktopConfigDir(): string {
-  const home = homedir();
-  if (process.platform === "darwin") return join(home, "Library", "Application Support", "Claude");
-  if (process.platform === "win32") return join(process.env.APPDATA ?? join(home, "AppData", "Roaming"), "Claude");
-  return join(home, ".config", "Claude");
-}
-
-// Memoree's value is bidirectional shared memory — every supported agent
-// must capture (write) AND recall (read). Cline / Roo Code / Kilo Code were
-// dropped because their public API (src/exports/cline.d.ts) is control-only
-// (startNewTask / sendMessage / pressPrimary/SecondaryButton). No event
-// subscription, no listener, no observation API. Auto-capture would require
-// a fragile filesystem watcher on Cline's task storage. See the project
-// memory for the investigation that arrived at this decision.
 const PLATFORM_MARKERS: DetectedPlatform[] = [
   { id: "claude", markerDir: join(HOME, ".claude") },
   { id: "codex", markerDir: join(HOME, ".codex") },
-  { id: "claw", markerDir: join(HOME, ".openclaw") },
-  { id: "cursor", markerDir: join(HOME, ".cursor") },
-  { id: "hermes", markerDir: join(HOME, ".hermes") },
-  // pi (badlogic/pi-mono coding-agent) — config at ~/.pi/agent/. pi exposes
-  // a rich extension event API (session_start / input / tool_call /
-  // tool_result / message_end / session_shutdown / etc.) — Tier 1 capable.
-  { id: "pi", markerDir: join(HOME, ".pi") },
-  // claude_cowork — Anthropic's agentic desktop assistant, hosted in the
-  // Claude Desktop app. Registers the shared memoree MCP server into
-  // claude_desktop_config.json (recall-only; capture is the desktop app's
-  // own concern). Marker is the OS-specific Claude Desktop config dir.
-  { id: "claude_cowork", markerDir: claudeDesktopConfigDir() },
 ];
 
 export function detectPlatforms(): DetectedPlatform[] {

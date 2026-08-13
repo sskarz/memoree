@@ -16,7 +16,7 @@ import { join } from "node:path";
 const repoRoot = process.cwd();
 
 interface AgentBundle {
-  agent: "claude-code" | "codex" | "cursor" | "hermes";
+  agent: "claude-code" | "codex";
   embedDaemon: string;
   captureHook: string;
 }
@@ -31,16 +31,6 @@ const AGENTS: AgentBundle[] = [
     agent: "codex",
     embedDaemon: join(repoRoot, "harnesses", "codex", "bundle", "embeddings", "embed-daemon.js"),
     captureHook: join(repoRoot, "harnesses", "codex", "bundle", "capture.js"),
-  },
-  {
-    agent: "cursor",
-    embedDaemon: join(repoRoot, "harnesses", "cursor", "bundle", "embeddings", "embed-daemon.js"),
-    captureHook: join(repoRoot, "harnesses", "cursor", "bundle", "capture.js"),
-  },
-  {
-    agent: "hermes",
-    embedDaemon: join(repoRoot, "harnesses", "hermes", "bundle", "embeddings", "embed-daemon.js"),
-    captureHook: join(repoRoot, "harnesses", "hermes", "bundle", "capture.js"),
   },
 ];
 
@@ -110,9 +100,6 @@ describe("shipped shell/memoree-shell.js — embed daemon path resolves to an ex
     ["codex",
       join(repoRoot, "harnesses", "codex", "bundle", "shell", "memoree-shell.js"),
       join(repoRoot, "harnesses", "codex", "bundle", "embeddings", "embed-daemon.js")],
-    ["cursor",
-      join(repoRoot, "harnesses", "cursor", "bundle", "shell", "memoree-shell.js"),
-      join(repoRoot, "harnesses", "cursor", "bundle", "embeddings", "embed-daemon.js")],
   ];
 
   it.each(SHELL_BUNDLES)("%s shell bundle exists", (_label, shellPath) => {

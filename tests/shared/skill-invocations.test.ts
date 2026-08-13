@@ -39,7 +39,7 @@ describe("invokedSkillRef", () => {
     expect(invokedSkillRef({ type: "assistant_message", content: "use the Skill tool" })).toBeNull();
     expect(invokedSkillRef({ type: "tool_call", tool_name: "Skill", tool_input: "not json" })).toBeNull();
   });
-  it("recognizes a SKILL.md load via a read path or a shell command (pi/codex/hermes)", () => {
+  it("recognizes a Codex SKILL.md load via a read path or shell command", () => {
     expect(invokedSkillRef({ type: "tool_call", tool_name: "read", tool_input: { path: "/x/skills/a--b/SKILL.md" } as unknown })).toBe("a--b");
     expect(invokedSkillRef({ type: "tool_call", tool_name: "Bash", tool_input: JSON.stringify({ command: "sed -n '1,5p' /x/.agents/skills/a--b/SKILL.md" }) })).toBe("a--b");
     expect(invokedSkillRef({ type: "tool_call", tool_name: "Bash", tool_input: JSON.stringify({ command: "ls /tmp" }) })).toBeNull();
@@ -79,7 +79,7 @@ describe("listSkillInvocations", () => {
     ]);
     const got = await listSkillInvocations(fn, TABLE, { sinceIso: "2026-06-01", limit: 100 });
     expect(calls[0]).toContain(`CAST(message AS TEXT) LIKE '%"Skill"%'`);
-    // prefilter must ALSO match SKILL.md loads (pi/codex/hermes read/shell invocations), else they
+    // Prefilter must also match Codex read/shell SKILL.md loads, or they
     // get dropped before invokedSkillRef can evaluate them.
     expect(calls[0]).toContain(`CAST(message AS TEXT) LIKE '%/SKILL.md%'`);
     expect(calls[0]).toContain("last_update_date >= '2026-06-01'");

@@ -10,7 +10,7 @@
  *     memoree_goals / memoree_kpis tables. The agent uses
  *     native Write/Edit on memory paths.
  *
- *   - GOALS_INSTRUCTIONS_CLI (CLI variant): for cursor/hermes/pi,
+ *   - GOALS_INSTRUCTIONS_CLI (CLI variant): for Codex,
  *     whose pre-tool-use hook can only intercept Shell / terminal
  *     commands (not Write tool). The Write tool on those runtimes
  *     would land on the host filesystem and never reach Memoree.

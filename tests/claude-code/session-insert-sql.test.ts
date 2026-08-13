@@ -76,9 +76,6 @@ const BUNDLES: Array<[string, string]> = [
   ["claude-code capture", resolve(ROOT, "harnesses", "claude-code", "bundle", "capture.js")],
   ["codex capture", resolve(ROOT, "harnesses", "codex", "bundle", "capture.js")],
   ["codex stop", resolve(ROOT, "harnesses", "codex", "bundle", "stop.js")],
-  ["cursor capture", resolve(ROOT, "harnesses", "cursor", "bundle", "capture.js")],
-  ["hermes capture", resolve(ROOT, "harnesses", "hermes", "bundle", "capture.js")],
-  ["openclaw index", resolve(ROOT, "harnesses", "openclaw", "dist", "index.js")],
 ];
 
 for (const [label, path] of BUNDLES) {

@@ -4,7 +4,7 @@
  * Detached background worker for auto-pull on SessionStart.
  *
  * Invoked via `nohup node graph-pull-worker.js --cwd <cwd>` from each
- * agent's SessionStart hook (claude-code / codex / cursor / hermes). The
+ * supported agent's SessionStart hook (Claude Code or Codex). The
  * parent hook calls `.unref()` and exits immediately — this worker keeps
  * running, calls pullSnapshot(cwd), writes the snapshot if backend is
  * fresher than local, and exits.

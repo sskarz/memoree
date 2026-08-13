@@ -4,12 +4,8 @@ import { homedir } from "node:os";
 
 const LOG = join(homedir(), ".memoree", "hook-debug.log");
 
-// Lazy read: the openclaw bundle replaces `process.env.MEMOREE_DEBUG`
-// with `globalThis.__memoree_tuning__.MEMOREE_DEBUG` via esbuild
-// `define`. The lookup must happen at call-time (not module-init) so it
-// picks up the values openclaw populates AFTER this module is imported.
-// Was previously `const DEBUG = …` at module top — that would have frozen
-// the value to `false` for the openclaw bundle regardless of pluginConfig.
+// Read at call time so tests and long-running hooks observe configuration
+// changes made after module initialization.
 function isDebug(): boolean {
   return process.env.MEMOREE_DEBUG === "1";
 }

@@ -1,6 +1,6 @@
 /**
  * Shared SessionStart placeholder-summary writer for all agent variants
- * (claude-code, codex, cursor, hermes).
+ * (Claude Code and Codex).
  *
  * THE BUG THIS FIXES (production: ~56% of summaries stuck at 'in progress',
  * ~75% with NULL embeddings):
@@ -55,7 +55,7 @@ export interface PlaceholderParams {
   userName: string;
   orgName: string;
   workspaceId: string;
-  /** Agent literal stored in the `agent` column: claude_code | codex | cursor | hermes. */
+  /** Agent literal stored in the `agent` column: claude_code | codex. */
   agent: string;
   pluginVersion: string;
   dialect?: StorageDialect;

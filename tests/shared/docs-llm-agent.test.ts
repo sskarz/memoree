@@ -40,14 +40,14 @@ describe("resolveDocLlmSpec — config.json slots between env and auto-detect", 
 
   it("env MEMOREE_DOCS_LLM_AGENT wins over the config agent", () => {
     setDocsLlmAgent("codex");
-    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "cursor" });
-    expect(spec.label).toBe("cursor");
+    const spec = resolveDocLlmSpec({ MEMOREE_DOCS_LLM_AGENT: "claude" });
+    expect(spec.label).toBe("claude");
   });
 
   it("MEMOREE_DOCS_LLM_BIN wins over both env agent and config", () => {
     setDocsLlmAgent("codex");
     const spec = resolveDocLlmSpec({
-      MEMOREE_DOCS_LLM_AGENT: "cursor",
+      MEMOREE_DOCS_LLM_AGENT: "claude",
       MEMOREE_DOCS_LLM_BIN: "/opt/mytool",
     });
     expect(spec.label).toBe("custom:/opt/mytool");
@@ -69,8 +69,8 @@ describe("getDocsLlmAgent / setDocsLlmAgent persistence", () => {
 
   it("round-trips through config.json", () => {
     expect(getDocsLlmAgent()).toBeUndefined();
-    setDocsLlmAgent("cursor");
-    expect(getDocsLlmAgent()).toBe("cursor");
+    setDocsLlmAgent("codex");
+    expect(getDocsLlmAgent()).toBe("codex");
   });
 
   it("does not clobber an existing embeddings setting", () => {
@@ -91,14 +91,13 @@ describe("getDocsLlmAgent / setDocsLlmAgent persistence", () => {
 
 describe("detectAvailableAgents / knownDocsAgents", () => {
   it("knownDocsAgents lists the registry in priority order", () => {
-    expect(knownDocsAgents()).toEqual(["claude", "codex", "pi", "cursor"]);
+    expect(knownDocsAgents()).toEqual(["claude", "codex"]);
   });
 
   it("returns only installed agents, in priority order", () => {
-    // Simulate: codex + cursor installed, claude + pi absent.
-    const installed = new Set(["codex", "cursor-agent"]);
+    const installed = new Set(["codex"]);
     const got = detectAvailableAgents((bin) => (installed.has(bin) ? `/usr/bin/${bin}` : null));
-    expect(got).toEqual(["codex", "cursor"]);
+    expect(got).toEqual(["codex"]);
   });
 
   it("returns [] when nothing is installed", () => {

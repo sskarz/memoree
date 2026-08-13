@@ -16,10 +16,8 @@ import { dirname, join } from "node:path";
  * Tries three sources, in order:
  *   1. `<bundle>/..<pluginManifestDir>/plugin.json` — claude-code and
  *      codex marketplace/cache layouts pin the version there.
- *   2. `<bundle>/../.memoree_version` — every agent installer that uses
- *      writeVersionStamp() (cursor / hermes / pi / openclaw / mcp) drops
- *      this plain-text file in PLUGIN_DIR. Without this fallback the
- *      version notice is silently empty for those agents.
+ *   2. `<bundle>/../.memoree_version` — source installers may drop this
+ *      plain-text file beside the bundle.
  *   3. Walk up from the bundle dir looking for a `package.json` whose
  *      name matches one of MEMOREE_PKG_NAMES.
  *
@@ -36,10 +34,7 @@ export function getInstalledVersion(bundleDir: string, pluginManifestDir: string
     if (stamp) return stamp;
   } catch { /* fall through */ }
   // Walk up from bundleDir looking for our package's package.json.
-  // Recognized names — if you publish under another scope, add it here.
-  // The npm rename @sskarz/memoree → memoree silently
-  // broke the version check (returned null → version block skipped) until
-  // these scoped names were added.
+  // Recognized source package names.
   const MEMOREE_PKG_NAMES = new Set(["memoree", "memoree-codex"]);
   let dir = bundleDir;
   for (let i = 0; i < 5; i++) {

@@ -31,7 +31,7 @@ import { log as _log } from "../utils/debug.js";
 
 const log = (msg: string) => _log("model-usage", msg);
 
-/** Money cost of a turn, in the agent's billing currency (Pi / OpenClaw). */
+/** Optional money cost reported directly by a runtime. */
 export interface CostBreakdown {
   input?: number;
   output?: number;
@@ -52,7 +52,7 @@ export interface NormalizedUsage {
   reasoning_output_tokens?: number;
   /** Grand total when the source reports one (Codex / SDK). */
   total_tokens?: number;
-  /** Money cost of the turn — Pi / OpenClaw report it directly (fractional). */
+  /** Money cost of the turn when the runtime reports it directly (fractional). */
   cost?: CostBreakdown;
 }
 
@@ -60,7 +60,7 @@ export interface NormalizedUsage {
 export interface TraceModelMeta {
   model?: string;
   reasoning_effort?: string | null;
-  /** Why the turn ended: Claude `stop_reason`, Pi/OpenClaw `stopReason`. */
+  /** Why the turn ended. */
   stop_reason?: string;
   /** Usage for the most recent turn. */
   token_usage?: NormalizedUsage;
@@ -97,7 +97,7 @@ function assign(target: NormalizedUsage, key: "input_tokens" | "output_tokens" |
   if (n !== undefined) target[key] = n;
 }
 
-/** Normalize a Pi/OpenClaw cost object `{input, output, cacheRead, cacheWrite, total}`. */
+/** Normalize a generic SDK cost object `{input, output, cacheRead, cacheWrite, total}`. */
 function normalizeCost(cost: unknown): CostBreakdown | undefined {
   if (!cost || typeof cost !== "object") return undefined;
   const c = cost as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown; total?: unknown };
@@ -202,7 +202,7 @@ export function readTailLines(path: string, maxBytes = 1_048_576): string[] | nu
 }
 
 // ---------------------------------------------------------------------------
-// Pi / OpenClaw (shared SDK usage shape)
+// Generic SDK usage shape
 // ---------------------------------------------------------------------------
 
 interface SdkUsage {
@@ -215,7 +215,7 @@ interface SdkUsage {
 }
 
 /**
- * Normalize the Pi / OpenClaw SDK usage object
+ * Normalize a generic SDK usage object
  * (`{ input, output, cacheRead, cacheWrite, totalTokens, cost }`) onto
  * {@link NormalizedUsage}, including the money `cost` sub-object. Returns
  * undefined when nothing usable is present, so callers can spread it without
@@ -236,7 +236,7 @@ export function normalizeSdkUsage(usage: unknown): NormalizedUsage | undefined {
 }
 
 /**
- * Build the trace enrichment for an in-process SDK turn (Pi / OpenClaw), where
+ * Build trace enrichment for an in-process SDK turn, where
  * the model, usage and stop reason arrive on the message object rather than a
  * transcript file. Returns undefined when nothing usable is present. These
  * runtimes expose no reasoning-effort field, so it is left unset.

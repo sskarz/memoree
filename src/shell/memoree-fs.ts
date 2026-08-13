@@ -796,7 +796,7 @@ export class MemoreeFs implements IFileSystem {
     }
     // Docs VFS bridge — same as graph, but async (SQL-backed) and delegating to
     // handleDocsVfs. Makes browse + docs/find work in the shell path (codex /
-    // cursor / hermes / interactive), not just the pre-tool-use hook (Claude).
+    // Codex or interactive), not just the pre-tool-use hook (Claude).
     if (isDocsPath(p) && this.docsTable) {
       if (isDocsDir(p)) throw fsErr("EISDIR", "illegal operation on a directory", p);
       const r = await handleDocsVfs(docsSubpathOf(p), (sql) => this.client.query(sql), this.docsTable, { embedQuery: makeQueryEmbedder(), project: this.docsProject ?? undefined, dialect: this.client.dialect });

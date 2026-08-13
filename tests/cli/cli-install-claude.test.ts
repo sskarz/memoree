@@ -10,6 +10,8 @@ function commands(): string[] {
   return execFileSyncMock.mock.calls.map(([, args]) => (args as string[]).join(" "));
 }
 
+const currentMarketplace = () => `  ❯ memoree\n    Source: Directory (${process.cwd()})\n`;
+
 beforeEach(() => {
   execFileSyncMock.mockReset();
   execFileSyncMock.mockImplementation((_bin: string, args: string[]) => {
@@ -34,7 +36,7 @@ describe("local Claude Code installation", () => {
 
   it("is idempotent when marketplace and plugin are already present", () => {
     execFileSyncMock.mockImplementation((_bin: string, args: string[]) => {
-      if (args.join(" ") === "plugin marketplace list") return "memoree local";
+      if (args.join(" ") === "plugin marketplace list") return currentMarketplace();
       if (args.join(" ") === "plugin list") return "memoree@memoree enabled";
       return "ok";
     });
@@ -43,6 +45,7 @@ describe("local Claude Code installation", () => {
       "--version",
       "plugin marketplace list",
       "plugin list",
+      "plugin update memoree@memoree --scope user",
       "plugin enable memoree@memoree --scope user",
     ]);
   });
@@ -51,7 +54,7 @@ describe("local Claude Code installation", () => {
     execFileSyncMock.mockImplementation((_bin: string, args: string[]) => {
       const command = args.join(" ");
       if (args[0] === "--version") return "ok";
-      if (command === "plugin marketplace list") return "memoree local";
+      if (command === "plugin marketplace list") return currentMarketplace();
       if (command === "plugin list") return "memoree@memoree enabled";
       if (command === "plugin enable memoree@memoree --scope user") {
         throw Object.assign(new Error("failed"), {
@@ -93,7 +96,7 @@ describe("local Claude Code installation", () => {
     execFileSyncMock.mockImplementation((_bin: string, args: string[]) => {
       const command = args.join(" ");
       if (args[0] === "--version") return "ok";
-      if (command === "plugin marketplace list") return "memoree local";
+      if (command === "plugin marketplace list") return currentMarketplace();
       if (command === "plugin list") return "memoree@memoree disabled";
       if (command.startsWith("plugin enable")) throw Object.assign(new Error("failed"), { stderr: "bad enable" });
       return "ok";

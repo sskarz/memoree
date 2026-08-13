@@ -6,9 +6,8 @@ import { join } from "node:path";
  * Cross-agent source guard for the #331 back-off.
  *
  * Only the claude_code and codex capture hooks have functional trigger tests
- * (their suites mock summary-state); cursor and hermes do not, so their copies
- * of maybeTriggerPeriodicSummary are only reachable at the source level. All
- * four are near-identical by construction, and the two properties that matter
+ * (their suites mock summary-state). Both are near-identical by construction,
+ * and the two properties that matter
  * are ordering ones a refactor can silently break:
  *
  *   1. the attempt is stamped BEFORE the worker is spawned — otherwise a
@@ -21,8 +20,6 @@ import { join } from "node:path";
 const CAPTURES = [
   "src/hooks/capture.ts",
   "src/hooks/codex/capture.ts",
-  "src/hooks/cursor/capture.ts",
-  "src/hooks/hermes/capture.ts",
 ] as const;
 
 describe("periodic summary trigger — attempt stamping (issue #331)", () => {

@@ -30,7 +30,7 @@ export interface TriggerOptions {
   config: Config;
   cwd: string;
   bundleDir: string;
-  agent: string;          // "claude_code" | "codex" | "cursor" | "hermes"
+  agent: string;          // "claude_code" | "codex"
   sessionId?: string;     // current session — excluded from mining
 }
 

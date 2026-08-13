@@ -1,28 +1,8 @@
 import { build } from "esbuild";
-import { chmodSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const esmPackageJson = '{"type":"module"}\n';
-const memoreeVersion = JSON.parse(readFileSync("package.json", "utf-8")).version;
-const openclawVersion = JSON.parse(readFileSync("harnesses/openclaw/package.json", "utf-8")).version;
-const openclawSkillBody = readFileSync("harnesses/openclaw/skills/SKILL.md", "utf-8");
-const openclawGraphSkillBody = readFileSync("harnesses/openclaw/skills/memoree-graph/SKILL.md", "utf-8");
-
-// Every output directory previously accumulated content-hashed chunks and
-// bundles for removed entry points. Recreate them on every build so packaged
-// artifacts can never retain stale product names or dead cloud code.
-for (const dir of [
-  "bundle",
-  "harnesses/claude-code/bundle",
-  "harnesses/codex/bundle",
-  "harnesses/cursor/bundle",
-  "harnesses/hermes/bundle",
-  "harnesses/pi/bundle",
-  "harnesses/openclaw/dist",
-  "mcp/bundle",
-]) rmSync(dir, { recursive: true, force: true });
-
-// tree-sitter + language grammars ship native .node prebuilds esbuild can't
-// bundle; they're always external and resolved from node_modules at runtime.
+const memoreeVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
 const treeSitterExternals = [
   "tree-sitter",
   "tree-sitter-typescript",
@@ -35,34 +15,39 @@ const treeSitterExternals = [
   "tree-sitter-c",
   "tree-sitter-cpp",
 ];
+const runtimeExternals = [
+  "node:*",
+  "node-liblzma",
+  "@mongodb-js/zstd",
+  "@huggingface/transformers",
+  "onnxruntime-node",
+  "onnxruntime-common",
+  "sharp",
+  ...treeSitterExternals,
+];
 
-/**
- * Build the graph-on-stop Stop/SessionEnd hook as its OWN code-split bundle
- * for a harness (claude-code / codex / cursor / hermes).
- *
- * Why splitting instead of a plain entry in the shared harness build list:
- * the hook's build path (runBuildCommand → extract/index → `import Parser
- * from "tree-sitter"`) is a chain of static ESM imports. As a plain bundle,
- * esbuild hoists the external `import ... from "tree-sitter"` to the TOP of
- * graph-on-stop.js, so Node resolves tree-sitter at MODULE LOAD — before
- * main() runs. On an install where the tree-sitter optionalDependency failed
- * to build (Node 24 / arm64), that load fails with ERR_MODULE_NOT_FOUND and
- * the Stop hook exits 1 (the reported crash). main()'s catch never fires.
- *
- * With `splitting: true`, graph-on-stop.ts's `await import("../commands/graph.js")`
- * stays a runtime import into a separate chunk; the tree-sitter statics live
- * only in that chunk, loaded lazily behind the gate. A missing grammar then
- * rejects the dynamic import, which main()'s try/catch turns into a logged
- * skip + exit 0. This mirrors the CLI fix (bundle/cli.js) already in this file.
- * The entry filename stays graph-on-stop.js so hook registrations are
- * unchanged; the chunk lands under graph-chunks/.
- *
- * Stale chunks are cleared first (their names are content-hashed, so a code
- * change would otherwise leave the previous chunk behind to ship as dead
- * weight). Scoped to graph-chunks/ so the shared bundle outputs are untouched.
- */
+for (const dir of [
+  "bundle",
+  "harnesses/claude-code/bundle",
+  "harnesses/codex/bundle",
+  "mcp/bundle",
+]) rmSync(dir, { recursive: true, force: true });
+
+async function buildEntries(entries, outdir) {
+  await build({
+    entryPoints: Object.fromEntries(entries.map(entry => [entry.out, entry.entry])),
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    outdir,
+    external: runtimeExternals,
+    define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
+  });
+  for (const entry of entries) chmodSync(`${outdir}/${entry.out}.js`, 0o755);
+  writeFileSync(`${outdir}/package.json`, esmPackageJson);
+}
+
 async function buildGraphOnStop(outdir) {
-  rmSync(`${outdir}/graph-chunks`, { recursive: true, force: true });
   await build({
     entryPoints: { "graph-on-stop": "dist/src/hooks/graph-on-stop.js" },
     bundle: true,
@@ -71,734 +56,49 @@ async function buildGraphOnStop(outdir) {
     outdir,
     splitting: true,
     chunkNames: "graph-chunks/[name]-[hash]",
-    external: [
-      "node:*",
-      "node-liblzma",
-      "@mongodb-js/zstd",
-      "@huggingface/transformers",
-      "onnxruntime-node",
-      "onnxruntime-common",
-      "sharp",
-      ...treeSitterExternals,
-    ],
-    define: {
-      __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-    },
+    external: runtimeExternals,
+    define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
   });
   chmodSync(`${outdir}/graph-on-stop.js`, 0o755);
 }
 
-// Claude Code plugin
-const ccHooks = [
-  { entry: "dist/src/hooks/session-start.js", out: "session-start" },
-  { entry: "dist/src/hooks/session-start-setup.js", out: "session-start-setup" },
-  { entry: "dist/src/hooks/capture.js", out: "capture" },
-  { entry: "dist/src/hooks/recall.js", out: "recall" },
-  { entry: "dist/src/hooks/pre-tool-use.js", out: "pre-tool-use" },
-  { entry: "dist/src/hooks/session-end.js", out: "session-end" },
-  { entry: "dist/src/hooks/plugin-cache-gc.js", out: "plugin-cache-gc" },
-  { entry: "dist/src/hooks/wiki-worker.js", out: "wiki-worker" },
-  { entry: "dist/src/skillify/skillify-worker.js", out: "skillify-worker" },
-  // SkillOpt weekly worker: spawned detached by the SessionStart trigger
-  // (src/skillify/skillopt-trigger.ts), which resolves it relative to its
-  // own bundle dir via import.meta.url. Only the Claude Code session-start
-  // hook fires the trigger, so only this bundle ships the worker.
-  { entry: "dist/src/skillify/skillopt-worker.js", out: "skillopt-worker" },
-  // codebase-graph Phase 1.5: auto-build the graph at SessionEnd, gated
-  // on (a) 10-min rate limit, (b) HEAD changed since last build, (c) ≥1
-  // source file diff. See src/hooks/graph-on-stop.ts. Built separately via
-  // buildGraphOnStop() (code-split so tree-sitter loads lazily) — NOT in
-  // this shared list. Filename keeps the "on-stop" suffix for backward-compat.
-  // codebase-graph Phase 3 v1.1: async auto-pull on SessionStart.
-  // Spawned detached via nohup from each agent's SessionStart hook;
-  // pulls the freshest cloud snapshot for HEAD if newer than local.
-  // See src/hooks/graph-pull-worker.ts.
-  { entry: "dist/src/hooks/graph-pull-worker.js", out: "graph-pull-worker" },
-  // Detached provisioning worker for the code-graph tree-sitter parsers.
-  // Spawned by session-start-setup so a cold npm install + native compile
-  // can outlive the hook's ~120s async timeout. See src/hooks/graph-deps-worker.ts.
-  { entry: "dist/src/hooks/graph-deps-worker.js", out: "graph-deps-worker" },
-];
+const claudeEntries = [
+  ["src/hooks/session-start", "session-start"],
+  ["src/hooks/session-start-setup", "session-start-setup"],
+  ["src/hooks/capture", "capture"],
+  ["src/hooks/recall", "recall"],
+  ["src/hooks/pre-tool-use", "pre-tool-use"],
+  ["src/hooks/session-end", "session-end"],
+  ["src/hooks/plugin-cache-gc", "plugin-cache-gc"],
+  ["src/hooks/wiki-worker", "wiki-worker"],
+  ["src/hooks/graph-pull-worker", "graph-pull-worker"],
+  ["src/hooks/graph-deps-worker", "graph-deps-worker"],
+  ["src/skillify/skillify-worker", "skillify-worker"],
+  ["src/skillify/skillopt-worker", "skillopt-worker"],
+  ["src/shell/memoree-shell", "shell/memoree-shell"],
+  ["src/embeddings/daemon", "embeddings/embed-daemon"],
+].map(([entry, out]) => ({ entry: `dist/${entry}.js`, out }));
 
-const ccShell = [
-  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
-];
+const codexEntries = [
+  ["src/hooks/codex/session-start", "session-start"],
+  ["src/hooks/codex/session-start-setup", "session-start-setup"],
+  ["src/hooks/codex/capture", "capture"],
+  ["src/hooks/codex/pre-tool-use", "pre-tool-use"],
+  ["src/hooks/codex/stop", "stop"],
+  ["src/hooks/codex/wiki-worker", "wiki-worker"],
+  ["src/hooks/graph-pull-worker", "graph-pull-worker"],
+  ["src/hooks/graph-deps-worker", "graph-deps-worker"],
+  ["src/skillify/skillify-worker", "skillify-worker"],
+  ["src/skillify/skillopt-worker", "skillopt-worker"],
+  ["src/shell/memoree-shell", "shell/memoree-shell"],
+  ["src/embeddings/daemon", "embeddings/embed-daemon"],
+].map(([entry, out]) => ({ entry: `dist/${entry}.js`, out }));
 
-const ccEmbed = [
-  { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
-];
+await buildEntries(claudeEntries, "harnesses/claude-code/bundle");
+await buildEntries(codexEntries, "harnesses/codex/bundle");
+await buildGraphOnStop("harnesses/claude-code/bundle");
+await buildGraphOnStop("harnesses/codex/bundle");
 
-const ccAll = [...ccHooks, ...ccShell, ...ccEmbed];
-
-await build({
-  entryPoints: Object.fromEntries(ccAll.map(h => [h.out, h.entry])),
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/claude-code/bundle",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    "@huggingface/transformers",
-    "onnxruntime-node",
-    "onnxruntime-common",
-    "sharp",
-    // tree-sitter and language grammars ship native .node prebuilds that
-    // esbuild cannot bundle. Resolved from node_modules at runtime.
-    "tree-sitter",
-    "tree-sitter-typescript",
-    "tree-sitter-javascript",
-    "tree-sitter-python",
-    "tree-sitter-go",
-    "tree-sitter-rust",
-    "tree-sitter-java",
-    "tree-sitter-ruby",
-    "tree-sitter-c",
-    "tree-sitter-cpp",
-  ],
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-  },
-});
-
-for (const h of ccAll) {
-  chmodSync(`harnesses/claude-code/bundle/${h.out}.js`, 0o755);
-}
-writeFileSync("harnesses/claude-code/bundle/package.json", esmPackageJson);
-
-// Codex plugin
-const codexHooks = [
-  { entry: "dist/src/hooks/codex/session-start.js", out: "session-start" },
-  { entry: "dist/src/hooks/codex/session-start-setup.js", out: "session-start-setup" },
-  { entry: "dist/src/hooks/codex/capture.js", out: "capture" },
-  { entry: "dist/src/hooks/codex/pre-tool-use.js", out: "pre-tool-use" },
-  { entry: "dist/src/hooks/codex/stop.js", out: "stop" },
-  { entry: "dist/src/hooks/codex/wiki-worker.js", out: "wiki-worker" },
-  { entry: "dist/src/skillify/skillify-worker.js", out: "skillify-worker" },
-  // SkillOpt worker — codex's capture spawns it on a user reaction to judge + improve a
-  // recently-used org skill (judging runs on the codex CLI). Same shared module CC uses.
-  { entry: "dist/src/skillify/skillopt-worker.js", out: "skillopt-worker" },
-  { entry: "dist/src/hooks/graph-pull-worker.js", out: "graph-pull-worker" },
-  // Detached provisioning worker for the code-graph tree-sitter parsers —
-  // codex parity with CC. Spawned by session-start-setup so a cold npm install
-  // + native compile can outlive the hook. See src/hooks/graph-deps-worker.ts.
-  { entry: "dist/src/hooks/graph-deps-worker.js", out: "graph-deps-worker" },
-  // G3: code-graph auto-build parity for Codex (same shared hook as CC/Cursor).
-  // graph-on-stop is built separately via buildGraphOnStop() (code-split).
-];
-
-const codexShell = [
-  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
-];
-
-const codexEmbed = [
-  { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
-];
-
-const codexAll = [...codexHooks, ...codexShell, ...codexEmbed];
-
-await build({
-  entryPoints: Object.fromEntries(codexAll.map(h => [h.out, h.entry])),
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/codex/bundle",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    "@huggingface/transformers",
-    "onnxruntime-node",
-    "onnxruntime-common",
-    "sharp",
-    // graph-pull-worker transitively imports all language extractors.
-    "tree-sitter",
-    "tree-sitter-typescript",
-    "tree-sitter-javascript",
-    "tree-sitter-python",
-    "tree-sitter-go",
-    "tree-sitter-rust",
-    "tree-sitter-java",
-    "tree-sitter-ruby",
-    "tree-sitter-c",
-    "tree-sitter-cpp",
-  ],
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-  },
-});
-
-for (const h of codexAll) {
-  chmodSync(`harnesses/codex/bundle/${h.out}.js`, 0o755);
-}
-writeFileSync("harnesses/codex/bundle/package.json", esmPackageJson);
-
-// Cursor plugin (1.7+ hooks API). Same shell + commands as the other agents.
-const cursorHooks = [
-  { entry: "dist/src/hooks/cursor/session-start.js", out: "session-start" },
-  { entry: "dist/src/hooks/cursor/capture.js", out: "capture" },
-  { entry: "dist/src/hooks/cursor/session-end.js", out: "session-end" },
-  { entry: "dist/src/hooks/cursor/pre-tool-use.js", out: "pre-tool-use" },
-  { entry: "dist/src/hooks/cursor/wiki-worker.js", out: "wiki-worker" },
-  { entry: "dist/src/skillify/skillify-worker.js", out: "skillify-worker" },
-  { entry: "dist/src/hooks/graph-pull-worker.js", out: "graph-pull-worker" },
-  // A1 (graph Cursor parity): same auto-build hook as Claude Code, wired
-  // to Cursor's stop + sessionEnd events in install-cursor.ts. Reuses the
-  // shared src/hooks/graph-on-stop.ts entry (no per-agent logic). Built
-  // separately via buildGraphOnStop() (code-split).
-];
-
-// Hermes Agent shell-hook bundles (matches Claude Code's wire protocol; see
-// agent/shell_hooks.py in NousResearch/hermes-agent).
-const hermesHooks = [
-  { entry: "dist/src/hooks/hermes/session-start.js", out: "session-start" },
-  { entry: "dist/src/hooks/hermes/capture.js", out: "capture" },
-  { entry: "dist/src/hooks/hermes/session-end.js", out: "session-end" },
-  { entry: "dist/src/hooks/hermes/pre-tool-use.js", out: "pre-tool-use" },
-  { entry: "dist/src/hooks/hermes/wiki-worker.js", out: "wiki-worker" },
-  { entry: "dist/src/skillify/skillify-worker.js", out: "skillify-worker" },
-  // SkillOpt worker — hermes capture spawns it on a reaction to judge + improve a recently-used
-  // org skill (judging runs on the hermes CLI). Same shared module CC uses.
-  { entry: "dist/src/skillify/skillopt-worker.js", out: "skillopt-worker" },
-  { entry: "dist/src/hooks/graph-pull-worker.js", out: "graph-pull-worker" },
-  // G3: code-graph auto-build parity for Hermes (registered on on_session_end).
-  // graph-on-stop is built separately via buildGraphOnStop() (code-split).
-];
-
-const cursorShell = [
-  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
-];
-
-const cursorEmbed = [
-  { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
-];
-
-const cursorAll = [...cursorHooks, ...cursorShell, ...cursorEmbed];
-
-await build({
-  entryPoints: Object.fromEntries(cursorAll.map(h => [h.out, h.entry])),
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/cursor/bundle",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    "@huggingface/transformers",
-    "onnxruntime-node",
-    "onnxruntime-common",
-    "sharp",
-    // graph-pull-worker transitively imports all language extractors.
-    "tree-sitter",
-    "tree-sitter-typescript",
-    "tree-sitter-javascript",
-    "tree-sitter-python",
-    "tree-sitter-go",
-    "tree-sitter-rust",
-    "tree-sitter-java",
-    "tree-sitter-ruby",
-    "tree-sitter-c",
-    "tree-sitter-cpp",
-  ],
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-  },
-});
-
-for (const h of cursorAll) {
-  chmodSync(`harnesses/cursor/bundle/${h.out}.js`, 0o755);
-}
-writeFileSync("harnesses/cursor/bundle/package.json", esmPackageJson);
-
-// Hermes Agent bundle (auto-capture via on_session_start / pre_llm_call /
-// post_tool_call / post_llm_call / on_session_end).
-const hermesShell = [
-  { entry: "dist/src/shell/memoree-shell.js", out: "shell/memoree-shell" },
-];
-const hermesEmbed = [
-  { entry: "dist/src/embeddings/daemon.js", out: "embeddings/embed-daemon" },
-];
-const hermesAll = [...hermesHooks, ...hermesShell, ...hermesEmbed];
-
-await build({
-  entryPoints: Object.fromEntries(hermesAll.map(h => [h.out, h.entry])),
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/hermes/bundle",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    "@huggingface/transformers",
-    "onnxruntime-node",
-    "onnxruntime-common",
-    "sharp",
-    // graph-pull-worker transitively imports all language extractors.
-    "tree-sitter",
-    "tree-sitter-typescript",
-    "tree-sitter-javascript",
-    "tree-sitter-python",
-    "tree-sitter-go",
-    "tree-sitter-rust",
-    "tree-sitter-java",
-    "tree-sitter-ruby",
-    "tree-sitter-c",
-    "tree-sitter-cpp",
-  ],
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-  },
-});
-
-for (const h of hermesAll) {
-  chmodSync(`harnesses/hermes/bundle/${h.out}.js`, 0o755);
-}
-
-// Pi (badlogic/pi-mono) — ships a wiki-worker bundle, a skillify-worker
-// bundle, and an autopull-worker bundle. The pi extension itself is raw .ts
-// at harnesses/pi/extension-source/memoree.ts; we don't bundle it because pi's
-// runtime compiles + loads the .ts file directly. Embed daemon reuses the
-// canonical ~/.memoree/embed-deps/embed-daemon.js — no per-pi embed
-// bundle needed. Skillify worker is the same shared module used by
-// CC/Codex/Cursor/Hermes; pi spawns it from session_shutdown.
-// Autopull worker is the same maybeAutoPull() the other agents call
-// directly; pi can't import it (raw .ts, zero deps) so it spawns this
-// bundle synchronously from session_start.
-const piWorker = [
-  { entry: "dist/src/hooks/pi/wiki-worker.js", out: "wiki-worker" },
-  { entry: "dist/src/skillify/skillify-worker.js", out: "skillify-worker" },
-  { entry: "dist/src/skillify/autopull-worker.js", out: "autopull-worker" },
-  // SkillOpt worker — pi spawns it on a user reaction (the extension can't import the
-  // raw-.ts trigger, so it shells this bundle like the others). Same shared module CC uses.
-  { entry: "dist/src/skillify/skillopt-worker.js", out: "skillopt-worker" },
-];
-await build({
-  entryPoints: Object.fromEntries(piWorker.map(h => [h.out, h.entry])),
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/pi/bundle",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    "@huggingface/transformers",
-    "onnxruntime-node",
-    "onnxruntime-common",
-    "sharp",
-  ],
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-  },
-});
-for (const h of piWorker) {
-  chmodSync(`harnesses/pi/bundle/${h.out}.js`, 0o755);
-}
-writeFileSync("harnesses/pi/bundle/package.json", esmPackageJson);
-writeFileSync("harnesses/hermes/bundle/package.json", esmPackageJson);
-
-// Code-split graph-on-stop bundles for every harness that registers the hook
-// as a Stop/SessionEnd handler. Kept out of the shared build lists above so
-// its tree-sitter dependency loads lazily (see buildGraphOnStop). Each
-// harness's bundle/package.json ({"type":"module"}) has already been written,
-// so the emitted graph-chunks/ resolve as ESM. (OpenClaw ships graph-on-stop
-// via its own graph-worker build below, which has separate env-rewrite
-// handling, so it is intentionally not included here.)
-for (const outdir of [
-  "harnesses/claude-code/bundle",
-  "harnesses/codex/bundle",
-  "harnesses/cursor/bundle",
-  "harnesses/hermes/bundle",
-]) {
-  await buildGraphOnStop(outdir);
-}
-
-// OpenClaw plugin bundle. The shared CC/Codex source modules reference a
-// handful of MEMOREE_* env vars for dev-only overrides. Those env paths are
-// never taken in the openclaw runtime (the plugin loads local settings from
-// pluginApi.pluginConfig), so we replace them with `undefined` at build time
-// to avoid shipping dead env-read code in the plugin bundle.
-await build({
-  entryPoints: { index: "harnesses/openclaw/src/index.ts" },
-  bundle: true,
-  splitting: true,
-  chunkNames: "chunks/[name]-[hash]",
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/openclaw/dist",
-  external: ["node:*", "pg"],
-  // Guarantee `globalThis.__memoree_tuning__` exists as an object before any
-  // bundled module's lazy env reads execute. esbuild's `define` rewrites
-  // `process.env.MEMOREE_X` → `globalThis.__memoree_tuning__.MEMOREE_X`
-  // (no optional chaining — esbuild rejects it as a define value). The
-  // openclaw plugin's `applyOpenclawTuning()` replaces this object with the
-  // user's `plugins.entries.memoree.config.tuning` values in register();
-  // until then, reads against the empty object resolve to `undefined` and
-  // the call-site `??` fallback applies.
-  banner: { js: "globalThis.__memoree_tuning__ ??= {};" },
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(openclawVersion),
-    __MEMOREE_SKILL__: JSON.stringify(openclawSkillBody),
-    __MEMOREE_GRAPH_SKILL__: JSON.stringify(openclawGraphSkillBody),
-    // Storage selection is controlled by the plugin configuration rather
-    // than arbitrary environment values in this packaged runtime.
-    "process.env.MEMOREE_TABLE": "undefined",
-    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
-    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
-    "process.env.MEMOREE_MEMORY_PATH": "undefined",
-    "process.env.MEMOREE_CAPTURE": "undefined",
-    "process.env.MEMOREE_BACKEND": "undefined",
-    "process.env.MEMOREE_SQLITE_PATH": "undefined",
-    "process.env.MEMOREE_POSTGRES_URL": "undefined",
-    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
-    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
-    "process.env.MEMOREE_CONFIG_PATH": "undefined",
-    "process.env.MEMOREE_SKILLS_TABLE": "undefined",
-    "process.env.MEMOREE_RULES_TABLE": "undefined",
-    "process.env.MEMOREE_GOALS_TABLE": "undefined",
-    "process.env.MEMOREE_KPIS_TABLE": "undefined",
-    // ----- User-tunable knobs: routed through a globalThis dispatch -----
-    // Every read of `process.env.MEMOREE_X` in transitively-bundled code is
-    // rewritten by esbuild to `globalThis.__memoree_tuning__.MEMOREE_X`.
-    // The openclaw plugin's `register()` populates that object from
-    // `pluginApi.pluginConfig.tuning` (i.e. what the user wrote under
-    // `plugins.entries.memoree.config.tuning` in `openclaw.json`). So the
-    // bundle has zero `process.env.X` substrings (ClawHub scan passes), AND
-    // the user can still tune at runtime by editing openclaw.json + restart.
-    // CodeRabbit + @efenocchi on #170 pushed back on the previous
-    // inline-to-undefined approach because it removed the env-override
-    // surface entirely. This restores it via a different mechanism.
-    "process.env.MEMOREE_DEBUG": "globalThis.__memoree_tuning__.MEMOREE_DEBUG",
-    "process.env.MEMOREE_TRACE_SQL": "globalThis.__memoree_tuning__.MEMOREE_TRACE_SQL",
-    "process.env.MEMOREE_QUERY_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_QUERY_TIMEOUT_MS",
-    "process.env.MEMOREE_DOCS_MIN_PERIOD_MS": "globalThis.__memoree_tuning__.MEMOREE_DOCS_MIN_PERIOD_MS",
-    "process.env.MEMOREE_INDEX_MARKER_TTL_MS": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_TTL_MS",
-    "process.env.MEMOREE_INDEX_MARKER_DIR": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_DIR",
-    "process.env.MEMOREE_SEMANTIC_LIMIT": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_LIMIT",
-    "process.env.MEMOREE_HYBRID_LEXICAL_LIMIT": "globalThis.__memoree_tuning__.MEMOREE_HYBRID_LEXICAL_LIMIT",
-    "process.env.MEMOREE_GREP_LIKE": "globalThis.__memoree_tuning__.MEMOREE_GREP_LIKE",
-    "process.env.MEMOREE_SEMANTIC_SEARCH": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_SEARCH",
-    "process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS",
-    "process.env.MEMOREE_SEMANTIC_EMIT_ALL": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMIT_ALL",
-    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
-    "process.env.MEMOREE_DOCS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_DOCS_TABLE",
-    // `MEMOREE_STATE_DIR` is the test-isolation override that points
-    // `~/.memoree/state/skillify` at a `mkdtempSync()` dir. OpenClaw has
-    // no testing surface and no reason to redirect state, so it always
-    // resolves to `undefined` at runtime — the call-site `??
-    // homedir()/...` fallback produces the production path. The rewrite
-    // matters mainly to keep the ClawHub `env-harvesting` scanner happy:
-    // a literal `process.env.MEMOREE_STATE_DIR` substring in the same
-    // file as a network send trips the critical rule even though the
-    // value is just a directory path.
-    "process.env.MEMOREE_STATE_DIR": "globalThis.__memoree_tuning__.MEMOREE_STATE_DIR",
-    "process.env.MEMOREE_BACKEND": "undefined",
-    "process.env.MEMOREE_SQLITE_PATH": "undefined",
-    "process.env.MEMOREE_POSTGRES_URL": "undefined",
-    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
-    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
-    "process.env.MEMOREE_CONFIG_PATH": "undefined",
-    "process.env.MEMOREE_TABLE": "undefined",
-    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
-    "process.env.MEMOREE_SKILLS_TABLE": "undefined",
-    "process.env.MEMOREE_RULES_TABLE": "undefined",
-    "process.env.MEMOREE_GOALS_TABLE": "undefined",
-    "process.env.MEMOREE_KPIS_TABLE": "undefined",
-    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
-    "process.env.MEMOREE_MEMORY_PATH": "undefined",
-    "process.env.MEMOREE_GRAPH_CWD": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_CWD",
-    "process.env.MEMOREE_GRAPH_ON_STOP": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_ON_STOP",
-    "process.env.MEMOREE_GRAPH_PULL": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PULL",
-  },
-  plugins: [{
-    // Dead-code elimination for transitively bundled CC/Codex-only features.
-    // harnesses/openclaw/src/index.ts imports shared modules from ../../../src/ (MemoreeApi,
-    // grep-core, virtual-table-query, auth device-flow). Several of those
-    // modules also host CC-specific helpers that shell out with execSync —
-    // opening the browser for SSO, nudging claude-plugin-update, spawning the
-    // wiki-worker daemon. Those helpers are never called through the openclaw
-    // entry point (openclaw is a pure HTTP/WebSocket gateway; it has no local
-    // browser, uses its own plugin installer, and does not run the wiki-worker
-    // daemon). Replacing node:child_process with a no-op export drops that
-    // dead code from the bundle instead of shipping unreachable exec calls.
-    name: "stub-unused-child-process",
-    setup(build) {
-      build.onResolve({ filter: /^node:child_process$/ }, () => ({
-        path: "node:child_process",
-        namespace: "stub",
-      }));
-      build.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
-        contents: "export const execSync = () => {}; export const execFileSync = () => {}; export const spawn = () => {};",
-        loader: "js",
-      }));
-    },
-  }],
-});
-writeFileSync("harnesses/openclaw/dist/package.json", esmPackageJson);
-
-// OpenClaw skillify-worker bundle. Same shared module CC/Codex/Cursor/Hermes/Pi
-// use; openclaw spawns it from its agent_end hook to mine reusable skills out
-// of just-captured sessions. Built as a SEPARATE entry (not added to the main
-// openclaw build above) because:
-//   1. The main bundle stubs out node:child_process to drop CC-only dead code.
-//      The worker genuinely needs spawn at runtime, so it gets its own bundle
-//      with no stubs.
-//   2. The main bundle uses code splitting (chunks/), and we don't want the
-//      worker's modules entangled with the gateway's chunk graph.
-// Lands at harnesses/openclaw/dist/skillify-worker.js — install-openclaw.ts already
-// copies the entire dist/ recursively, so it ships to
-// ~/.openclaw/extensions/memoree/dist/skillify-worker.js with no other change.
-await build({
-  entryPoints: { "skillify-worker": "dist/src/skillify/skillify-worker.js" },
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/openclaw/dist",
-  external: ["node:*", "pg"],
-  // Same banner as the main openclaw bundle — see the comment there for
-  // the rationale. The worker entry itself overwrites this with the
-  // tuning passed in via the config JSON before any shared module's
-  // lazy env read fires.
-  banner: { js: "globalThis.__memoree_tuning__ ??= {};" },
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-    // Every `process.env.MEMOREE_X` read in transitively-bundled code is
-    // rewritten by esbuild to `globalThis.__memoree_tuning__.MEMOREE_X`.
-    // The worker entry (src/skillify/skillify-worker.ts) populates that
-    // object from its config JSON before any shared code path runs (the
-    // openclaw plugin writes the user's `pluginConfig.tuning` into the
-    // config JSON when spawning the worker). Net result:
-    //   - openclaw bundle has zero `process.env.X` substrings (ClawHub scan
-    //     passes per the env-harvesting rule)
-    //   - user-tunable knobs (timeouts, debug, skillify cadence, agent
-    //     models, etc.) still take effect at runtime via openclaw.json's
-    //     `plugins.entries.memoree.config.tuning` section
-    //   - MEMOREE_SKILLIFY_WORKER=1 is set by the worker entry so the
-    //     recursion guard inside trigger code short-circuits correctly
-    //
-    // CodeRabbit + @efenocchi pushed back on the prior inline-to-undefined
-    // version because it silently removed every env-override surface. This
-    // restores them via a build-time-friendly dispatch.
-    //
-    // The list below MUST cover every `process.env.MEMOREE_*` that may be
-    // transitively imported into the worker bundle. Source of truth:
-    //   grep -rn "process\.env\.MEMOREE_" src/skillify src/shell \
-    //       src/memoree-api.ts src/utils src/hooks/virtual-table-query.ts
-    "process.env.MEMOREE_DEBUG": "globalThis.__memoree_tuning__.MEMOREE_DEBUG",
-    "process.env.MEMOREE_TRACE_SQL": "globalThis.__memoree_tuning__.MEMOREE_TRACE_SQL",
-    "process.env.MEMOREE_QUERY_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_QUERY_TIMEOUT_MS",
-    "process.env.MEMOREE_DOCS_MIN_PERIOD_MS": "globalThis.__memoree_tuning__.MEMOREE_DOCS_MIN_PERIOD_MS",
-    "process.env.MEMOREE_SEMANTIC_LIMIT": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_LIMIT",
-    "process.env.MEMOREE_SEMANTIC_SEARCH": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_SEARCH",
-    "process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS",
-    "process.env.MEMOREE_SEMANTIC_EMIT_ALL": "globalThis.__memoree_tuning__.MEMOREE_SEMANTIC_EMIT_ALL",
-    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
-    "process.env.MEMOREE_INDEX_MARKER_TTL_MS": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_TTL_MS",
-    "process.env.MEMOREE_INDEX_MARKER_DIR": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_DIR",
-    "process.env.MEMOREE_CURSOR_MODEL": "globalThis.__memoree_tuning__.MEMOREE_CURSOR_MODEL",
-    "process.env.MEMOREE_HERMES_PROVIDER": "globalThis.__memoree_tuning__.MEMOREE_HERMES_PROVIDER",
-    "process.env.MEMOREE_HERMES_MODEL": "globalThis.__memoree_tuning__.MEMOREE_HERMES_MODEL",
-    "process.env.MEMOREE_PI_PROVIDER": "globalThis.__memoree_tuning__.MEMOREE_PI_PROVIDER",
-    "process.env.MEMOREE_PI_MODEL": "globalThis.__memoree_tuning__.MEMOREE_PI_MODEL",
-    "process.env.MEMOREE_SKILLIFY_WORKER": "globalThis.__memoree_tuning__.MEMOREE_SKILLIFY_WORKER",
-    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
-    "process.env.MEMOREE_DOCS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_DOCS_TABLE",
-    "process.env.MEMOREE_SKILLIFY_EVERY_N_TURNS": "globalThis.__memoree_tuning__.MEMOREE_SKILLIFY_EVERY_N_TURNS",
-    "process.env.MEMOREE_AUTOPULL_DISABLED": "globalThis.__memoree_tuning__.MEMOREE_AUTOPULL_DISABLED",
-    "process.env.MEMOREE_BACKEND": "undefined",
-    "process.env.MEMOREE_SQLITE_PATH": "undefined",
-    "process.env.MEMOREE_POSTGRES_URL": "undefined",
-    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
-    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
-    "process.env.MEMOREE_CONFIG_PATH": "undefined",
-    "process.env.MEMOREE_TABLE": "undefined",
-    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
-    "process.env.MEMOREE_SKILLS_TABLE": "undefined",
-    "process.env.MEMOREE_RULES_TABLE": "undefined",
-    "process.env.MEMOREE_GOALS_TABLE": "undefined",
-    "process.env.MEMOREE_KPIS_TABLE": "undefined",
-    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
-    "process.env.MEMOREE_MEMORY_PATH": "undefined",
-    // Skillify state-dir test-isolation override. OpenClaw never needs
-    // to redirect state, so this rewrites to `undefined` at runtime and
-    // the call-site fallback produces the homedir-based production path.
-    // The rewrite primarily satisfies the ClawHub `env-harvesting`
-    // scanner — see the matching entry in the main openclaw build above.
-    "process.env.MEMOREE_STATE_DIR": "globalThis.__memoree_tuning__.MEMOREE_STATE_DIR",
-  },
-});
-chmodSync("harnesses/openclaw/dist/skillify-worker.js", 0o755);
-
-// OpenClaw graph worker bundles — separate entries (same rationale as
-// skillify-worker): need real child_process + git without the main bundle's
-// stub-unused-child-process plugin. install-openclaw.ts copies all of dist/.
-const openclawGraphWorkerExternals = [
-  "node:*",
-  "pg",
-  "node-liblzma",
-  "@mongodb-js/zstd",
-  "@huggingface/transformers",
-  "onnxruntime-node",
-  "onnxruntime-common",
-  "sharp",
-  "tree-sitter",
-  "tree-sitter-typescript",
-  "tree-sitter-javascript",
-  "tree-sitter-python",
-  "tree-sitter-go",
-  "tree-sitter-rust",
-  "tree-sitter-java",
-  "tree-sitter-ruby",
-  "tree-sitter-c",
-  "tree-sitter-cpp",
-];
-
-const openclawGraphWorkerDefine = {
-  banner: { js: "globalThis.__memoree_tuning__ ??= {};" },
-  define: {
-    __MEMOREE_VERSION__: JSON.stringify(memoreeVersion),
-    "process.env.MEMOREE_DEBUG": "globalThis.__memoree_tuning__.MEMOREE_DEBUG",
-    "process.env.MEMOREE_TRACE_SQL": "globalThis.__memoree_tuning__.MEMOREE_TRACE_SQL",
-    "process.env.MEMOREE_QUERY_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_QUERY_TIMEOUT_MS",
-    "process.env.MEMOREE_DOCS_MIN_PERIOD_MS": "globalThis.__memoree_tuning__.MEMOREE_DOCS_MIN_PERIOD_MS",
-    "process.env.MEMOREE_GRAPH_ON_STOP": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_ON_STOP",
-    "process.env.MEMOREE_GRAPH_TICK_INTERVAL_MS": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_TICK_INTERVAL_MS",
-    "process.env.MEMOREE_GRAPH_PULL": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PULL",
-    "process.env.MEMOREE_GRAPH_PULL_TIMEOUT_MS": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PULL_TIMEOUT_MS",
-    "process.env.MEMOREE_DOCS_AUTO_FILE": "undefined",
-    "process.env.MEMOREE_DOCS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_DOCS_TABLE",
-    // Transitively imported via MemoreeApi -> index-marker-store.ts. Without
-    // these two rewrites the bundle keeps literal `process.env.MEMOREE_INDEX_MARKER_*`
-    // reads alongside fetch() and trips ClawHub's env-harvesting critical rule.
-    "process.env.MEMOREE_INDEX_MARKER_TTL_MS": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_TTL_MS",
-    "process.env.MEMOREE_INDEX_MARKER_DIR": "globalThis.__memoree_tuning__.MEMOREE_INDEX_MARKER_DIR",
-    // Table/path resolvers transitively pulled in via the shared config +
-    // memoree-api modules. Each is a literal process.env read co-located with
-    // fetch() in the bundle, so all must be rewritten to clear env-harvesting.
-    "process.env.MEMOREE_SKILLS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_SKILLS_TABLE",
-    "process.env.MEMOREE_RULES_TABLE": "globalThis.__memoree_tuning__.MEMOREE_RULES_TABLE",
-    "process.env.MEMOREE_GOALS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_GOALS_TABLE",
-    "process.env.MEMOREE_KPIS_TABLE": "globalThis.__memoree_tuning__.MEMOREE_KPIS_TABLE",
-    "process.env.MEMOREE_MEMORY_PATH": "globalThis.__memoree_tuning__.MEMOREE_MEMORY_PATH",
-    "process.env.MEMOREE_GRAPH_PUSH": "globalThis.__memoree_tuning__.MEMOREE_GRAPH_PUSH",
-    "process.env.MEMOREE_GRAPHS_HOME": "globalThis.__memoree_tuning__.MEMOREE_GRAPHS_HOME",
-    // APPDATA is read only by a Claude-desktop config-path resolver that is
-    // dead code in the openclaw runtime; rewrite to undefined so the literal
-    // process.env read leaves the bundle (the `?? fallback` keeps it safe).
-    "process.env.APPDATA": "undefined",
-    "process.env.MEMOREE_TABLE": "undefined",
-    "process.env.MEMOREE_CODEBASE_TABLE": "undefined",
-    "process.env.MEMOREE_SESSIONS_TABLE": "undefined",
-    "process.env.MEMOREE_STATE_DIR": "globalThis.__memoree_tuning__.MEMOREE_STATE_DIR",
-    // Config-path resolver (src/user-config.ts). Pulled into the graph-on-stop
-    // bundle via graph-on-stop.ts's lazy `import("../commands/graph.js")` →
-    // config.js → user-config.ts: the dynamic import defeats the tree-shaking
-    // that previously dropped it under the old static import, so the literal
-    // `process.env.MEMOREE_CONFIG_PATH` read now sits alongside fetch() and
-    // trips ClawHub's env-harvesting critical. openclaw has no reason to
-    // redirect the config path, so rewrite to undefined — the call site's
-    // `?? homedir()/.memoree/config.json` fallback yields the correct path.
-    "process.env.MEMOREE_CONFIG_PATH": "undefined",
-    "process.env.MEMOREE_BACKEND": "undefined",
-    "process.env.MEMOREE_SQLITE_PATH": "undefined",
-    "process.env.MEMOREE_POSTGRES_URL": "undefined",
-    "process.env.MEMOREE_POSTGRES_SCHEMA": "undefined",
-    "process.env.MEMOREE_VECTOR_SCAN_LIMIT": "undefined",
-  },
-};
-
-// De-literalize child_process in the graph worker bundles.
-//
-// The graph workers MUST run git as a subprocess (git ls-files / rev-parse /
-// diff / config) to enumerate repo files and version the graph — an
-// irreducible dependency, so the `execSync`/`execFileSync` call sites cannot
-// be removed. Left as-is, the bundled `import { execSync } from
-// "node:child_process"` + `execSync("git ...")` call trips ClawHub's
-// `dangerous-exec` critical rule, which triggers a post-publish takedown of
-// the whole plugin (see .github/workflows/release.yaml + issue #169).
-//
-// ClawHub's rule fires only when BOTH the `child_process` context string AND
-// an exec/spawn call literal appear in the same file. We break the context:
-// every `import { ... } from "node:child_process"` is rewritten to a
-// createRequire binding whose module id is assembled at runtime, so the
-// literal `child_process` token never survives into the shipped bundle. In
-// the built worker files `child_process` only ever appears on these import
-// lines (verified: no string/comment occurrences), so removing it there
-// clears the context for good. This mirrors the sanctioned createRequire
-// pattern already used in harnesses/openclaw/src/graph-lifecycle.ts and keeps
-// the shared src/ modules untouched.
-const deliteralizeChildProcessPlugin = {
-  name: "memoree-deliteralize-child-process",
-  setup(build) {
-    const { outdir, entryPoints } = build.initialOptions;
-    build.onEnd(() => {
-      for (const key of Object.keys(entryPoints)) {
-        const outfile = `${outdir}/${key}.js`;
-        let src = readFileSync(outfile, "utf-8");
-        const importRe = /^import\s*\{([^}]*)\}\s*from\s*"node:child_process";\s*$/gm;
-        if (!importRe.test(src)) continue;
-        importRe.lastIndex = 0;
-        src = src.replace(importRe, (_m, specs) => {
-          const bindings = specs
-            .split(",")
-            .map(s => s.trim())
-            .filter(Boolean)
-            .map(s => {
-              const asMatch = s.match(/^(\S+)\s+as\s+(\S+)$/);
-              return asMatch ? `${asMatch[1]}: ${asMatch[2]}` : s;
-            })
-            .join(", ");
-          return `const { ${bindings} } = __hmChildProcess;`;
-        });
-        // Prepend the createRequire binding once, above every converted const.
-        // The split "child" + "_process" id keeps the literal token out of the
-        // bundle while resolving to "node:child_process" at runtime. A leading
-        // shebang (present on the executable worker bundles) MUST stay on line
-        // one, so insert the prelude after it.
-        const prelude =
-          'import { createRequire as __hmCreateRequire } from "node:module";\n' +
-          'const __hmChildProcess = __hmCreateRequire(import.meta.url)("node:child" + "_process");\n';
-        const shebang = src.match(/^#![^\n]*\n/);
-        const out = shebang
-          ? shebang[0] + prelude + src.slice(shebang[0].length)
-          : prelude + src;
-        writeFileSync(outfile, out, "utf-8");
-      }
-    });
-  },
-};
-
-await build({
-  entryPoints: { "graph-on-stop": "dist/src/hooks/graph-on-stop.js" },
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/openclaw/dist",
-  external: openclawGraphWorkerExternals,
-  banner: openclawGraphWorkerDefine.banner,
-  define: openclawGraphWorkerDefine.define,
-  plugins: [deliteralizeChildProcessPlugin],
-});
-chmodSync("harnesses/openclaw/dist/graph-on-stop.js", 0o755);
-
-await build({
-  entryPoints: { "graph-pull-worker": "dist/src/hooks/graph-pull-worker.js" },
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "harnesses/openclaw/dist",
-  external: openclawGraphWorkerExternals,
-  banner: openclawGraphWorkerDefine.banner,
-  define: openclawGraphWorkerDefine.define,
-  plugins: [deliteralizeChildProcessPlugin],
-});
-chmodSync("harnesses/openclaw/dist/graph-pull-worker.js", 0o755);
-
-// Memoree MCP server (stdio). Reused by Cline / Roo / Kilo / any MCP-aware
-// agent. Lives at ~/.memoree/mcp/server.js after install.
 await build({
   entryPoints: { server: "dist/src/mcp/server.js" },
   bundle: true,
@@ -806,103 +106,36 @@ await build({
   format: "esm",
   outdir: "mcp/bundle",
   external: ["node:*", "node-liblzma", "@mongodb-js/zstd"],
-  // server.js source has no shebang, so the banner supplies one.
   banner: { js: "#!/usr/bin/env node" },
+  define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
 });
 chmodSync("mcp/bundle/server.js", 0o755);
-
-// wiki-worker + skillify-worker ship alongside the server so the Cowork
-// ingester can spawn them for idle Cowork sessions (Cowork has no SessionEnd
-// hook). install copies the whole mcp/bundle dir, so shipping them here is
-// enough to deliver them at ~/.memoree/mcp/. NO banner: these sources already
-// start with their own `#!/usr/bin/env node`, and a banner would double it
-// (a second shebang on line 2 is a SyntaxError).
-await build({
-  entryPoints: {
-    "wiki-worker": "dist/src/hooks/wiki-worker.js",
-    "skillify-worker": "dist/src/skillify/skillify-worker.js",
-  },
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "mcp/bundle",
-  external: ["node:*", "node-liblzma", "@mongodb-js/zstd"],
-});
-chmodSync("mcp/bundle/wiki-worker.js", 0o755);
-chmodSync("mcp/bundle/skillify-worker.js", 0o755);
 writeFileSync("mcp/bundle/package.json", esmPackageJson);
 
-// Unified CLI (`npx memoree install` … single entrypoint for all assistants)
 await build({
   entryPoints: { cli: "dist/src/cli/index.js" },
   bundle: true,
-  // Code-splitting so the dynamic `import("../commands/graph.js")` in
-  // src/cli/index.ts is emitted as a separate chunk. That keeps the
-  // external `import "tree-sitter"` (an optionalDependency that fails to
-  // build on some platforms, e.g. Node 24 / arm64) OUT of the top of
-  // bundle/cli.js. Without splitting, esbuild hoists that external import
-  // to the entry file and every `memoree` command — including `install` —
-  // crashes with ERR_MODULE_NOT_FOUND when the addon is absent.
   splitting: true,
   platform: "node",
   format: "esm",
   outdir: "bundle",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    // tree-sitter and language grammars ship native .node prebuilds that
-    // esbuild cannot bundle. Resolved from node_modules at runtime.
-    "tree-sitter",
-    "tree-sitter-typescript",
-    "tree-sitter-javascript",
-    "tree-sitter-python",
-    "tree-sitter-go",
-    "tree-sitter-rust",
-    "tree-sitter-java",
-    "tree-sitter-ruby",
-    "tree-sitter-c",
-    "tree-sitter-cpp",
-  ],
-  // No `banner` here: with `splitting` enabled esbuild stamps the banner onto
-  // every output file (the entry AND the split chunks). A shebang inside an
-  // imported chunk breaks it (Node strips only the first line, leaving the
-  // rest as a syntax error). Prepend the shebang to the entry file only.
+  external: runtimeExternals,
+  define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
 });
-{
-  const cliPath = "bundle/cli.js";
-  const cliSrc = readFileSync(cliPath, "utf-8");
-  if (!cliSrc.startsWith("#!")) {
-    writeFileSync(cliPath, `#!/usr/bin/env node\n${cliSrc}`);
-  }
-}
-chmodSync("bundle/cli.js", 0o755);
+const cliPath = "bundle/cli.js";
+const cliSource = readFileSync(cliPath, "utf8");
+if (!cliSource.startsWith("#!")) writeFileSync(cliPath, `#!/usr/bin/env node\n${cliSource}`);
+chmodSync(cliPath, 0o755);
 
-// Standalone embed daemon bundle. `memoree embeddings install` deposits
-// this at ~/.memoree/embed-deps/embed-daemon.js so every agent (including
-// pi, which can't ship per-agent bundles) spawns the same canonical
-// daemon. Externals match the per-agent daemon bundles — the daemon
-// resolves them from its sibling node_modules (the shared deps dir).
 await build({
   entryPoints: { "embed-daemon": "dist/src/embeddings/daemon.js" },
   bundle: true,
   platform: "node",
   format: "esm",
   outdir: "embeddings",
-  external: [
-    "node:*",
-    "node-liblzma",
-    "@mongodb-js/zstd",
-    "@huggingface/transformers",
-    "onnxruntime-node",
-    "onnxruntime-common",
-    "sharp",
-  ],
+  external: runtimeExternals,
+  define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
 });
 chmodSync("embeddings/embed-daemon.js", 0o755);
 
-// Status to stderr (not stdout) so callers parsing `npm pack --json` etc.
-// don't get script log noise mixed into their data pipe — see PR #185
-// where `scripts/pack-check.mjs` (which runs `prepack` via npm pack)
-// failed JSON parse because this line and sync-versions printed to stdout.
-console.error(`Built: ${ccAll.length} CC + ${codexAll.length} Codex + ${cursorAll.length} Cursor + ${hermesAll.length} Hermes + 1 OpenClaw + 1 MCP + 1 CLI + 1 standalone-daemon bundle`);
+console.error(`Built: ${claudeEntries.length} Claude Code + ${codexEntries.length} Codex + 1 MCP + 1 CLI + 1 embedding daemon`);

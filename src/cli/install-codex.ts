@@ -291,9 +291,10 @@ function removeCodexAgentsBlock(): void {
   }
 }
 
-export function installCodex(): void {
-  const srcBundle = join(pkgRoot(), "harnesses", "codex", "bundle");
-  const srcSkills = join(pkgRoot(), "harnesses", "codex", "skills");
+export function installCodex(options: { packageRoot?: string } = {}): void {
+  const root = options.packageRoot ?? pkgRoot();
+  const srcBundle = join(root, "harnesses", "codex", "bundle");
+  const srcSkills = join(root, "harnesses", "codex", "skills");
 
   if (!existsSync(srcBundle)) {
     throw new Error(`Codex bundle missing at ${srcBundle}. Run 'npm run build' first.`);

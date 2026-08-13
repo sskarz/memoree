@@ -4,7 +4,7 @@ import { join, basename } from "node:path";
 /**
  * Source-level tests for src/index-marker-store.ts — fs-backed lookup-index
  * freshness markers. Extracted from src/memoree-api.ts in PR #76 so the
- * openclaw plugin's bundle could split fs writes from its fetch calls.
+ * a bundled runtime could split filesystem writes from its fetch calls.
  *
  * Branches covered:
  *   - getIndexMarkerDir: env override vs default tmpdir() fallback.

@@ -95,7 +95,7 @@ Everyday:
   memoree docs auto on|off [--cwd <dir>]
       Turn automatic per-commit sync on/off for THIS repo on THIS org.
       Enabling with no corpus asks for explicit confirmation (LLM cost).
-  memoree docs agent [claude|codex|pi|cursor]
+  memoree docs agent [claude|codex]
       Show or set which host CLI authors the docs (persisted globally).
       No arg → show current + installed. Overridable per-run with
       MEMOREE_DOCS_LLM_AGENT.

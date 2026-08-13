@@ -51,12 +51,10 @@ describe("findMemoreeInstalls", () => {
     expect(findMemoreeInstalls(tmpHome)).toEqual([]);
   });
 
-  it("detects codex/cursor/hermes when each has a bundle/ subdir", () => {
+  it("detects only the supported Codex fixed install", () => {
     fakeBundleAt(join(tmpHome, ".codex", "memoree"));
-    fakeBundleAt(join(tmpHome, ".cursor", "memoree"));
-    fakeBundleAt(join(tmpHome, ".hermes", "memoree"));
     const installs = findMemoreeInstalls(tmpHome);
-    expect(installs.map(i => i.id).sort()).toEqual(["codex", "cursor", "hermes"]);
+    expect(installs.map(i => i.id)).toEqual(["codex"]);
     for (const i of installs) {
       expect(i.pluginDir).toContain(tmpHome);
       expect(i.pluginDir).toMatch(/memoree$/);

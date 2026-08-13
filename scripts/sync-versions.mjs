@@ -22,8 +22,6 @@ const SOURCE = "package.json";
 export const SCALAR_TARGETS = [
   ".claude-plugin/plugin.json",
   "harnesses/claude-code/.claude-plugin/plugin.json",
-  "harnesses/openclaw/openclaw.plugin.json",
-  "harnesses/openclaw/package.json",
   "harnesses/codex/package.json",
   "harnesses/codex/.codex-plugin/plugin.json",
 ];

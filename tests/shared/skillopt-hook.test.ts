@@ -27,26 +27,26 @@ describe("armSkillOptOnSkillUse", () => {
     expect(markSkillPending).not.toHaveBeenCalled();
   });
 
-  it("arms on a SKILL.md read (pi style), recovering the ref from the path", () => {
-    armSkillOptOnSkillUse("s1", "read", { path: "/home/u/.pi/agent/skills/posthog--kamo/SKILL.md" }, "tu2");
+  it("arms on a Codex SKILL.md read, recovering the ref from the path", () => {
+    armSkillOptOnSkillUse("s1", "read", { path: "/home/u/.agents/skills/posthog--kamo/SKILL.md" }, "tu2");
     expect(markSkillPending).toHaveBeenCalledWith("s1", "posthog--kamo", "tu2");
   });
 
-  it("arms on a SHELL command that reads SKILL.md (harnesses/codex/hermes style — path in the command)", () => {
+  it("arms on a Codex shell command that reads SKILL.md", () => {
     armSkillOptOnSkillUse("s1", "Bash", { command: 'cat "/home/u/.agents/skills/posthog--kamo/SKILL.md"' }, "tu3");
     expect(markSkillPending).toHaveBeenCalledWith("s1", "posthog--kamo", "tu3");
   });
 
   it("does not arm on a non-SKILL.md read, nor on an EDIT of a SKILL.md (use, not edit)", () => {
     armSkillOptOnSkillUse("s1", "read", { path: "/home/u/notes.md" });
-    armSkillOptOnSkillUse("s1", "Edit", { path: "/home/u/.pi/agent/skills/x--a/SKILL.md" });
+    armSkillOptOnSkillUse("s1", "Edit", { path: "/home/u/.agents/skills/x--a/SKILL.md" });
     expect(markSkillPending).not.toHaveBeenCalled();
   });
 });
 
 describe("skillRefFromSkillFileRead", () => {
   it("extracts the dir segment as the ref from a skills SKILL.md read", () => {
-    expect(skillRefFromSkillFileRead("read", { path: "/x/.pi/agent/skills/posthog--kamo/SKILL.md" })).toBe("posthog--kamo");
+    expect(skillRefFromSkillFileRead("read", { path: "/x/.agents/skills/posthog--kamo/SKILL.md" })).toBe("posthog--kamo");
     expect(skillRefFromSkillFileRead("Read", { path: "/a/skills/bare/SKILL.md" })).toBe("bare"); // returned; markSkillPending rejects bare
   });
   it("returns null for non-read tools, non-SKILL.md paths, or missing path", () => {

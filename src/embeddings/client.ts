@@ -22,7 +22,7 @@ import { log as _log } from "../utils/debug.js";
 // Canonical location for the standalone daemon bundle, deposited by
 // `memoree embeddings install`. Used as the auto-spawn fallback when
 // neither opts.daemonEntry nor MEMOREE_EMBED_DAEMON is set — so any
-// agent (including pi, which has no bundled daemon of its own) can spawn
+// supported agent can spawn
 // the same shared daemon process.
 const SHARED_DAEMON_PATH = join(homedir(), ".memoree", "embed-deps", "embed-daemon.js");
 
@@ -94,7 +94,7 @@ export class EmbedClient {
     const v = await this.embedAttempt(text, kind);
     if (v !== "recycled") return v;
     // The probe killed the old daemon mid-call. With autoSpawn enabled,
-    // spawn a fresh one and retry once. Without autoSpawn (tests, pi's
+    // spawn a fresh one and retry once. Without autoSpawn (tests or another
     // fallback that relies on the canonical shared daemon already being
     // up) we have no way to bring the daemon back, so just return null —
     // the caller treats it the same as any other transient miss.
@@ -183,7 +183,7 @@ export class EmbedClient {
     if (this.helloVerified) return false;
     if (!this.daemonEntry) {
       // No expectation to verify against (e.g. canonical-shared-deps mode,
-      // or pi's fallback). Mark verified so we don't re-enter on every
+      // fallback). Mark verified so we don't re-enter on every
       // connect for the same EmbedClient.
       this.helloVerified = true;
       return false;

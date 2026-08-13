@@ -1,7 +1,7 @@
 /**
  * Shared graph-read command parser for the VFS intercept.
  *
- * Several agents (Claude Code, Cursor, …) intercept shell commands that read
+ * Claude Code and Codex intercept shell commands that read
  * the `~/.memoree/memory/graph/` subtree and synthesize the response from the
  * local snapshot instead of touching disk. The *path taxonomy* and the
  * dispatch to `handleGraphVfs()` are identical across agents — only the

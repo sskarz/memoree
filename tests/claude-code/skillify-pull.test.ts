@@ -941,15 +941,15 @@ describe("fanOutSymlinks", () => {
     const canonical = join(fakeHome, ".claude", "skills", "deploy--alice");
     mkdirSync(canonical, { recursive: true });
     const agentsRoot = join(fakeHome, ".agents", "skills");
-    const hermesRoot = join(fakeHome, ".hermes", "skills");
+    const secondaryRoot = join(fakeHome, ".agents", "skills-secondary");
     mkdirSync(agentsRoot, { recursive: true });
-    mkdirSync(hermesRoot, { recursive: true });
+    mkdirSync(secondaryRoot, { recursive: true });
 
-    const created = fanOutSymlinks(canonical, "deploy--alice", [agentsRoot, hermesRoot]);
+    const created = fanOutSymlinks(canonical, "deploy--alice", [agentsRoot, secondaryRoot]);
 
     expect(created).toEqual([
       join(agentsRoot, "deploy--alice"),
-      join(hermesRoot, "deploy--alice"),
+      join(secondaryRoot, "deploy--alice"),
     ]);
     expect(lstatSync(created[0]).isSymbolicLink()).toBe(true);
     expect(readlinkSync(created[0])).toBe(canonical);
@@ -1028,15 +1028,9 @@ describe("runPull — symlink fan-out (global install only)", () => {
     ...over,
   });
 
-  it("fans out symlinks to detected agent roots and records them in the manifest", async () => {
-    // Pretend codex + hermes are installed by creating their config
-    // directories — the agent-roots detector keys off these markers
-    // (not on the skills subdir itself), since pi's installer never
-    // creates the skills dir.
+  it("fans out symlinks to the detected Codex root and records it in the manifest", async () => {
     mkdirSync(join(fakeHome, ".codex"), { recursive: true });
-    mkdirSync(join(fakeHome, ".hermes"), { recursive: true });
     const agentsRoot = join(fakeHome, ".agents", "skills");
-    const hermesRoot = join(fakeHome, ".hermes", "skills");
 
     const { fn } = makeMockQuery([sampleRow()]);
     const summary = await runPull({
@@ -1048,14 +1042,10 @@ describe("runPull — symlink fan-out (global install only)", () => {
     const canonical = join(fakeHome, ".claude", "skills", "deploy--alice");
     expect(existsSync(join(canonical, "SKILL.md"))).toBe(true);
     expect(readlinkSync(join(agentsRoot, "deploy--alice"))).toBe(canonical);
-    expect(readlinkSync(join(hermesRoot, "deploy--alice"))).toBe(canonical);
 
     const m = loadManifest();
     expect(m.entries).toHaveLength(1);
-    expect(m.entries[0].symlinks).toEqual([
-      join(agentsRoot, "deploy--alice"),
-      join(hermesRoot, "deploy--alice"),
-    ]);
+    expect(m.entries[0].symlinks).toEqual([join(agentsRoot, "deploy--alice")]);
   });
 
   it("does NOT fan out for project-install pulls (project scope shouldn't leak globally)", async () => {
@@ -1079,7 +1069,7 @@ describe("runPull — symlink fan-out (global install only)", () => {
   });
 
   it("records empty symlinks[] when no agent roots are detected", async () => {
-    // No ~/.agents/skills, no ~/.hermes/skills, no ~/.pi/agent/skills.
+    // No supported agent skill roots.
     const { fn } = makeMockQuery([sampleRow()]);
     await runPull({
       query: fn, tableName: "skills", install: "global",

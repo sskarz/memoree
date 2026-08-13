@@ -42,7 +42,7 @@ afterAll(() => {
 });
 
 function freshHome(): void {
-  for (const sub of [".memoree", ".memoree", ".codex", ".cursor", ".hermes", ".claude"]) {
+  for (const sub of [".memoree", ".codex", ".claude"]) {
     rmSync(join(HOME_DIR, sub), { recursive: true, force: true });
   }
   cfg._resetUserConfigForTesting();

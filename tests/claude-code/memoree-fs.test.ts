@@ -1338,7 +1338,7 @@ describe("cp recursive", () => {
   });
 });
 
-// ── docs VFS bridge (the shell path used by codex/cursor/hermes/interactive) ──
+// ── docs VFS bridge (the shell path used by Codex and interactive calls) ──
 
 describe("docs VFS routing in the shell", () => {
   function makeDocsClient(onQuery: (sql: string) => unknown[]) {

@@ -37,7 +37,7 @@ export interface CommitExtractInput {
 
 export interface CommitExtractOptions {
   /** Agent identifier — picks the LLM CLI to spawn. */
-  agent: "claude-code" | "codex" | "cursor" | "hermes" | string;
+  agent: "claude-code" | "codex" | string;
   /** user_email of the current Memoree user. Used to scope goals. */
   currentUser: string;
   /** Optional explicit cwd (defaults to process.cwd()). */
@@ -146,8 +146,7 @@ interface CliSpec {
  * agent uses its own credentials/plan — no Anthropic API key needed
  * in the plugin.
  *
- * Return null when the agent has no batch CLI we can dispatch to
- * (e.g. cursor/hermes/pi/openclaw don't currently ship one).
+ * Return null when the agent has no supported batch CLI.
  */
 function cliForAgent(agent: string): CliSpec | null {
   switch (agent) {

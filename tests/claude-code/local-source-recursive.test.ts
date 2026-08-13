@@ -4,7 +4,7 @@
  * The original walk only descended ONE directory level, which matched
  * Claude's `projects/<enc-cwd>/<id>.jsonl` layout but silently yielded ZERO
  * sessions for Codex's `sessions/YYYY/MM/DD/rollout-*.jsonl` nesting (and
- * cursor/hermes). These tests pin the recursive behavior and the inCwd
+ * Codex). These tests pin the recursive behavior and the inCwd
  * anchoring so the backfill + mine-local both keep reaching nested agents.
  */
 

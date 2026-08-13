@@ -72,11 +72,6 @@ export function spawnSkillifyWorker(opts: SkillifySpawnOptions): void {
     install: scopeConfig.install,
     tmpDir,
     gateBin,
-    cursorModel: process.env.MEMOREE_CURSOR_MODEL,
-    hermesProvider: process.env.MEMOREE_HERMES_PROVIDER,
-    hermesModel: process.env.MEMOREE_HERMES_MODEL,
-    piProvider: process.env.MEMOREE_PI_PROVIDER,
-    piModel: process.env.MEMOREE_PI_MODEL,
     skillifyLog: SKILLIFY_LOG,
     currentSessionId,
   }), { mode: 0o600 });

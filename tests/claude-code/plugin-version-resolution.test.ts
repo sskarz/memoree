@@ -38,18 +38,13 @@ interface AgentLayout {
 const AGENTS: AgentLayout[] = [
   { agent: "claude-code", bundleDir: resolve(REPO_ROOT, "harnesses", "claude-code", "bundle"), manifestDir: ".claude-plugin" },
   { agent: "codex",       bundleDir: resolve(REPO_ROOT, "harnesses", "codex", "bundle"),       manifestDir: ".codex-plugin" },
-  { agent: "cursor",      bundleDir: resolve(REPO_ROOT, "harnesses", "cursor", "bundle"),      manifestDir: ".claude-plugin" },
-  { agent: "hermes",      bundleDir: resolve(REPO_ROOT, "harnesses", "hermes", "bundle"),      manifestDir: ".claude-plugin" },
-  { agent: "pi",          bundleDir: resolve(REPO_ROOT, "harnesses", "pi", "bundle"),          manifestDir: ".claude-plugin" },
 ];
 
 describe("plugin_version stamps a non-empty value for every shipped agent", () => {
   it.each(AGENTS)("$agent resolves getInstalledVersion to a semver string", ({ bundleDir, manifestDir }) => {
     // The repo-level package.json has name "memoree" (in the
     // MEMOREE_PKG_NAMES set), so even agents without an in-repo manifest
-    // (cursor/hermes/pi) resolve via the walk-up fallback — and at real
-    // install time their installer drops a .memoree_version stamp, also
-    // covered. Either way the runtime must NOT see an empty string here.
+    // Runtime must never see an empty version here.
     const version = getInstalledVersion(bundleDir, manifestDir);
     expect(version, `${manifestDir} from ${bundleDir} must resolve a version`).not.toBeNull();
     // Accept full SemVer 2.0: x.y.z plus optional -prerelease and +build
@@ -66,10 +61,7 @@ describe("plugin_version is wired into every agent's capture INSERT", () => {
   const CAPTURE_BUNDLES: Array<[string, string]> = [
     ["claude-code capture", resolve(REPO_ROOT, "harnesses", "claude-code", "bundle", "capture.js")],
     ["codex capture",       resolve(REPO_ROOT, "harnesses", "codex", "bundle", "capture.js")],
-    ["cursor capture",      resolve(REPO_ROOT, "harnesses", "cursor", "bundle", "capture.js")],
-    ["hermes capture",      resolve(REPO_ROOT, "harnesses", "hermes", "bundle", "capture.js")],
     ["codex stop",          resolve(REPO_ROOT, "harnesses", "codex", "bundle", "stop.js")],
-    ["openclaw index",      resolve(REPO_ROOT, "harnesses", "openclaw", "dist", "index.js")],
   ];
 
   it.each(CAPTURE_BUNDLES)("%s INSERT lists plugin_version column", (_label, path) => {
@@ -90,8 +82,6 @@ describe("plugin_version is wired into every agent's session-start placeholder I
   const PLACEHOLDER_BUNDLES: Array<[string, string]> = [
     ["claude-code session-start", resolve(REPO_ROOT, "harnesses", "claude-code", "bundle", "session-start.js")],
     ["codex session-start-setup", resolve(REPO_ROOT, "harnesses", "codex", "bundle", "session-start-setup.js")],
-    ["cursor session-start",      resolve(REPO_ROOT, "harnesses", "cursor", "bundle", "session-start.js")],
-    ["hermes session-start",      resolve(REPO_ROOT, "harnesses", "hermes", "bundle", "session-start.js")],
   ];
 
   it.each(PLACEHOLDER_BUNDLES)("%s placeholder INSERT lists plugin_version column", (_label, path) => {

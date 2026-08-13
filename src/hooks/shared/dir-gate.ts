@@ -1,6 +1,6 @@
 /**
  * Shared per-directory capture gate for all agent capture hooks
- * (claude-code / codex / cursor / hermes).
+ * (Claude Code and Codex).
  *
  * Loads the global config and overlays the nearest `.memoree` for `cwd`
  * (see src/dir-config.ts). Returns the Config to capture with, or `null` when

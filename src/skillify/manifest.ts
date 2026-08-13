@@ -52,7 +52,7 @@ export interface PulledEntry {
   /**
    * Absolute paths of symlinks fanned out at pull time, one per detected
    * non-Claude agent root (`~/.agents/skills/<dirName>`,
-   * `~/.hermes/skills/<dirName>`, …). Source of truth for `unpull` to
+   * `~/.agents/skills/<dirName>`). Source of truth for `unpull` to
    * remove the links without rescanning the disk and for the orphan
    * sweep to clean up dangling links when the canonical dir is gone.
    *

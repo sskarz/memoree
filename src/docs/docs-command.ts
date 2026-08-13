@@ -1,6 +1,6 @@
 /**
  * Shared `cat /docs/*` dispatcher for the rewrite-capable agent hooks
- * (claude / codex / cursor / hermes). The docs analogue of
+ * (Claude Code and Codex). The docs analogue of
  * `tryGraphRead` (src/graph/graph-command.ts): parse a read command, and if it
  * targets the `/docs/` subtree, answer it from the docs table via handleDocsVfs.
  *

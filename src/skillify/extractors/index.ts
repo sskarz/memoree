@@ -1,7 +1,7 @@
 /**
  * Extract prompt+answer pairs from Memoree sessions table rows.
  *
- * All four agents (claude-code, codex, cursor, hermes) normalize their
+ * Both supported agents (Claude Code and Codex) normalize their
  * native JSONL events into the same row taxonomy in Memoree:
  *   - type: "user_message"      → conversational prompt
  *   - type: "assistant_message" → conversational answer

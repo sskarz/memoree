@@ -324,7 +324,7 @@ describe("symlinks field", () => {
     const entry = sampleEntry({
       symlinks: [
         "/home/test/.agents/skills/deploy--alice",
-        "/home/test/.hermes/skills/deploy--alice",
+        "/home/test/.agents/skills-secondary/deploy--alice",
       ],
     });
     saveManifest({ version: 1, entries: [entry] });
@@ -371,14 +371,14 @@ describe("symlinks field", () => {
           "",                                   // empty — drop
           42,                                   // wrong type — drop
           null,                                 // wrong type — drop
-          "/home/test/.hermes/skills/a--alice", // ok
+          "/home/test/.agents/skills-secondary/a--alice", // ok
         ],
       }],
     }));
     const m = loadManifest();
     expect(m.entries[0].symlinks).toEqual([
       "/home/test/.agents/skills/a--alice",
-      "/home/test/.hermes/skills/a--alice",
+      "/home/test/.agents/skills-secondary/a--alice",
     ]);
   });
 

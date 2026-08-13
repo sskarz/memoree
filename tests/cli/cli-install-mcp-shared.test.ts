@@ -6,7 +6,7 @@ import { setFakeHome, clearFakeHome } from "../shared/fake-home.js";
 
 /**
  * Tests for src/cli/install-mcp-shared.ts. The shared MCP server installer
- * is invoked by Tier B consumers (Hermes, future Cline/Roo/Kilo wiring).
+ * is invoked by integrations that need the shared MCP server.
  * It owns one disk path: ~/.memoree/mcp/.
  */
 

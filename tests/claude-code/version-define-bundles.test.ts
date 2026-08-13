@@ -10,9 +10,8 @@ import { readdirSync, statSync } from "node:fs";
  * placeholder via `define`. Without it, bundled code that interpolates the
  * constant (e.g. `memoreeClientValue()` for the X-Memoree-Client header)
  * crashes at runtime with "__MEMOREE_VERSION__ is not defined" on the very
- * first Memoree API call. The cursor and hermes blocks were missing the
- * define on first ship; this guard prevents the same drop-out from happening
- * again, including for any new agent we wire up later.
+ * first Memoree API call. This guard prevents a per-harness build from
+ * silently dropping the substitution.
  */
 
 const ROOT = resolve(process.cwd());
@@ -33,8 +32,6 @@ function listBundleFiles(dir: string): string[] {
 const BUNDLE_DIRS = [
   ["claude-code", resolve(ROOT, "harnesses", "claude-code", "bundle")],
   ["codex", resolve(ROOT, "harnesses", "codex", "bundle")],
-  ["cursor", resolve(ROOT, "harnesses", "cursor", "bundle")],
-  ["hermes", resolve(ROOT, "harnesses", "hermes", "bundle")],
 ];
 
 for (const [label, dir] of BUNDLE_DIRS) {

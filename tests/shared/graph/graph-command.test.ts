@@ -7,7 +7,7 @@ import { parseReadTargetPath, tryGraphRead } from "../../../src/graph/graph-comm
 
 /**
  * graph-command.ts is the shared parser the per-agent pre-tool-use hooks
- * (Claude Code, Cursor, Codex, Hermes) call to route a `cat /graph/*` read to
+ * (Claude Code and Codex) call to route a `cat /graph/*` read to
  * the local snapshot. The routing/parsing is what's tested here; the snapshot
  * rendering itself is covered by vfs-handler tests.
  */

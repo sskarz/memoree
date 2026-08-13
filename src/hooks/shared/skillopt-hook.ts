@@ -1,6 +1,6 @@
 /**
  * Shared SkillOpt hook wiring, so every agent's PreToolUse / UserPromptSubmit hook
- * (claude + the codex/hermes/cursor forks) wires the event trigger with one call each
+ * (Claude Code and Codex) wires the event trigger with one call each
  * instead of copy-pasting the logic. Both are fully swallowed — they must NEVER affect
  * whether a tool runs or a prompt is captured.
  */
@@ -10,21 +10,21 @@ import { SKILLOPT_ENV } from "../../skillify/skillopt-env.js";
 
 /**
  * Recover an org-skill ref from a tool call that LOADS a skill's SKILL.md — how agents without
- * a first-class `Skill` tool use skills: pi `read`s `.../skills/<dir>/SKILL.md` (structured
- * `path`), harnesses/codex/hermes SHELL a read of it (path inside `command`). The `<dir>` segment is the
+ * a first-class `Skill` tool use skills: Codex reads `.../skills/<dir>/SKILL.md`,
+ * either through a structured `path` or inside a shell `command`. The `<dir>` segment is the
  * ref. Returns null when it isn't a SKILL.md load. markSkillPending still gates the ref
  * (org-shape + manifest), so a bare/non-org dir is rejected there.
  */
 export function skillRefFromSkillFileRead(toolName: string, toolInput: unknown): string | null {
-  // read tool with a structured path (pi)
+  // Read tool with a structured path.
   if (/^read$/i.test(toolName)) return pathToSkillRef((toolInput as { path?: unknown })?.path);
-  // shell tool with the path inside the command (codex Bash, hermes terminal)
+  // Shell tool with the path inside the command (Codex Bash).
   return pathToSkillRef((toolInput as { command?: unknown })?.command);
 }
 
 /**
  * PreToolUse: open a skill's K-message judgment window when the agent USES an org skill —
- * either via a first-class `Skill` tool (claude) or by reading its SKILL.md file (pi/codex).
+ * either via a first-class `Skill` tool (Claude) or by reading its SKILL.md file (Codex).
  * Org-skill gating (shape + pull manifest) happens in markSkillPending.
  */
 export function armSkillOptOnSkillUse(sessionId: string, toolName: string, toolInput: unknown, toolUseId?: string): void {
@@ -35,7 +35,7 @@ export function armSkillOptOnSkillUse(sessionId: string, toolName: string, toolI
       const s = (toolInput as { skill?: unknown })?.skill;
       ref = typeof s === "string" ? s : null;
     } else {
-      ref = skillRefFromSkillFileRead(toolName, toolInput); // pi/codex: read of …/skills/<ref>/SKILL.md
+      ref = skillRefFromSkillFileRead(toolName, toolInput); // Codex: read of …/skills/<ref>/SKILL.md
     }
     if (ref) markSkillPending(sessionId, ref, toolUseId);
   } catch { /* never break PreToolUse */ }

@@ -6,7 +6,7 @@
  *   2. if the task FAILED, reads X's current body, proposes a bounded edit, and
  *      publishes v+1 DIRECTLY to the org skills table — right then.
  *
- * Runs on the USER's own agent (claude/codex/hermes/cursor/pi) — no org key, cost lands
+ * Runs on the user's own supported agent (Claude Code or Codex).
  * on the user. MEMOREE_SKILLOPT_WORKER=1 is set by the trigger as a recursion guard.
  * Inputs come via env: MEMOREE_SKILLOPT_{SESSION,SKILL,REACTION,AGENT}.
  */
@@ -26,11 +26,11 @@ const log = (m: string) => _log("skillopt-worker", m);
 
 /**
  * Resolve a known agent's CLI by walking $PATH — finds nvm/volta/fnm installs that
- * gate-runner's static-path findAgentBin misses (it deliberately avoids PATH for the
- * openclaw bundle). undefined → agentModel falls back to findAgentBin. Done in Node
+ * gate-runner's static-path findAgentBin misses. undefined falls back to
+ * findAgentBin. Done in Node
  * (no shell / subprocess) so an env-derived agent name can't reach a command line.
  */
-const AGENT_CMD: Record<string, string> = { claude_code: "claude", codex: "codex", cursor: "cursor-agent", hermes: "hermes", pi: "pi" };
+const AGENT_CMD: Record<string, string> = { claude_code: "claude", codex: "codex" };
 function resolveAgentBin(agent: string): string | undefined {
   // Only resolve KNOWN agents — no `?? agent` fallback. `agent` traces back to the
   // MEMOREE_SKILLOPT_AGENT env var; feeding an arbitrary value to a command is a
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   const now = new Date().toISOString();
 
   // Score on the USER's own agent (cost lands on them), not hardcoded claude — a
-  // harnesses/codex/hermes/cursor/pi user with no local `claude` still gets SkillOpt. The
+  // A Codex user with no local `claude` still gets SkillOpt. The
   // judge/proposer run no-tools (untrusted reaction/transcript text in the prompt).
   const agent = detectScorerAgent();
   const agentBin = resolveAgentBin(agent);

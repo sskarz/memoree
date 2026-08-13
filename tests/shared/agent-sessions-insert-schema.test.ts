@@ -5,18 +5,17 @@ import { SESSIONS_COLUMNS } from "../../src/storage/schema.js";
 
 /**
  * Every agent builds its own `sessions` INSERT as an inline SQL string — a
- * hand-maintained copy of the canonical column set. The `pi` extension already
- * shipped exactly this drift: its INSERT wrote `plugin_version` while its
- * CREATE/heal did not, so every pi sessions table was one column short and every
- * INSERT failed permanently with `column "plugin_version" ... does not exist`
- * (42703). (pi has its own INSERT ⊆ CREATE guard in tests/pi.)
+ * hand-maintained copy of the canonical column set. A runtime once shipped
+ * exactly this drift: its INSERT wrote `plugin_version` while its CREATE/heal
+ * did not, so every sessions table was one column short and every INSERT failed
+ * permanently with `column "plugin_version" ... does not exist` (42703).
  *
  * The shared-path agents below derive their CREATE TABLE and schema-heal from
  * SESSIONS_COLUMNS, so the invariant that keeps them safe is: every column an
  * INSERT writes must exist in SESSIONS_COLUMNS — otherwise CREATE/heal never
- * create it and the write 42703s. Lock it so the pi bug can't reappear here.
+ * create it and the write 42703s. Lock it so this bug cannot reappear here.
  */
-// The claude/codex/cursor/hermes capture hooks and codex/stop.ts all build
+// The Claude/Codex capture hooks and codex/stop.ts all build
 // their single-row INSERT through the shared buildDirectSessionInsertSql
 // helper, so its one column list covers every direct-insert agent. The
 // batched queue path keeps its own inline column list.

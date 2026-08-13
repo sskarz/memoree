@@ -8,7 +8,7 @@
  *   memoree_index        — list summaries with their dates and descriptions
  *
  * Transport: stdio. Spawned as a subprocess by the consuming MCP client
- * (Hermes today; reused by any future MCP-aware agent).
+ * by the supported agent integrations.
  *
  * Configuration: loads ~/.memoree/config.json and the optional PostgreSQL
  * URL from the environment.
@@ -26,7 +26,6 @@ import { searchMemoreeTables, searchDocs, buildGrepSearchOptions, normalizeConte
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
 import { getVersion } from "../cli/version.js";
-import { startCoworkIngestLoop, coworkDataNoticeOnce } from "./cowork-ingest.js";
 import { textExpression } from "../storage/sql-dialect.js";
 
 interface ServerContext {
@@ -53,12 +52,8 @@ function errorResult(text: string): { content: Array<{ type: "text"; text: strin
   return { content: [{ type: "text", text }] };
 }
 
-/**
- * Successful tool result. Prepends the one-time Cowork data notice when
- * running inside a Cowork host (no-op everywhere else and after first use).
- */
 function okResult(text: string): { content: Array<{ type: "text"; text: string }> } {
-  return { content: [{ type: "text", text: coworkDataNoticeOnce() + text }] };
+  return { content: [{ type: "text", text }] };
 }
 
 /**
@@ -238,10 +233,6 @@ server.registerTool(
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  // Cowork has no capture hooks — tail its local transcripts and write them
-  // to the sessions table so Cowork conversations become shared memory too.
-  // Best-effort and self-throttling; never touches the stdio channel.
-  startCoworkIngestLoop();
 }
 
 main().catch((err) => {

@@ -2,8 +2,8 @@
  * Shared SessionStart context renderer.
  *
  * Produces the "MEMOREE RULES" + "MEMOREE GOALS" + "HOW-TO" block
- * that every agent's SessionStart hook (claude-code, codex, cursor,
- * hermes) appends to its own MEMOREE MEMORY context. One source of
+ * that each supported agent's SessionStart hook appends to its own
+ * MEMOREE MEMORY context. One source of
  * truth lives here so a wording fix lands in one place; the per-agent
  * forks just import and concatenate.
  *
@@ -16,7 +16,7 @@
  *   - Per-agent forks differ only in how they wrap the surrounding
  *     context (stdin shape, output envelope, agent-specific log lines).
  *     The rules / goals rendering is invariant.
- *   - `memoree context` CLI for harnesses/pi/openclaw calls the same renderer
+ *   - `memoree context` CLI for manual inspection calls the same renderer
  *     to print the block on demand — same output as SessionStart,
  *     deterministically.
  *
@@ -257,7 +257,7 @@ function formatBlock(input: FormatInput): string {
     lines.push("- Rules above are shared principles. Treat any action that would violate one as a critical error and surface it to the user before proceeding.");
   }
   if (input.goals.length > 0) {
-    lines.push("- Goals above are your current open work items. Move a goal forward by `mv`-ing its file between memory/goal/<user>/{opened,in_progress,closed}/ (claude-code/codex) or `memoree goal progress <goal_id> <status>` (cursor/hermes/pi).");
+    lines.push("- Goals above are your current open work items. Move a goal forward by `mv`-ing its file between memory/goal/<user>/{opened,in_progress,closed}/ or run `memoree goal progress <goal_id> <status>`.");
   }
   lines.push("- Run 'memoree rules list' / 'memoree goal list --mine' for the full inventories beyond what's shown here.");
 

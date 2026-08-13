@@ -10,8 +10,7 @@
  * Two-phase, split at the upload boundary (see pending-memory-manifest.ts):
  *
  *   EXTRACT  (this command; no auth; runs in the background at install):
- *     1. Detect installed agents by session-dir presence (claude_code,
- *        codex, cursor, hermes).
+ *     1. Detect supported agents by session-dir presence (claude_code, codex).
  *     2. Enumerate local sessions, keep those modified within the window
  *        (default 6 weeks).
  *     3. Dedup against already-staged session ids.

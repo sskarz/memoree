@@ -81,8 +81,8 @@ type Manifest = LocalManifest;
  * stdin has no such cap, so we can push a multi-hundred-KB prompt without
  * touching the shared worker code path.
  *
- * Only handles claude_code today. Other agents (codex/cursor/hermes/pi)
- * keep the existing argv-bound runGate until we verify their stdin
+ * Only handles claude_code today. Codex keeps the existing argv-bound
+ * runGate until we verify its stdin
  * semantics. mine-local in v1 only auto-selects claude_code as the gate
  * when running inside Claude Code anyway.
  */
@@ -508,7 +508,7 @@ async function runMineLocalImpl(args: string[]): Promise<void> {
   // (e.g. `--only claude_code`). Used by the install-time scan to
   // honor a "scan your Claude Code sessions" promise — without this
   // filter, the picker walks every installed agent's sessions and
-  // could surface an insight from Codex / Cursor / etc when only
+  // could surface an insight from Codex when only
   // Claude Code was advertised (codex PR #198 P2 finding).
   const installs = onlyAgent
     ? installsAll.filter(i => i.agent === onlyAgent)
@@ -649,12 +649,10 @@ async function runMineLocalImpl(args: string[]): Promise<void> {
   }
   flat.sort((a, b) => b.session.mtime - a.session.mtime);
 
-  // Compute fan-out targets once: which non-Claude agent skill roots are
+  // Compute fan-out targets once: whether the Codex skill root is
   // installed on this machine? We reuse the same detector + symlink helper
   // that `memoree skillify pull` uses, so a mined skill ends up visible
-  // to every agent (codex, hermes, pi via ~/.agents/skills/, ~/.hermes/skills/,
-  // ~/.pi/agent/skills/). Cursor has no native skill discovery and is
-  // intentionally excluded by detectAgentSkillsRoots.
+  // to Codex via ~/.agents/skills/.
   const fanOutRoots = detectAgentSkillsRoots(skillsRoot);
   if (fanOutRoots.length > 0) {
     console.log(`Fan-out targets: ${fanOutRoots.join(", ")}`);

@@ -226,9 +226,8 @@ describe("parseCodexTurnMeta", () => {
   });
 });
 
-describe("normalizeSdkUsage / sdkTurnMeta (Pi + OpenClaw)", () => {
-  it("normalizes the real Pi usage shape incl. fractional cost", () => {
-    // From a real ~/.pi transcript: {input, output, cacheRead, cacheWrite, totalTokens, cost}.
+describe("normalizeSdkUsage / sdkTurnMeta", () => {
+  it("normalizes an SDK usage shape including fractional cost", () => {
     const u = { input: 12456, output: 15, cacheRead: 0, cacheWrite: 0, totalTokens: 12471, cost: { input: 0.06228, output: 0.00045, cacheRead: 0, cacheWrite: 0, total: 0.06273 } };
     expect(normalizeSdkUsage(u)).toEqual({
       input_tokens: 12456,
@@ -240,7 +239,7 @@ describe("normalizeSdkUsage / sdkTurnMeta (Pi + OpenClaw)", () => {
     });
   });
 
-  it("normalizes the real OpenClaw usage shape and maps cacheWrite -> cache_creation", () => {
+  it("maps SDK cacheWrite to cache_creation", () => {
     const u = { input: 28621, output: 806, cacheRead: 4, cacheWrite: 9, totalTokens: 29427 };
     expect(normalizeSdkUsage(u)).toEqual({
       input_tokens: 28621,
@@ -270,7 +269,7 @@ describe("normalizeSdkUsage / sdkTurnMeta (Pi + OpenClaw)", () => {
   });
 
   it("keeps model even when usage is absent", () => {
-    expect(sdkTurnMeta("claude-via-openclaw", null)).toEqual({ model: "claude-via-openclaw" });
+    expect(sdkTurnMeta("claude-via-sdk", null)).toEqual({ model: "claude-via-sdk" });
   });
 
   it("carries stop_reason and rejects a fractional token count but keeps fractional cost", () => {

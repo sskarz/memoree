@@ -1,22 +1,8 @@
 /**
  * CLI surface for `memoree goal` / `memoree kpi`.
  *
- * Why this exists: cursor and hermes intercept ONLY Shell-style
- * tool invocations in their pre-tool-use hook (see
- * src/hooks/cursor/pre-tool-use.ts:53 and
- * src/hooks/hermes/pre-tool-use.ts:43). The Write / Edit / Read
- * tools in those agents go straight to the host filesystem without
- * passing through memoree-fs.ts, so the goal-path classifier
- * never fires. The VFS-routing approach works for claude-code and
- * codex but is structurally unavailable on cursor/hermes.
- *
- * This CLI is the fallback channel: any agent can invoke
- * `memoree goal add "<text>"` via its Shell tool, the bash
- * command runs as a normal subprocess (cursor's hook lets
- * non-memory-touching commands pass through), and this code talks
- * directly to the Memoree API. End result: a row in
- * memoree_goals (or memoree_kpis) regardless of which agent
- * called it.
+ * This CLI lets both supported agents and scripts manage the same goals and
+ * KPI tables through an ordinary subprocess invocation.
  *
  * Subcommands:
  *

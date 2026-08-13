@@ -1,9 +1,7 @@
 #!/bin/bash
 # Memoree — Codex CLI plugin installer.
-# This script now delegates to the unified `memoree` CLI, which handles
-# Claude Code, Codex, and OpenClaw from a single entrypoint.
-#
-# Equivalent to: npx memoree@latest codex install
+# This script delegates to the source-built Memoree CLI.
 
 set -e
-exec npx -y memoree@latest codex install
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
+exec node "$repo_dir/bundle/cli.js" codex install

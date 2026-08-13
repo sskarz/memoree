@@ -9,8 +9,7 @@
  * Static "memoree" — no version dimension. The version part used to be
  * baked in via esbuild's `define: { __MEMOREE_VERSION__: ... }`, but
  * keeping every per-bundle build step in sync was a recurring source of
- * bugs (cursor / hermes / mcp / unified CLI all shipped with the literal
- * unsubstituted at one point), and the backend doesn't actively use the
+ * bugs across independently built artifacts, and the backend doesn't actively use the
  * version dimension. If version-level attribution becomes useful again,
  * re-introduce the define on every build step that ships a bundle hitting
  * memoree-api.

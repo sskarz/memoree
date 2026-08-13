@@ -6,14 +6,7 @@
  * Prints the same rules + open-goals + HOW-TO block that the
  * SessionStart forks inject into agent context. Two consumers:
  *
- *   1. pi / openclaw agents — these platforms don't have a SessionStart
- *      hook in v1, so they invoke `memoree context` from the model to
- *      pull the block on demand. Deterministic output: identical to
- *      what claude-code / cursor / hermes get auto-injected, so the
- *      same prompt instructions land regardless of which agent runs
- *      them.
- *
- *   2. Any agent / human debugging the inject — `memoree context`
+ *   1. Any agent or human debugging the inject — `memoree context`
  *      is a read-only diagnostic that surfaces what the renderer
  *      would produce right now without firing SessionStart.
  *
@@ -32,12 +25,9 @@ memoree context — print the rules + open-goals block on demand
 Usage:
   memoree context
 
-Same output that SessionStart auto-injects for claude-code / cursor /
-hermes: active org rules + the current user's open goals (status
-opened or in_progress). Use from pi / openclaw agents (which have no
-SessionStart hook in v1) to pull the block manually, or anywhere as
-a read-only diagnostic to see what the renderer would produce right
-now.
+Same output that SessionStart auto-injects for Claude Code and Codex:
+active rules plus the current user's open goals. This is a read-only
+diagnostic that shows what the renderer would produce right now.
 `.trim();
 
 export async function runContextCommand(args: string[]): Promise<void> {

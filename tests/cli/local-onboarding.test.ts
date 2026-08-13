@@ -60,7 +60,6 @@ exit 0
       embeddings: { enabled: false },
     });
     expect(existsSync(join(root, ".codex"))).toBe(false);
-    expect(existsSync(join(root, ".cursor"))).toBe(false);
 
     const commands = readFileSync(commandLog, "utf-8").trim().split("\n");
     expect(commands).toEqual([

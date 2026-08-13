@@ -258,7 +258,7 @@ export async function main(deps: MainDeps = {}): Promise<void> {
     // `import Parser from "tree-sitter"` is a chain of static ESM imports;
     // pulling it at the top of this file would make Node resolve tree-sitter
     // at load time. tree-sitter is an optionalDependency (may be absent on a
-    // codex/cursor install whose native build failed — Node 24 / arm64), so
+    // Codex install whose native build failed — Node 24 / arm64), so
     // an unresolved package would abort module load with ERR_MODULE_NOT_FOUND
     // and exit the Stop hook with code 1 — BEFORE main()'s catch can swallow
     // it. Deferring the import to here (behind the gate, inside this try)

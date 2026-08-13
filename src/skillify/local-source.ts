@@ -19,7 +19,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionRow } from "./extractors/index.js";
 
-export type LocalAgent = "claude_code" | "codex" | "cursor" | "hermes";
+export type LocalAgent = "claude_code" | "codex";
 
 export interface AgentInstall {
   agent: LocalAgent;
@@ -53,11 +53,8 @@ export function detectInstalledAgents(): AgentInstall[] {
     });
   }
 
-  // Codex/Cursor/Hermes — detection is best-effort. Each agent's encoded-cwd
-  // scheme differs, and as of v1 we only have a verified mapping for Claude
-  // Code. For other agents we still surface their session files (so the
-  // user knows we found them) but mark every file as in_cwd=false, which
-  // means they only get picked via the ε-greedy global quota.
+  // Codex's nested date layout has no verified cwd mapping, so its files are
+  // surfaced with inCwd=false and remain eligible for the global quota.
   const codexRoot = join(HOME, ".codex", "sessions");
   if (existsSync(codexRoot)) {
     installs.push({
@@ -143,7 +140,7 @@ export function listLocalSessions(installs: AgentInstall[], cwd: string): Sessio
       // inCwd is anchored on the top-level segment (Claude's encoded-cwd
       // dir). Agents with deeper layouts never match, so they fall through
       // as inCwd=false — identical to the prior single-level behavior for
-      // Claude, but now actually reaching nested codex/cursor/hermes files.
+      // Claude, while still reaching Codex's nested session files.
       const inCwd = entry.name === cwdEncoded;
       if (entry.isDirectory()) {
         collectJsonlRecursive(out, install.agent, join(install.sessionRoot, entry.name), inCwd);

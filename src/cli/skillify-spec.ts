@@ -3,9 +3,8 @@
  *
  * Two parallel views of the same data live here:
  *
- *   1. `SKILLIFY_COMMANDS` — flat one-line-per-entry. Consumed by the four
- *      per-agent SessionStart inject blocks (claude-code/codex/cursor/hermes),
- *      the pi mirror in `harnesses/pi/extension-source/memoree.ts`, and the bundle-scan
+ *   1. `SKILLIFY_COMMANDS` — flat one-line-per-entry. Consumed by the
+ *      Claude Code and Codex SessionStart inject blocks and bundle-scan
  *      tests that assert specific subcommand strings appear verbatim in the
  *      shipped JS. Kept as a literal array (not derived) so esbuild preserves
  *      every entry as a string literal in the bundle.
@@ -20,10 +19,9 @@
  * A self-drift test (tests/cli/skillify-spec-self-drift.test.ts) asserts the
  * two views agree: every (subcommand, option) pair in `SKILLIFY_SPEC` must
  * appear as a corresponding flat entry in `SKILLIFY_COMMANDS`, and vice
- * versa. The pi mirror has its own drift test against `SKILLIFY_COMMANDS`
- * at tests/pi/skillify-spec-drift.test.ts.
+ * versa.
  *
- * Shipped SKILL.md files (claude-code/codex/openclaw) remain hand-typed for
+ * Shipped SKILL.md files (Claude Code and Codex) remain hand-typed for
  * now — they need a build-step generator because Markdown can't import TS
  * at runtime. Tracked in issue #175.
  */

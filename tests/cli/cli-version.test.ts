@@ -15,7 +15,7 @@ describe("getVersion (source-mode = catch-fallback)", () => {
   it("returns the '0.0.0' sentinel when pkgRoot has no package.json", async () => {
     // In source-mode tests pkgRoot() resolves to src/ which has no package.json,
     // so this exercises the catch branch. Bundled mode runs through the happy
-    // path via the live cursor/hermes session-start hooks.
+    // path via the live supported session-start hooks.
     const { getVersion } = await import("../../src/cli/version.js");
     const v = getVersion();
     expect(v).toMatch(/^\d+\.\d+\.\d+|0\.0\.0$/);

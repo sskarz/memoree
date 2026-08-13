@@ -14,7 +14,7 @@ export const SKILLOPT_ENV = {
   SKILL: "MEMOREE_SKILLOPT_SKILL",
   REACTION: "MEMOREE_SKILLOPT_REACTION",
   TOOL_USE_ID: "MEMOREE_SKILLOPT_TOOL_USE_ID",
-  /** Which agent's CLI runs the judge/proposer (claude_code/codex/hermes/cursor/pi). */
+  /** Which supported agent's CLI runs the judge/proposer (claude_code/codex). */
   AGENT: "MEMOREE_SKILLOPT_AGENT",
   /** K-message judgment-window size override. */
   JUDGE_WINDOW: "MEMOREE_SKILLOPT_JUDGE_WINDOW",

@@ -261,7 +261,7 @@ export function fanOutSymlinks(
  * locally take the `"skipped"` path, which doesn't refresh symlinks.
  * That breaks two real scenarios:
  *
- *   1. User installs a NEW agent (codex / hermes / pi) AFTER having
+ *   1. User installs Codex AFTER having
  *      already pulled skills. Without backfill, those existing skills
  *      stay invisible to the new agent until each one is independently
  *      bumped on the org table.
@@ -759,7 +759,7 @@ export async function runPull(opts: PullOptions): Promise<PullSummary> {
 
   // Backfill fan-out for skills that were already up-to-date this run.
   // Per-row fan-out only fires on `action === "wrote"`, so when a user
-  // installs a NEW agent (codex / hermes / pi) AFTER having pulled, the
+  // installs Codex AFTER having pulled, the
   // existing skills' canonical dirs are present but their symlinks in
   // the new agent root are missing — and they'd stay missing forever
   // because the next pull just sees `localVersion >= remoteVersion`

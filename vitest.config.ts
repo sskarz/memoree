@@ -22,10 +22,6 @@ export default defineConfig({
       "tests/claude-code/**/*.test.ts",
       "tests/cli/**/*.test.ts",
       "tests/codex/**/*.test.ts",
-      "tests/cursor/**/*.test.ts",
-      "tests/hermes/**/*.test.ts",
-      "tests/openclaw/**/*.test.ts",
-      "tests/pi/**/*.test.ts",
       "tests/scripts/**/*.test.ts",
       // Non-agent-specific tests for shared `src/` modules (auth,
       // memoree-api, embeddings, grep, notifications, etc.). New

@@ -38,8 +38,6 @@ export function findMemoreeInstalls(home: string = HOME): AgentInstall[] {
   const out: AgentInstall[] = [];
   const fixed: AgentInstall[] = [
     { id: "codex", pluginDir: join(home, ".codex", "memoree") },
-    { id: "cursor", pluginDir: join(home, ".cursor", "memoree") },
-    { id: "hermes", pluginDir: join(home, ".hermes", "memoree") },
   ];
   for (const inst of fixed) {
     if (existsSync(join(inst.pluginDir, "bundle"))) out.push(inst);
@@ -128,8 +126,7 @@ function ensureSharedDeps(): void {
   }
   // Always (re)deposit the canonical embed-daemon.js. Cheap copy; keeps the
   // daemon up-to-date when the user reinstalls memoree without re-installing
-  // the deps. Pi (and any agent that doesn't ship its own bundle) launches
-  // this exact file.
+  // the dependencies.
   ensureDir(SHARED_DIR);
   const src = join(pkgRoot(), "embeddings", "embed-daemon.js");
   if (existsSync(src)) {

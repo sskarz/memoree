@@ -17,12 +17,10 @@ import { join } from "node:path";
  * splitting is dropped or the tree-sitter chain leaks back into the entry —
  * the exact regression the unit test (which injects runBuildCommand) can't see.
  *
- * Covers the four harnesses that register graph-on-stop as a Stop/SessionEnd
- * hook. OpenClaw ships graph-on-stop via a separate graph-worker build with
- * its own env-rewrite handling and is out of scope here.
+ * Covers both supported harnesses that register graph-on-stop.
  */
 const REPO_ROOT = join(__dirname, "..", "..", "..");
-const HARNESSES = ["claude-code", "codex", "cursor", "hermes"];
+const HARNESSES = ["claude-code", "codex"];
 
 describe("graph-on-stop shipped bundle (tree-sitter isolation)", () => {
   const built = HARNESSES.map((h) => ({
@@ -32,7 +30,7 @@ describe("graph-on-stop shipped bundle (tree-sitter isolation)", () => {
   })).filter((b) => existsSync(b.entry));
 
   it("has every harness bundle built (none silently missing)", () => {
-    // Require ALL four harnesses, not just one: a filtered subset would let a
+    // Require both harnesses, not just one: a filtered subset would let a
     // per-harness packaging regression (or a build that skipped a harness)
     // pass unnoticed. Asserting the exact set also guards against the glob
     // matching nothing after a path drift. Run `npm run build` first if this
