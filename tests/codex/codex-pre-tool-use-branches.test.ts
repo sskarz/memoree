@@ -11,6 +11,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import { Bash } from "just-bash";
 import {
   buildUnsupportedGuidance,
   processCodexPreToolUse,
@@ -59,10 +60,11 @@ function toolInput(command: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe("codex: pure helpers", () => {
-  it("buildUnsupportedGuidance names the allowed bash builtins and rejects interpreters", () => {
+  it("buildUnsupportedGuidance names the public sandbox contract and security limits", () => {
     const s = buildUnsupportedGuidance();
-    expect(s).toMatch(/cat.*grep.*echo/);
-    expect(s).toMatch(/python|node|curl/);
+    expect(s).toContain("Supported sandboxed commands: cat, ls, grep, head, tail, wc, find, jq, echo, printf, tee.");
+    expect(s).toContain("Interpreters");
+    expect(s).toContain("sed and awk are unavailable");
   });
 
 });
@@ -83,22 +85,51 @@ describe("processCodexPreToolUse: pass-through + unsafe", () => {
       baseDeps(),
     );
     expect(d.action).toBe("block");
-    expect(d.output).toContain("not supported");
+    expect(d.output).toContain("denied");
     expect(d.rewrittenCommand).toContain("python");
   });
 
-  it("blocks (does NOT run a shell or proceed to host) when no config is loaded", async () => {
-    // Must be "block" (exit 2), not "guide" (exit 0): guide would let Codex run
-    // the original command on the host. Block stops it and injects guidance.
+  it.each([
+    "sed -n '1p' ~/.memoree/memory/index.md",
+    "awk '{print $1}' ~/.memoree/memory/index.md",
+    "python ~/.memoree/memory/x.py",
+    "node ~/.memoree/memory/x.js",
+    "curl file://~/.memoree/memory/index.md",
+    "cat $(printf ~/.memoree/memory/index.md)",
+    "cat `printf ~/.memoree/memory/index.md`",
+    "find ~/.memoree/memory -name '*.md' -exec cat {} ;",
+  ])("reserves block for policy-rejected command: %s", async (command) => {
+    const d = await processCodexPreToolUse(toolInput(command), baseDeps());
+    expect(d.action).toBe("block");
+    expect(d.output).toContain("denied");
+    expect(d.replacementCommand).toBeUndefined();
+  });
+
+  it("turns unavailable storage into an ordinary nonzero command failure", async () => {
     const d = await processCodexPreToolUse(
       toolInput("cat ~/.memoree/memory/index.md"),
       { ...baseDeps(), config: null as any },
     );
-    expect(d.action).toBe("block");
-    expect(d.output).toContain("not supported");
+    expect(d.action).toBe("allow");
+    expect(d.output).toContain("storage is unavailable");
+    expect(d.replacementCommand).toContain(">&2");
+    expect(d.replacementCommand).toContain("exit 1");
   });
 
-  it("blocks with a not-found result (not generic guidance) for a concrete cat on a missing VFS file", async () => {
+  it("turns storage backend construction failure into an ordinary nonzero command failure", async () => {
+    const d = await processCodexPreToolUse(
+      toolInput("cat ~/.memoree/memory/index.md"),
+      {
+        ...baseDeps(),
+        createApi: vi.fn(() => { throw new Error("database locked"); }),
+      },
+    );
+    expect(d.action).toBe("allow");
+    expect(d.output).toContain("database locked");
+    expect(d.replacementCommand).toContain("exit 1");
+  });
+
+  it("returns a normal nonzero failure for a concrete cat on a missing VFS file", async () => {
     const d = await processCodexPreToolUse(
       toolInput("cat ~/.memoree/memory/nonexistent.md"),
       {
@@ -107,24 +138,87 @@ describe("processCodexPreToolUse: pass-through + unsafe", () => {
         readVirtualPathContentFn: vi.fn(async () => null) as any,
       },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toContain("No such file or directory");
     // Path-specific, not a generic error (a regression to generic text must fail).
     expect(d.output).toContain("nonexistent.md");
-    expect(d.output).not.toContain("not supported");
+    expect(d.output).not.toContain("denied");
+    expect(d.replacementCommand).toContain("exit 1");
+    expect(d.replacementCommand).not.toContain(".memoree/memory");
   });
 });
 
 describe("processCodexPreToolUse: compiled bash fast-path", () => {
-  it("delegates to executeCompiledBashCommand and blocks with its output when a segment compiles", async () => {
+  it("delegates to executeCompiledBashCommand and allows a harmless output replacement", async () => {
     const executeCompiledBashCommandFn = vi.fn(async () => "COMPILED OUTPUT") as any;
     const d = await processCodexPreToolUse(
       toolInput("cat ~/.memoree/memory/index.md && ls ~/.memoree/memory/summaries"),
       { ...baseDeps(), executeCompiledBashCommandFn },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toBe("COMPILED OUTPUT");
     expect(executeCompiledBashCommandFn).toHaveBeenCalled();
+  });
+
+  it.each([
+    ["cat", "cat ~/.memoree/memory/index.md"],
+    ["ls", "ls ~/.memoree/memory/summaries"],
+    ["grep", "grep -ri 'runtime' ~/.memoree/memory/summaries/"],
+    ["head", "head -5 ~/.memoree/memory/index.md"],
+    ["tail", "tail -5 ~/.memoree/memory/index.md"],
+    ["wc", "wc -l ~/.memoree/memory/index.md"],
+    ["find", "find ~/.memoree/memory/summaries -name '*.md'"],
+  ])(
+    "returns allow for a successful curated %s read",
+    async (command, invocation) => {
+      const d = await processCodexPreToolUse(
+        toolInput(invocation),
+        {
+          ...baseDeps(),
+          executeCompiledBashCommandFn: vi.fn(async () => `${command} output`) as any,
+        },
+      );
+      expect(d.action).toBe("allow");
+      expect(d.output).toBe(`${command} output`);
+      expect(d.replacementCommand).toBe(`printf '%s\\n' '${command} output'`);
+    },
+  );
+
+  it("returns allow for successful jq processing through the VFS shell", async () => {
+    const d = await processCodexPreToolUse(
+      toolInput("cat ~/.memoree/memory/valid.json | jq '.items | length'"),
+      {
+        ...baseDeps(),
+        executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        runVfsShellFn: vi.fn(() => ({ status: 0, stdout: "3\n", stderr: "" })),
+      },
+    );
+    expect(d.action).toBe("allow");
+    expect(d.output).toBe("3");
+    expect(d.replacementCommand).toBe("printf '%s\\n' '3'");
+  });
+
+  it("caps successful output and keeps quotes, substitutions, newlines, and percent signs literal", async () => {
+    const dangerous = "quote ' `touch /escaped` $HOME 100%\n" + "x".repeat(12_000);
+    const d = await processCodexPreToolUse(
+      toolInput("cat ~/.memoree/memory/index.md"),
+      {
+        ...baseDeps(),
+        executeCompiledBashCommandFn: vi.fn(async () => dangerous) as any,
+      },
+    );
+
+    expect(d.action).toBe("allow");
+    expect(Buffer.byteLength(d.output ?? "", "utf8")).toBeLessThanOrEqual(8 * 1024);
+    expect(d.output).toContain("quote ' `touch /escaped` $HOME 100%");
+    expect(d.output).toContain("truncated");
+    expect(d.replacementCommand).not.toContain(".memoree/memory");
+    expect(d.replacementCommand).not.toContain("cat ~/.memoree");
+
+    const replacement = await new Bash().exec(d.replacementCommand!);
+    expect(replacement.exitCode).toBe(0);
+    expect(replacement.stderr).toBe("");
+    expect(replacement.stdout).toBe(`${d.output}\n`);
   });
 
   it("the compiled fallback callback cache-hits /index.md without re-querying the sessions table", async () => {
@@ -406,7 +500,7 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
     expect(handleGrepDirectFn).toHaveBeenCalled();
   });
 
-  it("blocks (does NOT run a shell or proceed to host) when the direct-query path throws mid-flow", async () => {
+  it("turns a direct-query exception into an ordinary nonzero command failure", async () => {
     const d = await processCodexPreToolUse(
       toolInput("cat ~/.memoree/memory/sessions/a.json"),
       {
@@ -415,8 +509,9 @@ describe("processCodexPreToolUse: find + grep + fallback", () => {
         readVirtualPathContentFn: vi.fn(async () => { throw new Error("network bonk"); }) as any,
       },
     );
-    expect(d.action).toBe("block");
-    expect(d.output).toContain("not supported");
+    expect(d.action).toBe("allow");
+    expect(d.output).toContain("network bonk");
+    expect(d.replacementCommand).toContain("exit 1");
   });
 });
 
@@ -432,8 +527,22 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
     };
   }
 
+  it.each([
+    "echo 'hello' > ~/.memoree/memory/h2h/echo.md",
+    "printf '%s' 'hello' > ~/.memoree/memory/h2h/printf.md",
+    "printf '%s' 'hello' | tee ~/.memoree/memory/h2h/tee.md",
+  ])("handles a curated sandboxed write without exposing the original command: %s", async (command) => {
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "written", stderr: "" }));
+    const d = await processCodexPreToolUse(toolInput(command), writeDeps({ runVfsShellFn }));
+
+    expect(d.action).toBe("allow");
+    expect(d.replacementCommand).toBe("printf '%s\\n' 'written'");
+    expect(d.replacementCommand).not.toContain(".memoree/memory");
+    expect(d.replacementCommand).not.toContain("h2h/");
+  });
+
   it("a successful VFS write returns action=allow with a rewritten host command, NOT guide/pass", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)" }));
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)", stderr: "" }));
     const d = await processCodexPreToolUse(toolInput(writeCmd), writeDeps({ runVfsShellFn }));
 
     // allow ⇒ main() emits permissionDecision:allow + updatedInput so Codex runs
@@ -445,7 +554,7 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
   });
 
   it("the replacement command echoes the VFS result and never re-runs the original redirect", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)" }));
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)", stderr: "" }));
     const d = await processCodexPreToolUse(toolInput(writeCmd), writeDeps({ runVfsShellFn }));
 
     expect(d.replacementCommand).toBe("printf '%s\\n' '(done)'");
@@ -456,7 +565,7 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
   });
 
   it("POSIX-escapes single quotes in the VFS output so it can't break out of the rewrite", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "it's done" }));
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "it's done", stderr: "" }));
     const d = await processCodexPreToolUse(toolInput(writeCmd), writeDeps({ runVfsShellFn }));
 
     expect(d.action).toBe("allow");
@@ -467,7 +576,7 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
     // CodeRabbit #284: `/\s>>?\s/` missed `echo foo>file`, misrouting it to block
     // and re-surfacing the F3 "write looks failed" symptom. The relaxed guard
     // must recognize the redirect regardless of surrounding whitespace.
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)" }));
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "(done)", stderr: "" }));
     const d = await processCodexPreToolUse(
       toolInput("echo 'hello'>~/.memoree/memory/h2h/relay-codex.md"),
       writeDeps({ runVfsShellFn }),
@@ -476,25 +585,35 @@ describe("processCodexPreToolUse: memory write redirect (F3 — no double execut
     expect(d.replacementCommand).toBe("printf '%s\\n' '(done)'");
   });
 
-  it("does NOT treat an fd redirect (echo ... 2>file) as a write → stays block", async () => {
-    // `2>`/`&>` are file-descriptor redirects, not memory writes. The `[^0-9&>]`
-    // guard must keep them on the block path (no allow rewrite).
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "x" }));
+  it("keeps an fd redirect inside the sandbox and replaces it with harmless output", async () => {
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "x", stderr: "" }));
     const d = await processCodexPreToolUse(
       toolInput("echo hello 2>~/.memoree/memory/h2h/err.md"),
       writeDeps({ runVfsShellFn }),
     );
-    expect(d.action).toBe("block");
-    expect(d.replacementCommand).toBeUndefined();
+    expect(d.action).toBe("allow");
+    expect(d.replacementCommand).toBe("printf '%s\\n' 'x'");
+    expect(d.replacementCommand).not.toContain(">");
   });
 
-  it("falls back to block+guidance when the VFS shell fails (non-zero, no stdout)", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 1, stdout: "" }));
-    const d = await processCodexPreToolUse(toolInput(writeCmd), writeDeps({ runVfsShellFn }));
+  it("preserves a VFS-shell error as an ordinary nonzero command failure", async () => {
+    const runVfsShellFn = vi.fn(() => ({ status: 4, stdout: "", stderr: "jq: parse error\n" }));
+    const d = await processCodexPreToolUse(
+      toolInput("cat ~/.memoree/memory/malformed.json | jq '.items | length'"),
+      writeDeps({ runVfsShellFn }),
+    );
 
-    expect(d.action).toBe("block");
-    expect(d.output).toContain("not supported");
-    expect(d.replacementCommand).toBeUndefined();
+    expect(d.action).toBe("allow");
+    expect(d.output).toBe("jq: parse error\n");
+    expect(d.replacementCommand).toContain("jq: parse error\n");
+    expect(d.replacementCommand).toContain(">&2");
+    expect(d.replacementCommand).toContain("exit 4");
+    expect(d.replacementCommand).not.toContain("denied");
+
+    const replacement = await new Bash().exec(d.replacementCommand!);
+    expect(replacement.stdout).toBe("");
+    expect(replacement.stderr).toBe("jq: parse error\n");
+    expect(replacement.exitCode).toBe(4);
   });
 });
 
@@ -511,7 +630,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       toolInput("ls -l ~/.memoree/memory/sessions"),
       { ...baseDeps({ listVirtualPathRowsFn }), ...noCompiled() },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toContain("a.json");
     expect(d.output).toContain("sub/");      // nested path collapses to a dir entry
     expect(d.output).toMatch(/drwx/);        // long-format directory line
@@ -528,7 +647,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       toolInput("ls ~/.memoree/memory"),
       { ...baseDeps({ listVirtualPathRowsFn }), ...noCompiled() },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toContain("sessions/");
     expect(d.output).toContain("index.md");
   });
@@ -538,7 +657,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       toolInput("ls ~/.memoree/memory/nope"),
       { ...baseDeps({ listVirtualPathRowsFn: vi.fn(async () => []) as any }), ...noCompiled() },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toContain("cannot access");
   });
 
@@ -570,29 +689,31 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
     );
   });
 
-  it("a non-redirect echo handled by the VFS shell stays on block (not allow)", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "echoed" }));
+  it("a non-redirect command handled by the VFS shell returns successful output", async () => {
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "echoed", stderr: "" }));
     const d = await processCodexPreToolUse(
       toolInput("echo hello ~/.memoree/memory/note.txt"),
       { ...baseDeps(), ...noCompiled(), runVfsShellFn },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toBe("echoed");
-    expect(d.replacementCommand).toBeUndefined();
+    expect(d.replacementCommand).toBe("printf '%s\\n' 'echoed'");
   });
 
-  it("a write succeeds via stdout even when the VFS shell exits non-zero", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 1, stdout: "still wrote" }));
+  it("a nonzero write preserves stdout but still exits nonzero", async () => {
+    const runVfsShellFn = vi.fn(() => ({ status: 1, stdout: "still wrote", stderr: "write failed\n" }));
     const d = await processCodexPreToolUse(
       toolInput("echo 'x' > ~/.memoree/memory/h2h/a.md"),
       { ...baseDeps(), ...noCompiled(), runVfsShellFn },
     );
     expect(d.action).toBe("allow");
-    expect(d.replacementCommand).toBe("printf '%s\\n' 'still wrote'");
+    expect(d.replacementCommand).toContain("printf '%s' 'still wrote'");
+    expect(d.replacementCommand).toContain("write failed\n");
+    expect(d.replacementCommand).toContain("exit 1");
   });
 
   it("a write with empty stdout defaults the echoed result to (done)", async () => {
-    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "" }));
+    const runVfsShellFn = vi.fn(() => ({ status: 0, stdout: "", stderr: "" }));
     const d = await processCodexPreToolUse(
       toolInput("echo 'x' > ~/.memoree/memory/h2h/a.md"),
       { ...baseDeps(), ...noCompiled(), runVfsShellFn },
@@ -601,14 +722,14 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
     expect(d.replacementCommand).toBe("printf '%s\\n' '(done)'");
   });
 
-  it("a /graph read is answered from the local snapshot (block + body), before any SQL", async () => {
+  it("a /graph read is answered as successful output before any SQL", async () => {
     const tryGraphReadFn = vi.fn(() => "GRAPH SNAPSHOT BODY") as any;
     const executeCompiledBashCommandFn = vi.fn(async () => "SHOULD-NOT-RUN") as any;
     const d = await processCodexPreToolUse(
       toolInput("cat ~/.memoree/memory/graph/index.md"),
       { ...baseDeps({ tryGraphReadFn }), executeCompiledBashCommandFn },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toBe("GRAPH SNAPSHOT BODY");
     expect(executeCompiledBashCommandFn).not.toHaveBeenCalled(); // graph short-circuits before SQL
   });
@@ -620,7 +741,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       toolInput("ls ~/.memoree/memory/docs") as any,
       baseDeps({ createApi: vi.fn(() => api), config: { ...BASE_CONFIG, docsTableName: "memoree_docs" } as any }),
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toContain("Docs Index");
     expect(calls.some((c) => /memoree_docs/.test(c))).toBe(true); // docs table, not memory
   });
@@ -632,7 +753,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
       toolInput("cat ~/.memoree/memory/docs/find/auth") as any,
       baseDeps({ createApi: vi.fn(() => api), config: { ...BASE_CONFIG, docsTableName: "memoree_docs" } as any }),
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toContain("src/a.ts");
     // Shared-table safety: the search filters to this repo's project key,
     // keeping legacy unstamped rows ('') visible.
@@ -651,7 +772,7 @@ describe("processCodexPreToolUse: ls / find variants + fallback branches", () =>
         readVirtualPathContentFn: vi.fn(async () => "DEFAULT-DEPS-CONTENT") as any,
       },
     );
-    expect(d.action).toBe("block");
+    expect(d.action).toBe("allow");
     expect(d.output).toBe("DEFAULT-DEPS-CONTENT");
   });
 });

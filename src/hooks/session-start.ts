@@ -26,6 +26,7 @@ import { countLocalManifestEntries } from "../skillify/local-manifest.js";
 import { renderLocalMinedNote } from "../skillify/local-mined-banner.js";
 import { maybeAutoMineLocal } from "../skillify/spawn-mine-local-worker.js";
 import { graphContextLine } from "../graph/session-context.js";
+import { MEMORY_COMMAND_GUIDANCE } from "./shared/memory-command-contract.js";
 import { spawnGraphPullWorker } from "../graph/spawn-pull-worker.js";
 import { entrypointPassesOnlyCliGate } from "./shared/capture-gate.js";
 import { clearSessionEnded, recordSessionOwner, touchSessionActivity } from "./summary-state.js";
@@ -38,7 +39,7 @@ const __bundleDir = dirname(fileURLToPath(import.meta.url));
 // — no per-agent path resolution needed. Marketplace-only installs without
 // `npm i -g memoree` are unsupported (documented in README + RELEASE_CHECKLIST).
 
-const context = `MEMOREE MEMORY: You have TWO memory sources. ALWAYS check BOTH when the user asks you to recall, remember, or look up ANY information:
+export const CLAUDE_MEMORY_CONTEXT = `MEMOREE MEMORY: You have TWO memory sources. ALWAYS check BOTH when the user asks you to recall, remember, or look up ANY information:
 
 1. Your built-in memory (~/.claude/) — personal per-project notes
 2. Memoree memory (~/.memoree/memory/) — persistent memory for the selected repository and backend
@@ -46,12 +47,12 @@ const context = `MEMOREE MEMORY: You have TWO memory sources. ALWAYS check BOTH 
 Memoree memory has THREE tiers — pick the right one for the question:
 1. ~/.memoree/memory/index.md   — auto-generated index, top 50 most-recently-updated entries with \`Created\` + \`Last Updated\` + \`Project\` + \`Description\` columns. ~5 KB. **For "what's recent / who did X this week / since <date>" queries, START HERE** and trust the \`Last Updated\` column over any \`Started:\` line in summary bodies.
 2. ~/.memoree/memory/summaries/ — condensed wiki summaries per session (~3 KB each). For keyword/topic recall, search these.
-3. ~/.memoree/memory/sessions/  — raw full-dialogue JSONL (~5 KB each). FALLBACK only — use when summaries don't contain the exact quote/turn you need.
+3. ~/.memoree/memory/sessions/  — rendered human-readable transcript views (~5 KB each). FALLBACK only — use when summaries don't contain the exact quote/turn you need. The .jsonl suffix does not guarantee JSON.
 
 Search workflow:
   - Time-based ("last week", "today", "since X"): \`cat ~/.memoree/memory/index.md\` and read the most-recent rows.
   - Keyword/topic recall: use the **Bash tool** with \`grep -r "keyword" ~/.memoree/memory/summaries/\`. The Bash hook routes this through hybrid lexical+semantic search — synonyms / paraphrases match too. Then \`cat\` the top-matching summary to pull the answer.
-  - Raw transcript fallback only: \`grep -r "keyword" ~/.memoree/memory/sessions/\` (use sparingly — JSONL is verbose).
+  - Rendered transcript fallback only: \`grep -r "keyword" ~/.memoree/memory/sessions/\` (use sparingly — transcript views are verbose).
 
 Tool choice on this mount:
   ✅ Bash tool with \`grep -r\` / \`cat\` / \`ls\` / \`head\` / \`tail\` — supported, fast.
@@ -63,7 +64,7 @@ Resuming work (user says "pick up where I left off" / "load that from memoree" /
   1. \`cat ~/.memoree/memory/index.md\` and take the newest rows whose \`Project\` matches this repo (or \`ls -t ~/.memoree/memory/summaries/<your-username>/\` for the latest files).
   2. \`cat\` the newest matching summary. If its \`## Next Steps\` (or older \`## Open Questions / TODO\`) is empty or says "none", move to the next-newest until you find one with real open work.
   3. Load THAT summary as context, then RECONCILE with the current git state (branch, uncommitted changes) before acting — the summary can be stale. Tell the user where they left off and confirm before continuing; don't silently execute the next step.
-  4. Don't bulk-read \`sessions/\` — drill into the raw jsonl only for a specific detail the summary is missing.
+  4. Don't bulk-read \`sessions/\` — drill into a rendered transcript view only for a specific detail the summary is missing.
 
 Diagnostics:
 - memoree doctor                             — verify local storage, embeddings, plugin, and hooks
@@ -79,7 +80,7 @@ Embeddings (semantic memory search) — enabled by default, persisted in ~/.memo
 - memoree embeddings uninstall [--prune]            — remove agent symlinks + disable; --prune wipes deps too
 - memoree embeddings status                         — show config + deps + per-agent link state
 
-IMPORTANT: Only use bash commands (cat, ls, grep, echo, jq, head, tail, etc.) to interact with ~/.memoree/memory/. Do NOT use python, python3, node, curl, or other interpreters — they are not available in the memory filesystem. Avoid bash brace expansions like \`{1..10}\` (not fully supported); spell out paths explicitly. Bash output is capped at 10MB total — avoid \`for f in *.json; do cat $f\` style loops on the whole sessions dir.
+IMPORTANT: ${MEMORY_COMMAND_GUIDANCE} Avoid bash brace expansions like \`{1..10}\` (not fully supported); spell out paths explicitly. Bash output is capped at 10MB total — avoid loops over the whole sessions directory.
 
 LIMITS: Do NOT spawn subagents to read Memoree memory. If a file returns empty after 2 attempts, skip it and move on. Report what you found rather than exhaustively retrying.
 
@@ -237,7 +238,7 @@ async function main(): Promise<void> {
   const updateNotice = current ? `\n\n✅ Memoree v${current}` : "";
 
   // No placeholder substitution needed — inject uses bare `memoree <sub>` form.
-  const resolvedContext = context;
+  const resolvedContext = CLAUDE_MEMORY_CONTEXT;
   // When the user has mined skills locally with
   // `memoree skillify mine-local`, surface a count in
   // the model-visible context. The rich concrete-insight banner is

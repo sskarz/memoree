@@ -11,11 +11,10 @@
  *     hookSpecificOutput.permissionDecision="allow" + updatedInput.command
  *                                                    (Codex runs the REPLACEMENT command)
  *
- * `allow` exists for memory writes: the hook performs the VFS/SQL write itself,
- * then rewrites the host command to a harmless echo so Codex does NOT re-run the
- * original redirect. A plain exit-0 with no JSON makes Codex run the original
- * `echo ... > ~/.memoree/memory/...` against the on-disk mount — the double
- * execution that errors "No such file or directory" when the subdir is absent (F3).
+ * `allow` is used for every command handled by the sandbox. The hook performs
+ * the VFS operation itself, then rewrites the host command to a harmless printf
+ * (and, for failures, a preserved nonzero exit) so Codex never runs the original
+ * memory command against the real host filesystem.
  *
  * The source logic is exported so tests can exercise it directly without
  * spawning the bundled script in a subprocess.
@@ -50,6 +49,9 @@ import { log as _log } from "../../utils/debug.js";
 import { isDirectRun } from "../../utils/direct-run.js";
 import { isSafe, touchesMemory, rewritePaths } from "../memory-path-utils.js";
 import { armSkillOptOnSkillUse } from "../shared/skillopt-hook.js";
+import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
+import { safeFailureReplacement, safeStdoutReplacement } from "../shared/shell-replacement.js";
+import { capOutputForClaude } from "../../utils/output-cap.js";
 
 export { isSafe, touchesMemory, rewritePaths };
 
@@ -75,18 +77,43 @@ export interface CodexPreToolDecision {
   /**
    * Host command Codex should run INSTEAD of the original, delivered via the
    * PreToolUse `updatedInput.command` rewrite. Set only for action="allow"
-   * (memory writes the hook has already persisted to the VFS). Running a
-   * harmless echo here stops the original redirect from double-executing
-   * against the on-disk mount.
+   * after the sandbox has already handled the VFS command. The replacement
+   * prints literal output or reproduces the sandbox failure without exposing
+   * the original command to the host.
    */
   replacementCommand?: string;
 }
 
 export function buildUnsupportedGuidance(): string {
-  return "This command is not supported for ~/.memoree/memory/ operations. " +
-    "Only bash builtins are available: cat, ls, grep, echo, jq, head, tail, wc, sort, find, etc. " +
-    "Do NOT use python, python3, node, curl, or other interpreters. " +
-    "Rewrite your command using only bash tools and retry.";
+  return "This command was denied for ~/.memoree/memory/ operations. " + MEMORY_COMMAND_GUIDANCE;
+}
+
+function buildHandledSuccess(
+  output: string,
+  rewrittenCommand: string,
+  kind = "command",
+): CodexPreToolDecision {
+  const capped = capOutputForClaude(output, { kind });
+  return {
+    action: "allow",
+    output: capped,
+    replacementCommand: safeStdoutReplacement(capped),
+    rewrittenCommand,
+  };
+}
+
+function buildHandledFailure(
+  stderr: string,
+  status: number | null,
+  rewrittenCommand: string,
+  stdout = "",
+): CodexPreToolDecision {
+  return {
+    action: "allow",
+    output: stderr || stdout,
+    replacementCommand: safeFailureReplacement(stderr, status, stdout),
+    rewrittenCommand,
+  };
 }
 
 function buildIndexContent(rows: Record<string, unknown>[]): string {
@@ -112,7 +139,7 @@ interface CodexPreToolDeps {
   handleGrepDirectFn?: typeof handleGrepDirect;
   readCachedIndexContentFn?: typeof readCachedIndexContent;
   writeCachedIndexContentFn?: typeof writeCachedIndexContent;
-  runVfsShellFn?: (command: string) => { status: number | null; stdout: string };
+  runVfsShellFn?: (command: string) => { status: number | null; stdout: string; stderr: string };
   tryGraphReadFn?: typeof tryGraphRead;
   logFn?: (msg: string) => void;
 }
@@ -138,7 +165,7 @@ export async function processCodexPreToolUse(
         encoding: "utf-8",
         timeout: 10_000,
       });
-      return { status: proc.status, stdout: proc.stdout ?? "" };
+      return { status: proc.status, stdout: proc.stdout ?? "", stderr: proc.stderr ?? "" };
     },
     tryGraphReadFn = tryGraphRead,
     logFn = log,
@@ -163,7 +190,7 @@ export async function processCodexPreToolUse(
   const graphBody = tryGraphReadFn(rewritten, input.cwd ?? process.cwd());
   if (graphBody !== null) {
     logFn(`graph vfs intercept: ${rewritten}`);
-    return { action: "block", output: graphBody, rewrittenCommand: rewritten };
+    return buildHandledSuccess(graphBody, rewritten, "graph");
   }
 
   if (!isSafe(rewritten)) {
@@ -179,10 +206,24 @@ export async function processCodexPreToolUse(
     };
   }
 
+  if (!config) {
+    return buildHandledFailure(
+      "Memoree storage is unavailable. Run `memoree doctor`.\n",
+      1,
+      rewritten,
+    );
+  }
+
   if (config) {
     const table = process.env["MEMOREE_TABLE"] ?? "memory";
     const sessionsTable = process.env["MEMOREE_SESSIONS_TABLE"] ?? "sessions";
-    const api = createApi(table, config);
+    let api: StorageBackend;
+    try {
+      api = createApi(table, config);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return buildHandledFailure(`Memoree storage is unavailable: ${message}\n`, 1, rewritten);
+    }
 
     const readVirtualPathContentsWithCache = async (
       cachePaths: string[],
@@ -223,14 +264,14 @@ export async function processCodexPreToolUse(
         logFn("docs vfs intercept: ls /docs");
         const r = await handleDocsVfs("", (sql) => api.query(sql), process.env["MEMOREE_DOCS_TABLE"] ?? config.docsTableName, { project: deriveProjectKey(input.cwd ?? process.cwd()).key, dialect: api.dialect });
         const body = r.kind === "ok" ? r.body : "(docs unavailable)";
-        return { action: "block", output: body, rewrittenCommand: rewritten };
+        return buildHandledSuccess(body, rewritten, "docs");
       }
 
       const compiled = await executeCompiledBashCommandFn(api, table, sessionsTable, rewritten, {
         readVirtualPathContentsFn: async (_api, _memoryTable, _sessionsTable, cachePaths) => readVirtualPathContentsWithCache(cachePaths),
       });
       if (compiled !== null) {
-        return { action: "block", output: compiled, rewrittenCommand: rewritten };
+        return buildHandledSuccess(compiled, rewritten, "bash");
       }
 
       let virtualPath: string | null = null;
@@ -291,8 +332,8 @@ export async function processCodexPreToolUse(
         const docsTable = process.env["MEMOREE_DOCS_TABLE"] ?? config.docsTableName;
         const sub = virtualPath === "/docs" ? "" : virtualPath.slice("/docs/".length);
         const r = await handleDocsVfs(sub, (sql) => api.query(sql), docsTable, { embedQuery: makeQueryEmbedder(), project: deriveProjectKey(input.cwd ?? process.cwd()).key, dialect: api.dialect });
-        const body = r.kind === "ok" ? r.body : `${virtualPath}: No such file or directory`;
-        return { action: "block", output: body, rewrittenCommand: rewritten };
+        if (r.kind === "ok") return buildHandledSuccess(r.body, rewritten, "docs");
+        return buildHandledFailure(`${virtualPath}: No such file or directory\n`, 1, rewritten);
       }
 
       if (virtualPath && !virtualPath.endsWith("/")) {
@@ -315,7 +356,7 @@ export async function processCodexPreToolUse(
             writeCachedIndexContentFn(input.session_id, content);
           }
           if (lineLimit === -1) {
-            return { action: "block", output: `${content.split("\n").length} ${virtualPath}`, rewrittenCommand: rewritten };
+            return buildHandledSuccess(`${content.split("\n").length} ${virtualPath}`, rewritten, "wc");
           }
           if (lineLimit > 0) {
             const lines = content.split("\n");
@@ -323,13 +364,13 @@ export async function processCodexPreToolUse(
               ? lines.slice(-lineLimit).join("\n")
               : lines.slice(0, lineLimit).join("\n");
           }
-          return { action: "block", output: content, rewrittenCommand: rewritten };
+          return buildHandledSuccess(content, rewritten, fromEnd ? "tail" : lineLimit > 0 ? "head" : "cat");
         }
         // Concrete file path with no VFS row → "not found", not an unsupported
         // command. Returning the generic guidance would mislead the model into
         // rewriting an already-valid `cat`/`head`/… shape.
         logFn(`virtual path not found: ${virtualPath}`);
-        return { action: "block", output: `${virtualPath}: No such file or directory`, rewrittenCommand: rewritten };
+        return buildHandledFailure(`${virtualPath}: No such file or directory\n`, 1, rewritten);
       }
 
       const lsMatch = rewritten.match(/^ls\s+(?:-[a-zA-Z]+\s+)*(\S+)?\s*$/);
@@ -366,14 +407,10 @@ export async function processCodexPreToolUse(
               lines.push(name + (info.isDir ? "/" : ""));
             }
           }
-          return { action: "block", output: lines.join("\n"), rewrittenCommand: rewritten };
+          return buildHandledSuccess(lines.join("\n"), rewritten, "ls");
         }
 
-        return {
-          action: "block",
-          output: `ls: cannot access '${dir}': No such file or directory`,
-          rewrittenCommand: rewritten,
-        };
+        return buildHandledFailure(`ls: cannot access '${dir}': No such file or directory\n`, 2, rewritten);
       }
 
       // Anchor to the exact shape the VFS serves (optionally piped to wc -l);
@@ -391,11 +428,7 @@ export async function processCodexPreToolUse(
         const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern);
         let result = paths.join("\n") || "";
         if (/\|\s*wc\s+-l\s*$/.test(rewritten)) result = String(paths.length);
-        return {
-          action: "block",
-          output: result || "(no matches)",
-          rewrittenCommand: rewritten,
-        };
+        return buildHandledSuccess(result || "(no matches)", rewritten, "find");
       }
 
       const grepParams = parseBashGrep(rewritten);
@@ -403,11 +436,12 @@ export async function processCodexPreToolUse(
         logFn(`direct grep: pattern=${grepParams.pattern} path=${grepParams.targetPath}`);
         const result = await handleGrepDirectFn(api, table, sessionsTable, grepParams);
         if (result !== null) {
-          return { action: "block", output: result, rewrittenCommand: rewritten };
+          return buildHandledSuccess(result, rewritten, "grep");
         }
       }
     } catch (e: any) {
       logFn(`direct query failed: ${e.message}`);
+      return buildHandledFailure(`Memoree command failed: ${e.message}\n`, 1, rewritten);
     }
   }
 
@@ -416,40 +450,23 @@ export async function processCodexPreToolUse(
   // We run it synchronously here so the output is available before returning the
   // decision; the write has already landed in the cloud `memory` table by then.
   //
-  // Action choice:
-  //   "allow" (exit 0 + updatedInput) — ONLY for write-redirect patterns
-  //     (echo/printf/tee … > /file). The VFS write already happened above, so we
-  //     rewrite the host command to a harmless echo: Codex reports success AND
-  //     never re-runs the original redirect against the on-disk mount (F3).
-  //   "block" (exit 2) — everything else (pipes, finds, reads) to prevent host
-  //     execution and inject the result/guidance via stderr.
-  // The write-redirect guard stays narrow: anchoring to echo/printf/tee keeps the
-  // rewrite to pure-output commands whose side effect is only the SQL write (a bare
-  // ">>" check would match mixed commands like `sort /etc/passwd > /vfs/out`).
-  // The redirect test is whitespace-agnostic — `echo foo>file` is as valid as
-  // `echo foo > file`; requiring spaces would misroute the no-space form to `block`
-  // and re-surface the F3 "write looks failed" symptom. `[^0-9&>]` before the `>`
-  // excludes fd redirects (`2>`, `&>`) so those still fall through to block.
+  // Every command that the sandbox handles is returned as action="allow" with
+  // a harmless replacement. Successful replacements print capped output;
+  // failed replacements reproduce stdout/stderr and exit nonzero. The original
+  // command never reaches the host. action="block" is reserved for commands
+  // rejected above by the security policy.
   const isWriteRedirect = /^\s*(echo|printf|tee)\b/.test(rewritten) && /(^|[^0-9&>])>>?/.test(rewritten);
   logFn(`unroutable memory command, falling back to VFS shell: ${rewritten}`);
   try {
     const proc = runVfsShellFn(rewritten);
-    if (proc.status === 0 || (proc.stdout && proc.stdout.trim())) {
-      const output = (proc.stdout?.trim() ?? "") || "(done)";
-      if (isWriteRedirect) {
-        // Rewrite the host command to echo the VFS result. POSIX single-quote
-        // escaping so arbitrary output can't break out of the quotes.
-        const replacementCommand = `printf '%s\\n' '${output.replace(/'/g, `'\\''`)}'`;
-        return { action: "allow", output, replacementCommand, rewrittenCommand: rewritten };
-      }
-      // Non-write command handled by the VFS shell: block so the host never runs
-      // it; the captured output is injected via stderr.
-      return { action: "block", output, rewrittenCommand: rewritten };
+    if (proc.status === 0) {
+      const output = (proc.stdout?.trim() ?? "") || (isWriteRedirect ? "(done)" : "");
+      return buildHandledSuccess(output, rewritten, isWriteRedirect ? "write" : "command");
     }
-    // Shell exited non-zero (bundle missing or command failed) — fall back to guidance.
-    return { action: "block", output: buildUnsupportedGuidance(), rewrittenCommand: rewritten };
-  } catch {
-    return { action: "block", output: buildUnsupportedGuidance(), rewrittenCommand: rewritten };
+    return buildHandledFailure(proc.stderr ?? "", proc.status, rewritten, proc.stdout ?? "");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return buildHandledFailure(`Memoree sandbox command failed: ${message}\n`, 1, rewritten);
   }
 }
 
@@ -468,7 +485,7 @@ async function main(): Promise<void> {
   if (decision.action === "allow") {
     // Codex >= 0.136 honors a PreToolUse `permissionDecision: "allow"` with
     // `updatedInput.command` and runs the rewritten command instead of the
-    // original. The VFS write already happened in processCodexPreToolUse.
+    // original. The VFS operation already happened in processCodexPreToolUse.
     process.stdout.write(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",

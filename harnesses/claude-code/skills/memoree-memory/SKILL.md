@@ -21,7 +21,7 @@ You have TWO memory sources. ALWAYS check BOTH when the user asks you to recall,
 │   └── session-xyz.md
 └── sessions/
     └── username/
-        ├── user_org_ws_slug1.jsonl   ← raw session data
+        ├── user_org_ws_slug1.jsonl   ← rendered transcript view
         └── user_org_ws_slug2.jsonl
 ```
 
@@ -29,10 +29,10 @@ You have TWO memory sources. ALWAYS check BOTH when the user asks you to recall,
 
 1. **First**: Read `~/.memoree/memory/index.md` — quick scan of all sessions with dates, projects, descriptions
 2. **If you need details**: Read the specific summary at `~/.memoree/memory/summaries/<session>.md`
-3. **If you need raw data**: Read the session JSONL at `~/.memoree/memory/sessions/<user>/<file>.jsonl`
+3. **If you need transcript detail**: Read the rendered session view at `~/.memoree/memory/sessions/<user>/<file>.jsonl`
 4. **Keyword search**: `Grep pattern="keyword" path="~/.memoree/memory"`
 
-Do NOT jump straight to reading raw JSONL files. Always start with index.md and summaries.
+Do NOT jump straight to rendered transcript views. Always start with index.md and summaries.
 
 ## Diagnostics
 
@@ -75,9 +75,9 @@ Enabled by default and persisted in `~/.memoree/config.json`.
 - `memoree embeddings uninstall [--prune]` — remove agent symlinks + disable; --prune wipes deps too
 - `memoree embeddings status` — show config + deps + per-agent link state
 
-## Important: Bash Only
+## Sandboxed commands
 
-Only use bash commands (cat, ls, grep, echo, jq, head, tail, sed, awk, etc.) to interact with `~/.memoree/memory/`. Do NOT use python, python3, node, curl, or other interpreters — they are not available in the memory filesystem. If a task seems to require Python, rewrite it using bash tools (e.g., `cat file.json | jq 'keys | length'`).
+Supported sandboxed commands: cat, ls, grep, head, tail, wc, find, jq, echo, printf, tee. Reading and searching use cat, ls, grep, head, tail, wc, and find; writing is limited to echo, printf, and tee with narrowly validated redirects. Use jq only for content known to be JSON; rendered session files ending in .jsonl are human-readable transcript views and are not guaranteed JSON. sed and awk are unavailable because their scripting features expand the security surface. Interpreters, network clients, command substitution, and command-executing find options such as -exec are denied.
 
 ## Limits
 

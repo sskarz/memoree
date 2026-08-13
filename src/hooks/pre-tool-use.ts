@@ -33,6 +33,8 @@ import {
 } from "./query-cache.js";
 import { isSafe, touchesMemory, rewritePaths, bashTouchesMemory } from "./memory-path-utils.js";
 import { capOutputForClaude } from "../utils/output-cap.js";
+import { MEMORY_COMMAND_GUIDANCE } from "./shared/memory-command-contract.js";
+import { safeStdoutReplacement } from "./shared/shell-replacement.js";
 import { ensureSessionOwner } from "./summary-state.js";
 
 export { isSafe, touchesMemory, rewritePaths };
@@ -110,12 +112,9 @@ export function buildDenyDecision(reason: string, description: string): ClaudePr
   return { command: "", description, deny: reason };
 }
 
-const MEMORY_RETRY_GUIDANCE =
+export const MEMORY_RETRY_GUIDANCE =
   "[RETRY REQUIRED] The command you tried is not available for ~/.memoree/memory/. " +
-  "This virtual filesystem only supports bash builtins: cat, ls, grep, echo, jq, head, tail, wc, sort, find, etc. " +
-  "python, python3, node, and curl are NOT available. " +
-  "You MUST rewrite your command using only the bash tools listed above and try again. " +
-  "For example, to parse JSON use: cat file.json | jq '.key'. To count keys: cat file.json | jq 'keys | length'.";
+  MEMORY_COMMAND_GUIDANCE + " Rewrite the command using that sandboxed command set and retry.";
 
 // Send an unserviceable memory request back to the agent as retry guidance,
 // shaped per tool so the original never reaches the host shell.
@@ -128,11 +127,11 @@ const MEMORY_RETRY_GUIDANCE =
 //     still tells the agent how to retry via Bash.
 function buildRetryGuidanceDecision(toolName: string): ClaudePreToolDecision {
   if (toolName === "Read") {
-    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use Bash builtins");
+    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use sandboxed commands");
   }
   return buildAllowDecision(
     `echo ${JSON.stringify(MEMORY_RETRY_GUIDANCE)}`,
-    "[Memoree] unsupported command — rewrite using bash builtins",
+    "[Memoree] unsupported command — rewrite using sandboxed commands",
   );
 }
 
@@ -222,8 +221,7 @@ export function buildAllowDecision(command: string, description: string): Claude
  * not the format).
  */
 export function safeEchoCommand(body: string): string {
-  const escaped = body.replace(/'/g, `'\\''`);
-  return `printf '%s\\n' '${escaped}'`;
+  return safeStdoutReplacement(body);
 }
 
 export function extractGrepParams(
@@ -626,7 +624,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   logFn(`unroutable memory command, falling back to shell: ${shellCmd}`);
   // Read needs file_path, not a command-shaped decision.
   if (input.tool_name === "Read") {
-    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use Bash builtins");
+    return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use sandboxed commands");
   }
   // Single-quote both arguments so $(), backticks, and variable expansion
   // cannot escape into the host shell before memoree-shell.js receives them.

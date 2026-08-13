@@ -83,6 +83,8 @@ export default defineConfig({
         "src/commands/backend.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/commands/doctor.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/cli/install-claude.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/hooks/shared/memory-command-contract.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/hooks/shared/shell-replacement.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/embeddings/client.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/embeddings/nomic.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/embeddings/protocol.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

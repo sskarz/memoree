@@ -261,7 +261,7 @@ describe("processPreToolUse: non-memory / no-op paths", () => {
       { config: BASE_CONFIG as any, logFn: vi.fn() },
     );
     expect(d?.command).toContain("[RETRY REQUIRED]");
-    expect(d?.command).toContain("bash builtins");
+    expect(d?.command).toContain("sandboxed commands");
   });
 
   it("denies (shape-safe) an unserviceable Read instead of returning a command-shaped decision", async () => {

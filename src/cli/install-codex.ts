@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { HOME, pkgRoot, ensureDir, copyDir, writeJson, writeJsonIfChanged, symlinkForce, writeVersionStamp, log, warn } from "./util.js";
 import { getVersion } from "./version.js";
 import { upsertMarkedBlock, stripMarkedBlock, MEMOREE_BLOCK_START, MEMOREE_BLOCK_END } from "./agents-md.js";
+import { MEMORY_COMMAND_GUIDANCE } from "../hooks/shared/memory-command-contract.js";
 
 const CODEX_HOME = join(HOME, ".codex");
 const PLUGIN_DIR = join(CODEX_HOME, "memoree");
@@ -17,17 +18,17 @@ const SKILL_LINK = join(AGENTS_SKILLS_DIR, "memoree-memory");
 // goals before starting work, without clobbering the TUI. We own only the
 // marker-fenced block; the user's own AGENTS.md content is preserved.
 const AGENTS_MD = join(CODEX_HOME, "AGENTS.md");
-const CODEX_AGENTS_BLOCK = `${MEMOREE_BLOCK_START}
+export const CODEX_AGENTS_BLOCK = `${MEMOREE_BLOCK_START}
 ## Memoree Memory
 
 You have global team memory at \`~/.memoree/memory/\`, shared across all sessions, users, and agents in your org. Proactively consult it before starting a task — and whenever the user asks you to recall, look up, or remember anything:
 
 - Team rules: \`memoree rules list\`
 - Your open goals: \`memoree goal list --mine\`
-- Past sessions: start at \`~/.memoree/memory/index.md\`, then read \`~/.memoree/memory/summaries/<user>/<session>.md\`; only fall back to raw \`~/.memoree/memory/sessions/<user>/*.jsonl\` when a summary lacks the detail.
+- Past sessions: start at \`~/.memoree/memory/index.md\`, then read \`~/.memoree/memory/summaries/<user>/<session>.md\`; only fall back to rendered transcript views under \`~/.memoree/memory/sessions/<user>/\` when a summary lacks the detail.
 - Keyword search: \`grep -ri "keyword" ~/.memoree/memory/summaries/\` (use \`grep\`, NOT \`rg\`/ripgrep — it may not be installed).
 
-Use only bash builtins (cat, ls, grep, jq, head, tail, sed, awk, wc, sort, find) to read this filesystem — rg/ripgrep, node, python, curl are not available there. Do not spawn subagents to read memory.
+${MEMORY_COMMAND_GUIDANCE} Do not spawn subagents to read memory.
 ${MEMOREE_BLOCK_END}`;
 
 function hookCmd(bundleFile: string, timeout: number, matcher?: string): Record<string, unknown> {
