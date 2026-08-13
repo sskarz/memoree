@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
   isolatedCounts,
   lexicalValidationPrompt,
@@ -129,5 +130,40 @@ describe("runtime validation lexical marker", () => {
     const identifier = "3b4aa504-2da6-4ad1-995b-293f1254d6c3";
     expect(redactSecrets(`Repeat this exact lexical fallback token: memoree-lexical-${identifier}`))
       .not.toContain(identifier);
+  });
+});
+
+describe("runtime validation agent responses", () => {
+  const identifier = "a912d384-5605-43ab-bae7-e34b50e6f81a";
+
+  it("accepts model paraphrasing and capitalization around the stable identifier", () => {
+    expect(() => assertAgentResponseContainsIdentifier(
+      `The Observatory Lantern's identifier is ${identifier}.`,
+      identifier,
+      "Claude Code capture turn",
+    )).not.toThrow();
+  });
+
+  it("reports the phase, identifier, and response excerpt when the identifier is absent", () => {
+    expect(() => assertAgentResponseContainsIdentifier(
+      "I cannot find that item.",
+      identifier,
+      "Codex semantic recall",
+    )).toThrow(
+      `Codex semantic recall did not return validation identifier ${identifier}; ` +
+      'response="I cannot find that item."',
+    );
+  });
+
+  it("reports an empty agent response explicitly", () => {
+    expect(() => assertAgentResponseContainsIdentifier("\n", identifier, "Claude Code capture turn"))
+      .toThrow(/response=<empty>/);
+  });
+
+  it("routes every live response through the shared assertion without stale variable names", () => {
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    expect(source).not.toContain("lexicalToken");
+    expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
+    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(5);
   });
 });

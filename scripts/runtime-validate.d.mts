@@ -15,6 +15,11 @@ export function authenticatedClaudeEnvironment(
   home: string,
   configDir?: string,
 ): NodeJS.ProcessEnv;
+export function assertAgentResponseContainsIdentifier(
+  response: string,
+  identifier: string,
+  phase: string,
+): void;
 export function lexicalValidationPrompt(identifier: string): string;
 export function isolatedCounts(databasePath: string, text: string): IsolatedCounts;
 export function waitForCapture(

@@ -26,10 +26,11 @@ function run(command, args, options = {}) {
       timeout: options.timeout ?? 240_000,
     });
   } catch (cause) {
-    const stdout = typeof cause?.stdout === "string" ? cause.stdout.trim() : "";
-    const stderr = typeof cause?.stderr === "string" ? cause.stderr.trim() : "";
+    const error = /** @type {Error & { stdout?: unknown; stderr?: unknown }} */ (cause);
+    const stdout = typeof error.stdout === "string" ? error.stdout.trim() : "";
+    const stderr = typeof error.stderr === "string" ? error.stderr.trim() : "";
     const details = [stdout && `stdout:\n${stdout}`, stderr && `stderr:\n${stderr}`].filter(Boolean).join("\n");
-    throw new Error(details ? `${cause.message}\n${details}` : cause.message, { cause });
+    throw new Error(details ? `${error.message}\n${details}` : error.message, { cause: error });
   }
 }
 
@@ -64,6 +65,15 @@ export function lexicalValidationPrompt(identifier) {
   return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
 }
 
+export function assertAgentResponseContainsIdentifier(response, identifier, phase) {
+  if (response.includes(identifier)) return;
+  const trimmed = response.trim();
+  const excerpt = trimmed ? JSON.stringify(trimmed.slice(0, 800)) : "<empty>";
+  throw new Error(
+    `${phase} did not return validation identifier ${identifier}; response=${excerpt}`,
+  );
+}
+
 function vectorLength(value) {
   if (Array.isArray(value)) return value.length;
   if (typeof value !== "string") return 0;
@@ -83,20 +93,20 @@ export function isolatedCounts(databasePath, text) {
   try {
     const sessionsExists = db.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
-    ).get();
+    ).get() !== undefined;
     const memoryExists = db.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory'",
-    ).get();
+    ).get() !== undefined;
     const matchingEvents = sessionsExists
-      ? Number(db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE CAST(message AS TEXT) LIKE ?").get(`%${text}%`).count)
+      ? Number(db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE CAST(message AS TEXT) LIKE ?").get(`%${text}%`)?.count ?? 0)
       : 0;
     const summaries = memoryExists
-      ? Number(db.prepare("SELECT COUNT(*) AS count FROM memory WHERE path LIKE '/summaries/%'").get().count)
+      ? Number(db.prepare("SELECT COUNT(*) AS count FROM memory WHERE path LIKE '/summaries/%'").get()?.count ?? 0)
       : 0;
     const matchingSummaries = memoryExists
       ? Number(db.prepare(
         "SELECT COUNT(*) AS count FROM memory WHERE path LIKE '/summaries/%' AND CAST(summary AS TEXT) LIKE ?",
-      ).get(`%${text}%`).count)
+      ).get(`%${text}%`)?.count ?? 0)
       : 0;
     return { matchingEvents, summaries, matchingSummaries };
   } finally {
@@ -157,12 +167,12 @@ async function captureUntilEmbedded(bundlePath, input, options, databasePath) {
 function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier) {
   const db = new DatabaseSync(databasePath, { readOnly: true });
   try {
-    const integrity = db.prepare("PRAGMA integrity_check").get();
-    const journal = db.prepare("PRAGMA journal_mode").get();
+    const integrity = db.prepare("PRAGMA integrity_check").get()?.integrity_check;
+    const journal = db.prepare("PRAGMA journal_mode").get()?.journal_mode;
     const events = db.prepare("SELECT message, message_embedding FROM sessions ORDER BY creation_date").all();
     const summaries = db.prepare("SELECT summary, summary_embedding FROM memory WHERE path LIKE '/summaries/%'").all();
-    assert(String(integrity.integrity_check).toLowerCase() === "ok", "SQLite integrity_check failed");
-    assert(String(journal.journal_mode).toLowerCase() === "wal", "SQLite is not in WAL mode");
+    assert(String(integrity).toLowerCase() === "ok", "SQLite integrity_check failed");
+    assert(String(journal).toLowerCase() === "wal", "SQLite is not in WAL mode");
     assert(events.length > 0, "No runtime validation events were captured");
     assert(summaries.length > 0, "No runtime validation summaries were generated");
     const eventText = events.map(row => row.message).join("\n");
@@ -272,7 +282,11 @@ export async function validateRuntime() {
       "--no-session-persistence",
       "--session-id", claudeSession,
     ], { cwd: repository, env: claudeEnv });
-    assert(claudeResponse.includes(semanticFact), "Claude Code did not return the semantic validation fact");
+    assertAgentResponseContainsIdentifier(
+      claudeResponse,
+      semanticIdentifier,
+      "Claude Code capture turn",
+    );
 
     const claudeHookOptions = { cwd: repository, env };
     runHook(join(claudeBundle, "capture.js"), {
@@ -309,9 +323,10 @@ export async function validateRuntime() {
       "-s", "read-only",
       "Recall the unusual observatory object and its exact identifier from Memoree. Answer with only that fact.",
     ], { cwd: repository, env: recallEnv });
-    assert(
-      semanticRecall.includes(semanticIdentifier),
-      "Codex did not semantically recall the Claude Code fact identifier",
+    assertAgentResponseContainsIdentifier(
+      semanticRecall,
+      semanticIdentifier,
+      "Codex semantic recall",
     );
 
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
@@ -329,7 +344,11 @@ export async function validateRuntime() {
       "-s", "read-only",
       codexPrompt,
     ], { cwd: repository, env: lexicalEnv });
-    assert(codexResponse.includes(lexicalToken), "Codex did not return the lexical validation token");
+    assertAgentResponseContainsIdentifier(
+      codexResponse,
+      lexicalIdentifier,
+      "Codex capture turn",
+    );
     const codexHookOptions = { cwd: repository, env: lexicalEnv };
     runHook(join(codexBundle, "capture.js"), {
       session_id: codexSession,
@@ -366,9 +385,10 @@ export async function validateRuntime() {
         realClaudeConfigDir,
       ),
     });
-    assert(
-      lexicalRecall.includes(lexicalIdentifier),
-      "Claude Code lexical fallback recall failed with embeddings disabled",
+    assertAgentResponseContainsIdentifier(
+      lexicalRecall,
+      lexicalIdentifier,
+      "Claude Code lexical fallback recall",
     );
 
     const counts = inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier);
