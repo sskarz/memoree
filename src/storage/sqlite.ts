@@ -78,7 +78,10 @@ export class SqliteBackend extends SqlStorageBackend {
       await this.runBusy(() => db["exec"]("PRAGMA journal_mode=WAL"));
       await this.runBusy(() => db["exec"]("PRAGMA foreign_keys=ON"));
       await this.runBusy(() => db["exec"]("PRAGMA synchronous=NORMAL"));
-      db.function("ARRAY_LENGTH", (raw: unknown) => {
+      // PostgreSQL spells this ARRAY_LENGTH(vector, dimension). Register a
+      // variadic compatibility function so SQLite accepts the same two-arg
+      // queries (and remains tolerant of older one-arg callers).
+      db.function("ARRAY_LENGTH", { deterministic: true, varargs: true }, (raw: unknown) => {
         const parsed = parseJson(raw);
         return Array.isArray(parsed) ? parsed.length : null;
       });

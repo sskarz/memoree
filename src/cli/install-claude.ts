@@ -7,6 +7,12 @@ const PLUGIN_KEY = "memoree@memoree";
 
 interface ClaudeResult { ok: boolean; stdout: string; stderr: string }
 
+function isAlreadyEnabled(result: ClaudeResult): boolean {
+  return /plugin\s+["']?memoree@memoree["']?\s+is already enabled\b/i.test(
+    `${result.stdout}\n${result.stderr}`,
+  );
+}
+
 function runClaude(args: string[]): ClaudeResult {
   try {
     const stdout = execFileSync("claude", args, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
@@ -41,7 +47,9 @@ export function installClaude(): void {
     if (!result.ok) throw new Error(`Failed to install Memoree plugin: ${result.stderr.slice(0, 200)}`);
   }
   const enabled = runClaude(["plugin", "enable", PLUGIN_KEY, "--scope", "user"]);
-  if (!enabled.ok) throw new Error(`Failed to enable Memoree plugin: ${enabled.stderr.slice(0, 200)}`);
+  if (!enabled.ok && !isAlreadyEnabled(enabled)) {
+    throw new Error(`Failed to enable Memoree plugin: ${enabled.stderr.slice(0, 200)}`);
+  }
   log(`  Claude Code    enabled ${PLUGIN_KEY} from ${source}`);
 }
 

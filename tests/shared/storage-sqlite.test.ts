@@ -60,6 +60,15 @@ describe("SQLite storage contract", () => {
     await backend.close();
   });
 
+  it("supports PostgreSQL-compatible two-argument ARRAY_LENGTH", async () => {
+    const backend = new SqliteBackend(path, "memory", names);
+    expect(await backend.query(
+      "SELECT ARRAY_LENGTH($1, 1) AS dims, ARRAY_LENGTH($2, 1) AS missing",
+      [[0.1, 0.2, 0.3], null],
+    )).toEqual([{ dims: 3, missing: null }]);
+    await backend.close();
+  });
+
   it("commits successful transactions and rolls back failures", async () => {
     const backend = new SqliteBackend(path, "memory", names);
     await backend.ensureTable();

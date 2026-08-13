@@ -9,6 +9,7 @@
  * `ARRAY_LENGTH(content_embedding,1) > 0`). NEVER blocks or fails a doc write.
  */
 
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EmbedClient } from "../embeddings/client.js";
@@ -17,8 +18,12 @@ import { embeddingsDisabled } from "../embeddings/disable.js";
 /** A best-effort text → vector function; returns null when unavailable. */
 export type DocEmbedder = (text: string) => Promise<number[] | null>;
 
-function resolveEmbedDaemonPath(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
+function embedClient(): EmbedClient {
+  const bundled = join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
+  // Agent harnesses ship a daemon beside their bundle. The standalone CLI
+  // does not, so omitting the explicit path lets EmbedClient select the
+  // canonical ~/.memoree/embed-deps/embed-daemon.js installed at onboarding.
+  return new EmbedClient(existsSync(bundled) ? { daemonEntry: bundled } : {});
 }
 
 /**
@@ -28,10 +33,20 @@ function resolveEmbedDaemonPath(): string {
  */
 export function makeDocEmbedder(): DocEmbedder {
   if (embeddingsDisabled()) return async () => null;
-  const client = new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() });
+  const client = embedClient();
+  let warmup: Promise<boolean> | null = null;
   return async (text: string) => {
     try {
-      return await client.embed(text, "document");
+      // Document generation/backfill is a batch path, so wait for a cold
+      // daemon instead of accepting EmbedClient's hot-hook behavior (return
+      // null while spawning in the background). Share one warmup across the
+      // whole batch and retry once if startup was still settling.
+      warmup ??= client.warmup();
+      await warmup;
+      let vector = await client.embed(text, "document");
+      if (vector && vector.length > 0) return vector;
+      vector = await client.embed(text, "document");
+      return vector && vector.length > 0 ? vector : null;
     } catch {
       return null;
     }
@@ -45,7 +60,7 @@ export function makeDocEmbedder(): DocEmbedder {
  */
 export function makeQueryEmbedder(): DocEmbedder {
   if (embeddingsDisabled()) return async () => null;
-  const client = new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() });
+  const client = embedClient();
   return async (text: string) => {
     try {
       return await client.embed(text, "query");

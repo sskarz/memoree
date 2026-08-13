@@ -47,6 +47,23 @@ describe("local Claude Code installation", () => {
     ]);
   });
 
+  it("treats Claude's already-enabled response as idempotent success", () => {
+    execFileSyncMock.mockImplementation((_bin: string, args: string[]) => {
+      const command = args.join(" ");
+      if (args[0] === "--version") return "ok";
+      if (command === "plugin marketplace list") return "memoree local";
+      if (command === "plugin list") return "memoree@memoree enabled";
+      if (command === "plugin enable memoree@memoree --scope user") {
+        throw Object.assign(new Error("failed"), {
+          stderr: 'Failed to enable plugin "memoree@memoree": Plugin "memoree@memoree" is already enabled at user scope',
+        });
+      }
+      return "ok";
+    });
+
+    expect(() => installClaude()).not.toThrow();
+  });
+
   it("fails with recovery guidance when Claude Code is absent", () => {
     execFileSyncMock.mockImplementation(() => { throw new Error("ENOENT"); });
     expect(() => installClaude()).toThrow(/Claude Code CLI/);
