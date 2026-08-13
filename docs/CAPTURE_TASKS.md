@@ -91,7 +91,7 @@ No new injection surface: capture writes to the goals table; goals already rende
 **v1 (shipped) — explicit Save↔Resume context-transfer**
 - **Save:** on "save this for later", the agent writes a goal whose body is a resumable *context package* (`<label>` + `Start here / Files / Branch / Run / Why`) via `memoree goal add --agent capture "<package>"`. `agent:"capture"` keeps parked side-tasks separable from hand-made goals.
 - **Resume:** on "let's work on that task", the agent finds the goal, pulls the full body with `memoree goal get <goal_id>`, flips it to `in_progress`, and continues from `Start here:` — automatic context transfer, no re-explaining.
-- Implemented in the `memoree-goals` skill (claude-code / codex / hermes / openclaw copies) + `src/commands/goal.ts` (`--agent` flag, `goal get`). Reuses the existing goals primitive — no separate task store, no new table.
+- Implemented in the Claude Code and Codex `memoree-goals` skills plus `src/commands/goal.ts` (`--agent` flag, `goal get`). Reuses the existing goals primitive — no separate task store, no new table.
 
 **Later (the auto-detection design above)**
 - Stop-hook → LLM gate → dedup → confirm → write, to catch tangents the user *forgets* to park. Gated behind proving demand for explicit capture first.

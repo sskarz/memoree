@@ -82,11 +82,11 @@ Cross-project caveat: same `(name, author)` from two different projects collides
 
 ## Auto-pull at SessionStart
 
-Every supported agent (Claude Code, Codex, Cursor, Hermes, pi) auto-runs the equivalent of `memoree skillify pull --all-users --to global` at the start of every session, so teammate-mined skills become available without anyone having to remember to run pull manually.
+Claude Code and Codex auto-run the equivalent of `memoree skillify pull --all-users --to global` at the start of every session, so teammate-mined skills become available without a manual pull.
 
 There is no throttle window. File writes inside `runPull` are idempotent (skipped when the local SKILL.md version is at-or-newer than remote), symlink fan-out is `lstat`-checked, and manifest writes are dedup'd — so the per-call cost is one SQL round-trip plus a handful of `existsSync` syscalls when nothing has changed. Bounded by a 5-second timeout so a slow Memoree never blocks SessionStart. All failures (network, missing table, auth) are swallowed silently and the session starts regardless.
 
-The pull writes canonically to `~/.claude/skills/<name>--<author>/SKILL.md` and fans out symlinks into every detected non-Claude agent skill root (`~/.agents/skills/`, `~/.hermes/skills/`, `~/.pi/agent/skills/`) so Codex / Hermes / pi discover the same skill without an extra copy on disk. Symlink targets are recorded per-entry in the manifest, so `unpull` reverses the fan-out without rescanning the filesystem.
+The pull writes canonically to `~/.claude/skills/<name>--<author>/SKILL.md` and fans out a symlink to Codex's `~/.agents/skills/` root when Codex is installed. Symlink targets are recorded per entry so `unpull` reverses the fan-out without rescanning the filesystem.
 
 | Env var                            | Default | Effect                                  |
 |------------------------------------|---------|-----------------------------------------|
@@ -99,22 +99,15 @@ The pull writes canonically to `~/.claude/skills/<name>--<author>/SKILL.md` and 
 | `MEMOREE_SKILLIFY_EVERY_N_TURNS`     | `20`    | Stop-counter threshold for mid-session worker fires     |
 | `MEMOREE_SKILLS_TABLE`              | `skills`| Memoree table name for org-wide provenance             |
 | `MEMOREE_SKILLIFY_WORKER=1`          | unset   | Recursion guard (set automatically inside the worker)   |
-| `MEMOREE_CURSOR_MODEL`              | `auto`  | (cursor only) model passed to the cursor-agent gate call |
-| `MEMOREE_HERMES_PROVIDER`           | `openrouter` | (hermes only) provider passed to the hermes gate call |
-| `MEMOREE_HERMES_MODEL`              | `anthropic/claude-haiku-4-5` | (hermes only) model passed to hermes |
 
 ## Per-agent gate CLI
 
-The skillify worker calls each agent's own headless CLI for the gate prompt — so a user who only has codex / cursor / hermes installed never needs `claude` in their PATH:
+The skillify worker calls the active supported agent's own headless CLI for the gate prompt, so a Codex-only user does not need `claude` on `PATH`:
 
 | Agent       | Gate command                                                                          |
 |-------------|----------------------------------------------------------------------------------------|
 | claude_code | `claude -p <prompt> --no-session-persistence --model haiku --permission-mode bypassPermissions` |
 | codex       | `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`                       |
-| cursor      | `cursor-agent --print --model <MEMOREE_CURSOR_MODEL> --force --output-format text <prompt>` |
-| hermes      | `hermes -z <prompt> --provider <MEMOREE_HERMES_PROVIDER> -m <MEMOREE_HERMES_MODEL> --yolo --ignore-user-config` |
-
-For hermes via OpenRouter (the default), set `OPENROUTER_API_KEY` in the environment; the worker inherits the parent process env. Other providers (anthropic, openai, etc.) need their respective API keys.
 
 ## Logs
 

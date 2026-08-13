@@ -40,22 +40,18 @@ summaries, and session records without introducing another source of truth.
 |---|---|---|
 | Claude Code | Local marketplace plugin | Session start, capture, recall, stop, session end |
 | Codex | Explicit `memoree codex install` | Session start, capture, recall, stop |
-| Cursor | Explicit `memoree cursor install` | Session start, prompt/tool capture, stop, session end |
-| Hermes | Explicit `memoree hermes install` | Hooks, skill, and MCP |
-| OpenClaw | Explicit `memoree claw install` | Native extension and contracted tools |
-| pi | Explicit `memoree pi install` | Extension, recall, capture, summary worker |
 
-Default onboarding installs Claude Code only. Other integrations, graph setup,
+Default onboarding installs Claude Code only. Codex installation, graph setup,
 documentation ingestion, history backfill, and skill mining remain explicit.
 
 ## Repository layout
 
 ```text
 src/                    TypeScript core, CLI, hooks, storage, retrieval
-harnesses/              Per-agent manifests, skills, and packaged bundles
+harnesses/              Claude Code and Codex manifests, skills, and bundles
 embeddings/             Standalone local embedding daemon entry
 docs/                   User and architecture documentation
-scripts/                Build, packaging, audit, and verification utilities
+scripts/                Build, runtime-management, and verification utilities
 tests/                   Runtime-specific and shared Vitest coverage
 library/                 Archived QA and requirements records
 bundle/                  Generated `memoree` executable bundle

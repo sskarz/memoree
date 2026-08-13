@@ -1,10 +1,14 @@
 # Memoree
 
-Memoree is local-first memory for coding agents. A default installation uses SQLite at `~/.memoree/memoree.sqlite3`, runs embeddings locally, and installs the Claude Code plugin from the checkout. It requires no account, browser flow, or hosted service.
+Memoree gives Claude Code and Codex persistent, local-first memory. SQLite,
+configuration, graphs, model files, and captured sessions stay under
+`~/.memoree`; local embeddings are enabled by default and require no Memoree
+account or hosted service.
 
-## Install for Claude Code
+## Install from source
 
-Requirements: Node.js 22.13 or newer, Git, and the `claude` command on `PATH`.
+Requirements: Git, Node.js 22.13 or newer, and an authenticated Claude Code or
+Codex CLI.
 
 ```sh
 git clone https://github.com/sskarz/memoree.git
@@ -13,24 +17,94 @@ npm ci
 npm run build
 npm link
 memoree install
+memoree codex install  # when using Codex
 memoree doctor
 ```
 
-`memoree install` is idempotent. It creates `~/.memoree/config.json`, initializes the SQLite schema, installs the local embedding runtime and model, registers this checkout as a Claude Code marketplace, and enables `memoree@memoree` at user scope. Restart Claude Code after installation.
+`memoree install` initializes SQLite and local embeddings, then installs the
+Claude Code plugin. `memoree codex install` adds the Codex hooks and skill. Both
+installers are idempotent and preserve unrelated user configuration. Restart
+the affected agent after installation.
 
-To avoid the model download and use lexical retrieval only:
+For lexical-only retrieval, use `memoree install --no-embeddings`.
+
+## Development and stable runtime
+
+Memoree uses three deliberately separate locations:
+
+| Location | Purpose |
+|---|---|
+| development checkout | edit code and run source tests |
+| `~/.local/share/memoree-runtime` | detached, committed revision loaded globally by Claude Code and Codex |
+| `~/.memoree` | durable user database, configuration, graphs, models, and logs |
+
+Never globally link or register the development checkout. Initialize the
+stable runtime only after closing every Claude Code and Codex session:
 
 ```sh
-memoree install --no-embeddings
+npm run verify
+npm run runtime:init -- HEAD
 ```
 
-## What stays local
+The runtime command resolves `HEAD` (or another supplied Git ref) to an
+immutable commit, creates the detached worktree, installs dependencies and
+builds inside it, globally links Memoree from it, points the Claude marketplace
+at it, installs the Codex hooks from it, and runs `memoree doctor`. Existing
+`~/.memoree` state is not moved or replaced.
 
-Memoree captures agent session events, summaries, memories, goals and KPIs, shared rules, generated skills, documents, and codebase graph snapshots. SQLite state, embedding dependencies, model cache, daemon state, and logs live under `~/.memoree`.
+Claude Code and Codex load Memoree globally. The runtime checkout chooses which
+Memoree revision is installed; it does not limit Memoree to projects inside
+that checkout.
 
-Embeddings use the bundled local runtime; no memory content is sent to an embedding service. Session synthesis continues to invoke the installed Claude Code CLI, so its normal provider and privacy settings still apply. Memoree itself does not authenticate to or contact a hosted Memoree service.
+## Promote, validate, and roll back
 
-Existing data in older product directories is ignored. Installation is a fresh start: it does not scan, import, modify, or migrate prior configuration or databases.
+Promote only a committed revision and only with explicit user authorization
+after all agent sessions are closed:
+
+```sh
+git status --short
+npm run verify
+npm run runtime:promote -- <git-ref>
+```
+
+Promotion refuses a dirty runtime checkout or active Claude/Codex processes.
+It records the prior SHA under `~/.local/state/memoree/runtime.json` and
+automatically restores that revision if checkout, build, installation, or
+doctor fails. It never terminates an agent process.
+
+Run the authenticated cross-agent smoke test with no interactive sessions
+open:
+
+```sh
+npm run runtime:validate
+```
+
+Validation creates a disposable Git repository and isolated SQLite/config/
+memory paths, checks Claude-to-Codex semantic recall, lexical fallback with
+embeddings disabled, SQLite integrity and WAL mode, captured events and
+summaries, and 768-element embeddings. It removes the disposable state even on
+failure; synthetic records never use the real database.
+
+Restore the previously recorded revision with:
+
+```sh
+npm run runtime:rollback
+```
+
+Rollback applies the same clean-worktree, closed-session, build, installation,
+and doctor checks as promotion.
+
+## Update
+
+Update the development checkout, verify it, commit any local work, and promote
+the desired commit:
+
+```sh
+git pull --ff-only
+npm ci
+npm run verify
+npm run runtime:promote -- origin/main
+```
 
 ## Everyday commands
 
@@ -45,26 +119,15 @@ memoree graph build
 memoree embeddings status
 ```
 
-History backfill, documentation ingestion, graph initialization, and skill mining are explicit operations; onboarding does not run them automatically. Run `memoree --help` and the relevant subcommand help for details.
-
-## Other agents
-
-Claude Code is the focused default. Target another integration explicitly:
-
-```sh
-memoree codex install
-memoree cursor install
-memoree hermes install
-memoree pi install
-memoree claw install
-memoree install --all
-```
-
-`--all` installs every detected integration. It is never implied by the default install.
+History backfill, documentation ingestion, graph construction, and skill mining
+are explicit operations; installation does not scan or import old agent
+history.
 
 ## PostgreSQL (advanced)
 
-PostgreSQL is an opt-in backend for shared or managed databases. The connection string is read only from the environment and is never written to config, printed, or included in worker handoffs.
+SQLite is the credential-free default. PostgreSQL remains an opt-in backend for
+shared deployments; its URL is read only from the environment and is never
+persisted or printed.
 
 ```sh
 export MEMOREE_POSTGRES_URL='postgresql://user:password@host/database'
@@ -72,48 +135,30 @@ memoree backend use postgres --schema memoree
 memoree backend check
 ```
 
-Return to the default local database with:
+Return to local SQLite with `memoree backend use sqlite`.
 
-```sh
-memoree backend use sqlite
-```
-
-Repository-specific non-secret routing can be placed in `.memoree` or `.memoree.local` using `repositoryKey` and `collect`. `.memoree.local` should remain untracked.
-
-## Troubleshooting
-
-Run `memoree doctor` first. It checks the selected database, required schema, embedding installation, Claude Code executable, plugin registration, and hook bundles.
-
-- Database failure: verify permissions under `~/.memoree`, or check `MEMOREE_POSTGRES_URL` when PostgreSQL is selected.
-- Embedding failure: run `memoree embeddings install`; use `--no-embeddings` if lexical-only retrieval is acceptable.
-- Plugin failure: confirm `claude --version`, rebuild with `npm run build`, then rerun `memoree install`.
-- Hook changes not visible: restart Claude Code.
-
-## Remove
+## Remove integrations
 
 ```sh
 memoree uninstall
-memoree embeddings uninstall --prune
+memoree codex uninstall
 ```
 
-Uninstalling the plugin does not delete memory. If you also want to remove local state, delete the specific `~/.memoree` directory yourself after making any desired backup. Older product directories remain untouched.
+Uninstalling integrations does not delete `~/.memoree`. Remove that specific
+directory yourself only after making any desired backup.
 
-## Development
+## Development checks
+
+`npm run verify` is the routine local gate: strict TypeScript plus source-level
+Vitest, without rebuilding runtime bundles. Before promoting a runtime change,
+also run:
 
 ```sh
-npm ci
 npm run build
 npm test
-npm run ci
-npm run pack:check
+git diff --check
 ```
-
-SQLite tests run without credentials. PostgreSQL contract tests use `MEMOREE_TEST_POSTGRES_URL` in CI against PostgreSQL 16.
 
 ## License
 
 See [LICENSE](LICENSE).
-
-## Acknowledgments
-
-Memoree began as a fork of [Hivemind](https://github.com/activeloopai/hivemind). It is now maintained as an independent project, with gratitude to the original project and its contributors.
