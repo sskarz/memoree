@@ -65,6 +65,29 @@ describe("runtime validation polling", () => {
       matchingSummaries: 1,
     });
   });
+
+  it("accepts a summary that preserves the exact identifier while paraphrasing the fact", async () => {
+    const { databasePath, db } = createValidationDatabase();
+    const identifier = "a912d384-5605-43ab-bae7-e34b50e6f81a";
+    db.prepare("INSERT INTO sessions (message) VALUES (?)").run(
+      `the observatory lantern is ${identifier}`,
+    );
+    db.prepare("INSERT INTO memory (path, summary) VALUES (?, ?)").run(
+      "/summaries/test/paraphrased.md",
+      `The exact identifier recorded for the observatory lantern was ${identifier}.`,
+    );
+    db.close();
+
+    await expect(waitForCapture(databasePath, identifier, {
+      requireSummary: true,
+      timeoutMs: 100,
+      pollMs: 1,
+    })).resolves.toEqual({
+      matchingEvents: 1,
+      summaries: 1,
+      matchingSummaries: 1,
+    });
+  });
 });
 
 describe("runtime validation Claude configuration", () => {

@@ -150,7 +150,7 @@ async function captureUntilEmbedded(bundlePath, input, options, databasePath) {
   throw new Error("Timed out waiting for a 768-element embedding from the installed capture hook");
 }
 
-function inspectDatabase(databasePath, semanticFact, lexicalToken) {
+function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalToken) {
   const db = new DatabaseSync(databasePath, { readOnly: true });
   try {
     const integrity = db.prepare("PRAGMA integrity_check").get();
@@ -165,7 +165,10 @@ function inspectDatabase(databasePath, semanticFact, lexicalToken) {
     const summaryText = summaries.map(row => row.summary).join("\n");
     assert(eventText.includes(semanticFact), "Semantic validation fact is missing from isolated SQLite events");
     assert(eventText.includes(lexicalToken), "Lexical validation token is missing from isolated SQLite events");
-    assert(summaryText.includes(semanticFact), "Semantic validation fact is missing from isolated summaries");
+    assert(
+      summaryText.includes(semanticIdentifier),
+      "Semantic validation identifier is missing from isolated summaries",
+    );
     assert(summaryText.includes(lexicalToken), "Lexical validation token is missing from isolated summaries");
     assert(
       [...events.map(row => row.message_embedding), ...summaries.map(row => row.summary_embedding)]
@@ -203,7 +206,8 @@ export async function validateRuntime() {
   const claudeSettings = join(state, "claude-settings.json");
   const realHome = homedir();
   const realClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
-  const semanticFact = `the observatory lantern is ${crypto.randomUUID()}`;
+  const semanticIdentifier = crypto.randomUUID();
+  const semanticFact = `the observatory lantern is ${semanticIdentifier}`;
   const lexicalToken = `memoree-lexical-${crypto.randomUUID()}`;
   const env = {
     ...process.env,
@@ -286,7 +290,10 @@ export async function validateRuntime() {
     }, claudeHookOptions);
 
     status("waiting for the Claude Code summary");
-    await waitForCapture(databasePath, semanticFact, { requireSummary: true });
+    // Summaries are semantic by design and may paraphrase the sentence around
+    // the value. The unique UUID is the durable, non-derivable proof that the
+    // generated summary retained the captured fact.
+    await waitForCapture(databasePath, semanticIdentifier, { requireSummary: true });
 
     const recallEnv = { ...env, MEMOREE_CAPTURE: "false" };
     status("checking semantic recall through Codex");
@@ -298,7 +305,10 @@ export async function validateRuntime() {
       "-s", "read-only",
       "Recall the unusual observatory object and its exact identifier from Memoree. Answer with only that fact.",
     ], { cwd: repository, env: recallEnv });
-    assert(semanticRecall.includes(semanticFact), "Codex did not semantically recall the Claude Code fact");
+    assert(
+      semanticRecall.includes(semanticIdentifier),
+      "Codex did not semantically recall the Claude Code fact identifier",
+    );
 
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
     const codexSession = crypto.randomUUID();
@@ -351,7 +361,7 @@ export async function validateRuntime() {
     });
     assert(lexicalRecall.includes(lexicalToken), "Claude Code lexical fallback recall failed with embeddings disabled");
 
-    const counts = inspectDatabase(databasePath, semanticFact, lexicalToken);
+    const counts = inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalToken);
     process.stdout.write(
       `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
