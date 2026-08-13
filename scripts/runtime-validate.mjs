@@ -60,6 +60,10 @@ export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
   return env;
 }
 
+export function lexicalValidationPrompt(identifier) {
+  return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
+}
+
 function vectorLength(value) {
   if (Array.isArray(value)) return value.length;
   if (typeof value !== "string") return 0;
@@ -150,7 +154,7 @@ async function captureUntilEmbedded(bundlePath, input, options, databasePath) {
   throw new Error("Timed out waiting for a 768-element embedding from the installed capture hook");
 }
 
-function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalToken) {
+function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier) {
   const db = new DatabaseSync(databasePath, { readOnly: true });
   try {
     const integrity = db.prepare("PRAGMA integrity_check").get();
@@ -164,12 +168,12 @@ function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexical
     const eventText = events.map(row => row.message).join("\n");
     const summaryText = summaries.map(row => row.summary).join("\n");
     assert(eventText.includes(semanticFact), "Semantic validation fact is missing from isolated SQLite events");
-    assert(eventText.includes(lexicalToken), "Lexical validation token is missing from isolated SQLite events");
+    assert(eventText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated SQLite events");
     assert(
       summaryText.includes(semanticIdentifier),
       "Semantic validation identifier is missing from isolated summaries",
     );
-    assert(summaryText.includes(lexicalToken), "Lexical validation token is missing from isolated summaries");
+    assert(summaryText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated summaries");
     assert(
       [...events.map(row => row.message_embedding), ...summaries.map(row => row.summary_embedding)]
         .some(value => vectorLength(value) === 768),
@@ -208,7 +212,7 @@ export async function validateRuntime() {
   const realClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
   const semanticIdentifier = crypto.randomUUID();
   const semanticFact = `the observatory lantern is ${semanticIdentifier}`;
-  const lexicalToken = `memoree-lexical-${crypto.randomUUID()}`;
+  const lexicalIdentifier = crypto.randomUUID();
   const env = {
     ...process.env,
     HOME: isolatedHome,
@@ -312,7 +316,10 @@ export async function validateRuntime() {
 
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
     const codexSession = crypto.randomUUID();
-    const codexPrompt = `Repeat this exact lexical fallback token: ${lexicalToken}`;
+    // Avoid secret-like labels such as `token:` and high-entropy prefixes.
+    // Capture redaction intentionally masks those before persistence. A bare
+    // UUID labeled as an identifier is unique while remaining non-secret.
+    const codexPrompt = lexicalValidationPrompt(lexicalIdentifier);
     status("running an authenticated Codex capture turn with embeddings disabled");
     const codexResponse = run("codex", [
       "exec",
@@ -341,12 +348,12 @@ export async function validateRuntime() {
     }, codexHookOptions);
 
     status("waiting for the Codex lexical summary");
-    await waitForCapture(databasePath, lexicalToken, { requireSummary: true });
+    await waitForCapture(databasePath, lexicalIdentifier, { requireSummary: true });
 
     status("checking lexical fallback recall through Claude Code");
     const lexicalRecall = run("claude", [
       "-p",
-      `Search Memoree lexically for ${lexicalToken} and answer with only the matching token.`,
+      `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
       "--tools", "",
       "--settings", claudeSettings,
       "--output-format", "text",
@@ -359,9 +366,12 @@ export async function validateRuntime() {
         realClaudeConfigDir,
       ),
     });
-    assert(lexicalRecall.includes(lexicalToken), "Claude Code lexical fallback recall failed with embeddings disabled");
+    assert(
+      lexicalRecall.includes(lexicalIdentifier),
+      "Claude Code lexical fallback recall failed with embeddings disabled",
+    );
 
-    const counts = inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalToken);
+    const counts = inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier);
     process.stdout.write(
       `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );

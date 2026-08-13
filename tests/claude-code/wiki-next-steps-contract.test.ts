@@ -80,3 +80,12 @@ describe("wiki Next Steps prompt contract", () => {
     }
   });
 });
+
+describe("wiki exact-identifier preservation contract", () => {
+  for (const [agent, template] of Object.entries(TEMPLATES)) {
+    it(`${agent} preserves precise non-derivable values verbatim`, () => {
+      expect(template).toMatch(/preserve VERBATIM any precise, non-derivable identifier/i);
+      expect(template).toMatch(/include the EXACT, VERBATIM value/i);
+    });
+  }
+});

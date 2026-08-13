@@ -15,6 +15,7 @@ export function authenticatedClaudeEnvironment(
   home: string,
   configDir?: string,
 ): NodeJS.ProcessEnv;
+export function lexicalValidationPrompt(identifier: string): string;
 export function isolatedCounts(databasePath: string, text: string): IsolatedCounts;
 export function waitForCapture(
   databasePath: string,

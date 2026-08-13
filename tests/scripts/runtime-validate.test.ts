@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   authenticatedClaudeEnvironment,
   isolatedCounts,
+  lexicalValidationPrompt,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
+import { redactSecrets } from "../../src/hooks/shared/redact.js";
 
 let root: string | undefined;
 
@@ -112,5 +114,20 @@ describe("runtime validation Claude configuration", () => {
   it("preserves an explicitly configured authenticated Claude profile", () => {
     const env = authenticatedClaudeEnvironment({}, "/Users/tester", "/custom/claude");
     expect(env.CLAUDE_CONFIG_DIR).toBe("/custom/claude");
+  });
+});
+
+describe("runtime validation lexical marker", () => {
+  it("survives capture redaction as an exact searchable identifier", () => {
+    const identifier = "3b4aa504-2da6-4ad1-995b-293f1254d6c3";
+    const prompt = lexicalValidationPrompt(identifier);
+    expect(redactSecrets(prompt)).toBe(prompt);
+    expect(prompt).toContain(identifier);
+  });
+
+  it("guards against the secret-like token label used by the failed validator", () => {
+    const identifier = "3b4aa504-2da6-4ad1-995b-293f1254d6c3";
+    expect(redactSecrets(`Repeat this exact lexical fallback token: memoree-lexical-${identifier}`))
+      .not.toContain(identifier);
   });
 });

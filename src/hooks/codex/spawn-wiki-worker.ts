@@ -43,7 +43,7 @@ Steps:
 - **JSONL offset**: __JSONL_LINES__
 
 ## What Happened
-<2-3 dense sentences. What was the goal, what was accomplished, what's left.>
+<2-3 dense sentences. What was the goal, what was accomplished, what's left. Preserve VERBATIM any precise, non-derivable identifier that defines the work — exact token/key/secret-name values, version numbers, error codes/sqlstates, table/branch/file names, commit SHAs, config keys and their chosen values. If the session established a specific value, write that EXACT value here, not a paraphrase of it.>
 
 ## People
 <For each person mentioned: name, role, what they did/said. Format: **Name** — role — action>
@@ -56,7 +56,7 @@ Format: **entity** (type) — what was done with it, its current state>
 <Every decision made and WHY.>
 
 ## Key Facts
-<Bullet list of atomic facts that could answer future questions.>
+<Bullet list of atomic facts that could answer future questions. Each fact should stand alone and include the EXACT, VERBATIM value where one exists — never replace a concrete identifier/value with a vague gist.>
 
 ## Files Modified
 <bullet list: path (new/modified/deleted) — what changed>
