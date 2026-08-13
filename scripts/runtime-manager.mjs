@@ -40,7 +40,13 @@ export function activeAgentProcesses(processList, currentPid = process.pid) {
     // "Codex (Renderer).app" that can remain resident without a live session.
     const isCli = /(^|\/)(claude|codex)(?:\s|$)/.test(command);
     const isClaudeNodeCli = /\/@anthropic-ai\/claude-code\/.*\/cli\.(?:js|mjs)(?:\s|$)/.test(command);
-    if (isCli || isClaudeNodeCli) active.push(line.trim());
+    // IDE extensions keep `codex ... app-server` processes resident even when
+    // every interactive Codex session is closed. They do not load or execute
+    // Memoree hooks, so treating them as sessions makes runtime management
+    // impossible until the entire IDE is quit. Real `codex exec` / `resume`
+    // processes continue to be blocked.
+    const isCodexAppServer = /(^|\s)(?:\S*\/)?codex(?:\s+(?:-c|--config)\s+\S+)*\s+app-server(?:\s|$)/.test(command);
+    if ((isCli || isClaudeNodeCli) && !isCodexAppServer) active.push(line.trim());
   }
   return active;
 }

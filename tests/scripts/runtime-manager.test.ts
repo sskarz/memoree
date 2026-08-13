@@ -22,6 +22,20 @@ describe("runtime manager safety", () => {
     ]);
   });
 
+  it("ignores persistent IDE app servers but still detects interactive Codex commands", () => {
+    const processes = [
+      " 201 /Users/test/.cursor/extensions/openai.chatgpt/bin/codex -c features.code_mode_host=true app-server --analytics-default-enabled",
+      " 202 /Applications/Codex.app/Contents/Resources/codex app-server",
+      " 203 /Applications/Codex.app/Contents/Resources/codex -c model=fast exec --ephemeral hello",
+      " 204 node /usr/local/bin/codex resume 1234",
+    ].join("\n");
+
+    expect(activeAgentProcesses(processes, 999)).toEqual([
+      "203 /Applications/Codex.app/Contents/Resources/codex -c model=fast exec --ephemeral hello",
+      "204 node /usr/local/bin/codex resume 1234",
+    ]);
+  });
+
   it("refuses active sessions and never attempts to terminate them", () => {
     expect(() => assertNoActiveAgentSessions({
       processList: " 77 /usr/bin/codex\n",
