@@ -10,12 +10,11 @@ export interface WaitForCaptureOptions {
   pollMs?: number;
 }
 
-export function claudeProfileRoot(env?: NodeJS.ProcessEnv, home?: string): string;
-export function prepareIsolatedClaudeConfig(
-  sourceRoot: string,
-  targetRoot: string,
-  autoMemoryDirectory: string,
-): string;
+export function authenticatedClaudeEnvironment(
+  baseEnv: NodeJS.ProcessEnv,
+  home: string,
+  configDir?: string,
+): NodeJS.ProcessEnv;
 export function isolatedCounts(databasePath: string, text: string): IsolatedCounts;
 export function waitForCapture(
   databasePath: string,

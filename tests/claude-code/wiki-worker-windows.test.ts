@@ -29,7 +29,13 @@ vi.mock("node:os", async () => {
 });
 
 import { resolveCliBin, binNeedsShell, shellFile } from "../../src/utils/resolve-cli-bin.js";
-import { buildClaudeInvocation, buildTrailingPromptInvocation, buildStdinPromptInvocation, buildClaudeStdinInvocation } from "../../src/hooks/wiki-worker-spawn.js";
+import {
+  buildClaudeInvocation,
+  buildClaudeStdinInvocation,
+  buildClaudeWorkerEnvironment,
+  buildStdinPromptInvocation,
+  buildTrailingPromptInvocation,
+} from "../../src/hooks/wiki-worker-spawn.js";
 
 const realPlatform = process.platform;
 function setPlatform(p: NodeJS.Platform): void {
@@ -162,6 +168,50 @@ describe("buildClaudeInvocation", () => {
     const inv = buildClaudeInvocation("C:\\pf\\claude.exe", "PROMPT-TEXT");
     expect(inv.options.shell).toBeFalsy();
     expect(inv.args).toContain("PROMPT-TEXT");
+  });
+
+  it("adds safe mode only for authenticated runtime validation", () => {
+    setPlatform("linux");
+    expect(buildClaudeInvocation("/usr/local/bin/claude", "P", {
+      MEMOREE_RUNTIME_VALIDATION: "1",
+    }).args).toContain("--safe-mode");
+    expect(buildClaudeInvocation("/usr/local/bin/claude", "P", {}).args).not.toContain("--safe-mode");
+  });
+});
+
+describe("buildClaudeWorkerEnvironment", () => {
+  it("keeps ordinary summary workers on their existing HOME", () => {
+    expect(buildClaudeWorkerEnvironment({ HOME: "/home/normal" })).toMatchObject({
+      HOME: "/home/normal",
+      MEMOREE_WIKI_WORKER: "1",
+      MEMOREE_CAPTURE: "false",
+    });
+  });
+
+  it("uses authenticated Claude context only during isolated runtime validation", () => {
+    const env = buildClaudeWorkerEnvironment({
+      HOME: "/tmp/disposable",
+      CLAUDE_CONFIG_DIR: "/tmp/disposable/.claude",
+      MEMOREE_RUNTIME_VALIDATION: "1",
+      MEMOREE_VALIDATION_CLAUDE_HOME: "/Users/tester",
+    });
+    expect(env).toMatchObject({
+      HOME: "/Users/tester",
+      CLAUDE_CODE_SAFE_MODE: "1",
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      MEMOREE_WIKI_WORKER: "1",
+      MEMOREE_CAPTURE: "false",
+    });
+    expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
+
+  it("preserves an explicitly configured authenticated Claude directory", () => {
+    const env = buildClaudeWorkerEnvironment({
+      MEMOREE_RUNTIME_VALIDATION: "1",
+      MEMOREE_VALIDATION_CLAUDE_HOME: "/Users/tester",
+      MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR: "/custom/claude",
+    });
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/custom/claude");
   });
 });
 

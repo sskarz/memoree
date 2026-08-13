@@ -1,12 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  claudeProfileRoot,
+  authenticatedClaudeEnvironment,
   isolatedCounts,
-  prepareIsolatedClaudeConfig,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
 
@@ -69,39 +68,26 @@ describe("runtime validation polling", () => {
 });
 
 describe("runtime validation Claude configuration", () => {
-  it("uses the home directory as Claude's default profile root", () => {
-    expect(claudeProfileRoot({}, "/Users/tester")).toBe("/Users/tester");
-    expect(claudeProfileRoot({ CLAUDE_CONFIG_DIR: "/custom/claude" }, "/Users/tester"))
-      .toBe("/custom/claude");
+  it("uses the authenticated HOME and suppresses nonessential profile writes", () => {
+    expect(authenticatedClaudeEnvironment({ MEMOREE_SQLITE_PATH: "/tmp/test.sqlite3" }, "/Users/tester"))
+      .toMatchObject({
+        HOME: "/Users/tester",
+        MEMOREE_SQLITE_PATH: "/tmp/test.sqlite3",
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      });
   });
 
-  it("copies profile metadata and settings into disposable state", () => {
-    const testRoot = mkdtempSync(join(tmpdir(), "runtime-validate-claude-test-"));
-    root = testRoot;
-    const source = join(testRoot, "real-profile");
-    const target = join(testRoot, "isolated-profile");
-    const autoMemory = join(testRoot, "state", "auto-memory");
-    mkdirSync(source, { recursive: true });
-    writeFileSync(join(source, ".claude.json"), JSON.stringify({ oauthAccount: { accountUuid: "test" } }));
-
-    const settingsPath = prepareIsolatedClaudeConfig(source, target, autoMemory);
-
-    expect(JSON.parse(readFileSync(join(target, ".claude.json"), "utf8"))).toEqual({
-      oauthAccount: { accountUuid: "test" },
-    });
-    expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toEqual({
-      autoMemoryDirectory: autoMemory,
-    });
-    expect(existsSync(join(source, "settings.json"))).toBe(false);
+  it("removes the disposable config override for a default Claude profile", () => {
+    const env = authenticatedClaudeEnvironment({
+      HOME: "/tmp/disposable",
+      CLAUDE_CONFIG_DIR: "/tmp/disposable/.claude",
+    }, "/Users/tester");
+    expect(env.HOME).toBe("/Users/tester");
+    expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
   });
 
-  it("fails clearly when Claude has no authenticated profile metadata", () => {
-    const testRoot = mkdtempSync(join(tmpdir(), "runtime-validate-claude-missing-"));
-    root = testRoot;
-    expect(() => prepareIsolatedClaudeConfig(
-      join(testRoot, "missing"),
-      join(testRoot, "isolated"),
-      join(testRoot, "auto-memory"),
-    )).toThrow(/claude auth login/);
+  it("preserves an explicitly configured authenticated Claude profile", () => {
+    const env = authenticatedClaudeEnvironment({}, "/Users/tester", "/custom/claude");
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/custom/claude");
   });
 });

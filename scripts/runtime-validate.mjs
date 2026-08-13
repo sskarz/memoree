@@ -2,8 +2,6 @@
 
 import { execFileSync } from "node:child_process";
 import {
-  chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -17,15 +15,22 @@ import { DatabaseSync } from "node:sqlite";
 import { assertNoActiveAgentSessions, runtimePaths } from "./runtime-manager.mjs";
 
 function run(command, args, options = {}) {
-  return execFileSync(command, args, {
-    cwd: options.cwd,
-    env: options.env,
-    encoding: "utf8",
-    input: options.input,
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: options.capture === false ? "inherit" : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-    timeout: options.timeout ?? 240_000,
-  });
+  try {
+    return execFileSync(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      encoding: "utf8",
+      input: options.input,
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: options.capture === false ? "inherit" : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      timeout: options.timeout ?? 240_000,
+    });
+  } catch (cause) {
+    const stdout = typeof cause?.stdout === "string" ? cause.stdout.trim() : "";
+    const stderr = typeof cause?.stderr === "string" ? cause.stderr.trim() : "";
+    const details = [stdout && `stdout:\n${stdout}`, stderr && `stderr:\n${stderr}`].filter(Boolean).join("\n");
+    throw new Error(details ? `${cause.message}\n${details}` : cause.message, { cause });
+  }
 }
 
 function runHook(bundlePath, input, options) {
@@ -43,25 +48,16 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-export function claudeProfileRoot(env = process.env, home = homedir()) {
-  const configured = env.CLAUDE_CONFIG_DIR?.trim();
-  return configured ? resolve(configured) : home;
-}
-
-export function prepareIsolatedClaudeConfig(sourceRoot, targetRoot, autoMemoryDirectory) {
-  const sourceProfile = join(sourceRoot, ".claude.json");
-  if (!existsSync(sourceProfile)) {
-    throw new Error(
-      `Claude profile is missing at ${sourceProfile}; run \`claude auth login\` before runtime validation`,
-    );
-  }
-  mkdirSync(targetRoot, { recursive: true, mode: 0o700 });
-  const targetProfile = join(targetRoot, ".claude.json");
-  copyFileSync(sourceProfile, targetProfile);
-  chmodSync(targetProfile, 0o600);
-  const settingsPath = join(targetRoot, "settings.json");
-  writeFileSync(settingsPath, `${JSON.stringify({ autoMemoryDirectory }, null, 2)}\n`, { mode: 0o600 });
-  return settingsPath;
+export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
+  const env = {
+    ...baseEnv,
+    HOME: home,
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+  };
+  const configured = configDir?.trim();
+  if (configured) env.CLAUDE_CONFIG_DIR = configured;
+  else delete env.CLAUDE_CONFIG_DIR;
+  return env;
 }
 
 function vectorLength(value) {
@@ -204,15 +200,15 @@ export async function validateRuntime() {
   const state = join(root, "state");
   const isolatedHome = join(root, "home");
   const databasePath = join(state, "memoree.sqlite3");
+  const claudeSettings = join(state, "claude-settings.json");
   const realHome = homedir();
-  const sourceClaudeProfileRoot = claudeProfileRoot(process.env, realHome);
-  const isolatedClaudeConfig = join(state, "claude-config");
+  const realClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
   const semanticFact = `the observatory lantern is ${crypto.randomUUID()}`;
   const lexicalToken = `memoree-lexical-${crypto.randomUUID()}`;
   const env = {
     ...process.env,
     HOME: isolatedHome,
-    CLAUDE_CONFIG_DIR: isolatedClaudeConfig,
+    CLAUDE_CONFIG_DIR: join(isolatedHome, ".claude"),
     CODEX_HOME: process.env.CODEX_HOME ?? join(realHome, ".codex"),
     MEMOREE_BACKEND: "sqlite",
     MEMOREE_SQLITE_PATH: databasePath,
@@ -228,17 +224,19 @@ export async function validateRuntime() {
     MEMOREE_SKILLIFY_WORKER: "1",
     MEMOREE_SKILLOPT_DISABLED: "1",
     MEMOREE_SUMMARY_EVERY_N_MSGS: "1000",
+    MEMOREE_RUNTIME_VALIDATION: "1",
+    MEMOREE_VALIDATION_CLAUDE_HOME: realHome,
+    ...(realClaudeConfigDir ? { MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR: realClaudeConfigDir } : {}),
     CLAUDE_CODE_ENTRYPOINT: "cli",
   };
+  const claudeEnv = authenticatedClaudeEnvironment(env, realHome, realClaudeConfigDir);
 
   try {
     mkdirSync(state, { recursive: true });
     mkdirSync(isolatedHome, { recursive: true });
-    const claudeSettings = prepareIsolatedClaudeConfig(
-      sourceClaudeProfileRoot,
-      isolatedClaudeConfig,
-      join(state, "claude-auto-memory"),
-    );
+    writeFileSync(claudeSettings, `${JSON.stringify({
+      autoMemoryDirectory: join(state, "claude-auto-memory"),
+    }, null, 2)}\n`, { mode: 0o600 });
     run("git", ["init", repository], { env, capture: false });
     run("git", ["config", "user.email", "runtime-validation@memoree.local"], { cwd: repository, env });
     run("git", ["config", "user.name", "Memoree Runtime Validation"], { cwd: repository, env });
@@ -265,7 +263,7 @@ export async function validateRuntime() {
       "--output-format", "text",
       "--no-session-persistence",
       "--session-id", claudeSession,
-    ], { cwd: repository, env });
+    ], { cwd: repository, env: claudeEnv });
     assert(claudeResponse.includes(semanticFact), "Claude Code did not return the semantic validation fact");
 
     const claudeHookOptions = { cwd: repository, env };
@@ -343,7 +341,14 @@ export async function validateRuntime() {
       "--settings", claudeSettings,
       "--output-format", "text",
       "--no-session-persistence",
-    ], { cwd: repository, env: { ...lexicalEnv, MEMOREE_CAPTURE: "false" } });
+    ], {
+      cwd: repository,
+      env: authenticatedClaudeEnvironment(
+        { ...lexicalEnv, MEMOREE_CAPTURE: "false" },
+        realHome,
+        realClaudeConfigDir,
+      ),
+    });
     assert(lexicalRecall.includes(lexicalToken), "Claude Code lexical fallback recall failed with embeddings disabled");
 
     const counts = inspectDatabase(databasePath, semanticFact, lexicalToken);

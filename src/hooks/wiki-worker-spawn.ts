@@ -17,6 +17,33 @@ export interface ClaudeInvocation {
 }
 
 /**
+ * Build the environment for the summary worker's Claude subprocess.
+ * Runtime validation keeps hook state under a disposable HOME, but Claude's
+ * macOS Keychain credential is available only from the authenticated HOME.
+ * The opt-in validation variables switch HOME only for this child process;
+ * safe mode and the nonessential-traffic opt-out prevent profile/cache writes.
+ */
+export function buildClaudeWorkerEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const childEnv: NodeJS.ProcessEnv = {
+    ...env,
+    MEMOREE_WIKI_WORKER: "1",
+    MEMOREE_CAPTURE: "false",
+  };
+  const validationHome = env.MEMOREE_VALIDATION_CLAUDE_HOME?.trim();
+  if (env.MEMOREE_RUNTIME_VALIDATION === "1" && validationHome) {
+    childEnv.HOME = validationHome;
+    childEnv.CLAUDE_CODE_SAFE_MODE = "1";
+    childEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+    const configDir = env.MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR?.trim();
+    if (configDir) childEnv.CLAUDE_CONFIG_DIR = configDir;
+    else delete childEnv.CLAUDE_CONFIG_DIR;
+  }
+  return childEnv;
+}
+
+/**
  * Build the `execFileSync` descriptor for the summary-generation claude call.
  *
  * Windows (`.cmd`/`.bat` shim): the shim cannot be spawned without a shell,
@@ -30,11 +57,18 @@ export interface ClaudeInvocation {
  * prompt as a positional arg, no shell — so the already-working path stays
  * byte-identical.
  */
-export function buildClaudeInvocation(claudeBin: string, prompt: string): ClaudeInvocation {
+export function buildClaudeInvocation(
+  claudeBin: string,
+  prompt: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ClaudeInvocation {
+  const flags = env.MEMOREE_RUNTIME_VALIDATION === "1"
+    ? [...CLAUDE_FLAGS, "--safe-mode"]
+    : [...CLAUDE_FLAGS];
   if (binNeedsShell(claudeBin)) {
     return {
       file: shellFile(claudeBin),
-      args: ["-p", ...CLAUDE_FLAGS],
+      args: ["-p", ...flags],
       // windowsHide: the wiki worker is a detached, console-less process, so
       // without CREATE_NO_WINDOW Windows allocates a visible console window
       // (titled after the CLI exe) for the child. No-op on POSIX.
@@ -43,7 +77,7 @@ export function buildClaudeInvocation(claudeBin: string, prompt: string): Claude
   }
   return {
     file: claudeBin,
-    args: ["-p", prompt, ...CLAUDE_FLAGS],
+    args: ["-p", prompt, ...flags],
     options: { stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
   };
 }

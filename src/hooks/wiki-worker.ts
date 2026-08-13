@@ -9,7 +9,7 @@
 
 import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { buildClaudeInvocation } from "./wiki-worker-spawn.js";
+import { buildClaudeInvocation, buildClaudeWorkerEnvironment } from "./wiki-worker-spawn.js";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { utcTimestamp, log as _log } from "../utils/debug.js";
@@ -296,7 +296,7 @@ async function main(): Promise<void> {
         // summary. The summary is written to a file, not read from stdout, so
         // we only need headroom to drain it.
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
+        env: buildClaudeWorkerEnvironment(),
       });
       execSucceeded = true;
       wlog("claude -p exited (code 0)");
