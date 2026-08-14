@@ -17,6 +17,7 @@ import { createStorageBackend } from "../storage/factory.js";
 import type { StorageBackend } from "../storage/backend.js";
 import { readStdin } from "../utils/stdin.js";
 import { log as _log } from "../utils/debug.js";
+import { isDirectRun } from "../utils/direct-run.js";
 import { getInstalledVersion } from "../utils/version-check.js";
 import { makeWikiLogger } from "../utils/wiki-log.js";
 import { autoPullSkills } from "../skillify/auto-pull.js";
@@ -108,19 +109,34 @@ async function createPlaceholder(api: StorageBackend, table: string, sessionId: 
   );
 }
 
-interface SessionStartInput {
+export interface SessionStartInput {
   session_id: string;
   cwd?: string;
 }
 
-async function main(): Promise<void> {
+export interface ClaudeSessionStartDeps {
+  autoPullFn?: typeof autoPullSkills;
+  spawnHygieneFn?: typeof maybeSpawnHygieneWorker;
+  loadConfigFn?: typeof loadConfig;
+  spawnGraphPullFn?: typeof spawnGraphPullWorker;
+}
+
+export async function processClaudeSessionStart(
+  input: SessionStartInput,
+  deps: ClaudeSessionStartDeps = {},
+): Promise<void> {
   // Skip if this is a sub-session spawned by the wiki worker
   if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
+  const {
+    autoPullFn = autoPullSkills,
+    spawnHygieneFn = maybeSpawnHygieneWorker,
+    loadConfigFn = loadConfig,
+    spawnGraphPullFn = spawnGraphPullWorker,
+  } = deps;
+
   const __hookT0 = Date.now();
   log(`hook entered (pid=${process.pid})`);
-
-  const input = await readStdin<SessionStartInput>();
 
   // A fresh start or --resume of this session re-activates it: drop any stale
   // ended marker and record the owning `claude` process so other sessions can
@@ -158,7 +174,7 @@ async function main(): Promise<void> {
   // repository key, or opt out entirely (`collect: false`). Resolved once and
   // reused for the placeholder write below and the disclosure banner.
   const sessionCwd = input.cwd ?? process.cwd();
-  const baseConfig = loadConfig();
+  const baseConfig = loadConfigFn();
   const storageAvailable = Boolean(baseConfig);
   const dirRes = baseConfig ? resolveDirConfig(baseConfig, sessionCwd) : null;
   const collectHere = captureEnabled && (dirRes?.collect ?? true);
@@ -171,10 +187,10 @@ async function main(): Promise<void> {
   // freezes SessionStart. Hard opt-out via MEMOREE_AUTOPULL_DISABLED=1.
   // All failures swallowed inside autoPullSkills (documented as
   // never-rejecting), so no try/catch needed here.
-  const pullResult = await autoPullSkills();
+  const pullResult = await autoPullFn();
   log(`autopull: pulled=${pullResult.pulled} skipped=${pullResult.skipped}`);
   try {
-    const spawned = maybeSpawnHygieneWorker({
+    const spawned = spawnHygieneFn({
       cwd: sessionCwd,
       bundleDir: __bundleDir,
       agent: "claude_code",
@@ -284,7 +300,7 @@ async function main(): Promise<void> {
   // spawn here is purely organizational — order doesn't matter because
   // the worker is fully detached.
   // Pull the latest snapshot from the selected SQL backend when available.
-  if (storageAvailable) spawnGraphPullWorker(input.cwd ?? process.cwd(), __bundleDir);
+  if (storageAvailable) spawnGraphPullFn(input.cwd ?? process.cwd(), __bundleDir);
   const graphLine = graphContextLine(input.cwd ?? process.cwd());
   const graphNote = graphLine ?? "";
 
@@ -330,4 +346,11 @@ async function main(): Promise<void> {
   log(`hook done (${Date.now() - __hookT0}ms total)`);
 }
 
-main().catch((e) => { log(`fatal: ${e.message}`); process.exit(0); });
+async function main(): Promise<void> {
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
+  await processClaudeSessionStart(await readStdin<SessionStartInput>());
+}
+
+if (isDirectRun(import.meta.url)) {
+  main().catch((e) => { log(`fatal: ${e.message}`); process.exit(0); });
+}
