@@ -59,6 +59,9 @@ export const SKILLIFY_COMMANDS: SkillifyCommand[] = [
   { cmd: "memoree skillify mine-local --n <num|all>",   desc: "how many sessions to mine (default: 8)" },
   { cmd: "memoree skillify mine-local --force",         desc: "re-run even if the manifest sentinel exists" },
   { cmd: "memoree skillify mine-local --dry-run",       desc: "stop before calling the LLM gate" },
+  { cmd: "memoree skillify hygiene",                    desc: "curate the local skill shelf (merge, shrink, archive Memoree-managed skills)" },
+  { cmd: "memoree skillify hygiene --dry-run",          desc: "print the hygiene plan without writing" },
+  { cmd: "memoree skillify hygiene --force",            desc: "run even if the 24h quiet period has not elapsed" },
 ];
 
 /** A single flag-style option attached to a subcommand. */
@@ -152,6 +155,15 @@ export const SKILLIFY_SPEC: SkillifySubcommand[] = [
       { flag: "--force",                 desc: "re-run even if the manifest sentinel exists" },
       { flag: "--dry-run",               desc: "stop before calling the LLM gate" },
     ],
+  },
+  {
+    cmd: "memoree skillify hygiene",
+    desc: "curate the local skill shelf (merge, shrink, archive Memoree-managed skills)",
+    options: [
+      { flag: "--dry-run", desc: "print the hygiene plan without writing" },
+      { flag: "--force",   desc: "run even if the 24h quiet period has not elapsed" },
+    ],
+    note: "only skills with Memoree frontmatter (created_by_agent or source_sessions) are in scope. Hand-written SKILL.md files are never deleted. SessionStart may spawn this at most once per 24h.",
   },
 ];
 

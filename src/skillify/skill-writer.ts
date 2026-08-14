@@ -64,6 +64,7 @@ export interface MergeSkillArgs {
   skillsRoot: string;
   name: string;            // existing skill to merge into
   description?: string;    // optional override
+  trigger?: string;        // optional override
   body: string;            // merged body returned by gate
   newSourceSessions: string[];
   agent: string;
@@ -358,7 +359,7 @@ export function mergeSkill(args: MergeSkillArgs): SkillWriteResult {
   const fm: SkillFrontmatter = {
     name: args.name,
     description: args.description ?? (parsed?.fm.description as string) ?? "",
-    trigger: parsed?.fm.trigger as string | undefined,
+    trigger: args.trigger ?? (parsed?.fm.trigger as string | undefined),
     author,
     source_sessions: merged,
     contributors,

@@ -34,6 +34,9 @@ import { loadRoutedConfig } from "../dir-config.js";
 import { createStorageBackend } from "../storage/factory.js";
 import { runMineLocal } from "./mine-local.js";
 import { renderSubcommandUsageBlock } from "../cli/skillify-spec.js";
+import { parseHygieneCliArgs, runHygieneCycle } from "../skillify/hygiene.js";
+import { deriveProjectKey } from "../utils/repo-identity.js";
+import { detectHostAgent } from "../skillify/local-source.js";
 
 // Route through the shared `getStateDir()` so `MEMOREE_STATE_DIR`
 // redirects (tests, alternate installs) land in the same dir as the
@@ -444,6 +447,24 @@ export function runSkillifyCommand(args: string[]): void {
       console.error(`mine-local error: ${e?.message ?? e}`);
       process.exit(1);
     });
+    return;
+  }
+  if (sub === "hygiene") {
+    const flags = parseHygieneCliArgs(args.slice(1));
+    const cwd = process.cwd();
+    const { key: projectKey } = deriveProjectKey(cwd);
+    const host = detectHostAgent();
+    const agent = host === "codex" ? "codex" as const : "claude_code" as const;
+    runHygieneCycle({ cwd, projectKey, agent, dryRun: flags.dryRun, force: flags.force })
+      .then((result) => {
+        for (const line of result.lines) console.log(line);
+        if (result.kind === "failed-llm") process.exit(1);
+      })
+      .catch((e) => {
+        console.error(`hygiene error: ${e?.message ?? e}`);
+        process.exit(1);
+      })
+      .catch(() => { /* test-only safety net */ });
     return;
   }
   if (sub === "--help" || sub === "-h" || sub === "help") { usage(); return; }

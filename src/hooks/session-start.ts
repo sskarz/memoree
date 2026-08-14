@@ -20,6 +20,7 @@ import { log as _log } from "../utils/debug.js";
 import { getInstalledVersion } from "../utils/version-check.js";
 import { makeWikiLogger } from "../utils/wiki-log.js";
 import { autoPullSkills } from "../skillify/auto-pull.js";
+import { maybeSpawnHygieneWorker } from "../skillify/spawn-hygiene-worker.js";
 import { renderSkillifyCommands } from "../cli/skillify-spec.js";
 import { renderContextBlock } from "./shared/context-renderer.js";
 import { countLocalManifestEntries } from "../skillify/local-manifest.js";
@@ -172,6 +173,16 @@ async function main(): Promise<void> {
   // never-rejecting), so no try/catch needed here.
   const pullResult = await autoPullSkills();
   log(`autopull: pulled=${pullResult.pulled} skipped=${pullResult.skipped}`);
+  try {
+    const spawned = maybeSpawnHygieneWorker({
+      cwd: sessionCwd,
+      bundleDir: __bundleDir,
+      agent: "claude_code",
+    });
+    if (spawned.triggered) log("hygiene worker spawned");
+  } catch {
+    // administrative; must never block SessionStart
+  }
 
   let rulesBlock = "";
   if (input.session_id && storageAvailable) {
