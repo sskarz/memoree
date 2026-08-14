@@ -1,13 +1,12 @@
 /**
  * `memoree memory flush` — upload staged backfill summaries into the org's
- * `memory` table (the FLUSH phase; needs auth).
+ * `memory` table (the FLUSH phase; needs a configured storage backend).
  *
  * The install-time EXTRACT phase (backfill-memory.ts) stages summaries +
  * local embeddings under ~/.claude/memoree/pending-memory/ with manifest
- * rows marked `uploaded: false`. This command
- * /org-select — reads those rows and INSERTs each into the chosen org's
- * memory table via the same uploadSummary() path the live wiki-worker uses,
- * then flips the row to `uploaded: true`.
+ * rows marked `uploaded: false`. This command reads those rows and INSERTs
+ * each into the chosen org's memory table via the same uploadSummary() path
+ * the live wiki-worker uses, then flips the row to `uploaded: true`.
  *
  * Pure upload: the summary text and (usually) the embedding already exist
  * on disk, so there's no LLM call and no extraction work here. When a row
@@ -42,7 +41,7 @@ export interface FlushSummary {
 /**
  * Injectable dependencies — defaults wire the real config/query/upload/embed.
  * Tests pass fakes so the per-row loop (skip-missing, mark-uploaded, count)
- * runs without auth or network.
+ * runs without network.
  */
 export interface FlushDeps {
   loadConfig: () => Config | null;
@@ -100,7 +99,7 @@ export function defaultDeps(pluginVersion?: string): FlushDeps {
 export async function runFlushMemory(deps: FlushDeps = defaultDeps()): Promise<FlushSummary> {
   const config = deps.loadConfig();
   if (!config) {
-    return { pending: 0, uploaded: 0, failed: 0, reason: "not-logged-in" };
+    return { pending: 0, uploaded: 0, failed: 0, reason: "no-config" };
   }
 
   const manifestPath = deps.manifestPath ?? PENDING_MEMORY_MANIFEST_PATH;

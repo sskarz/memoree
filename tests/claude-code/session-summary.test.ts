@@ -305,10 +305,10 @@ describe("session summary — resumed sessions update last_update_date", () => {
       `- **JSONL offset**: 42`,
       "",
       "## What Happened",
-      "Fixed authentication bug in the login flow. Added retry logic for token refresh.",
+      "Fixed persistGraph write race. Added retry for snapshot refresh.",
       "",
       "## Key Facts",
-      "- Auth tokens now refresh automatically",
+      "- Snapshots now refresh automatically",
     ].join("\n");
 
     await uploadSummary(fs, client, sessionId, "testuser", completedSummary, "my-app");
@@ -317,7 +317,7 @@ describe("session summary — resumed sessions update last_update_date", () => {
     // last_update_date must have changed
     expect(rowAfterEnd.last_update_date).not.toBe(initialDate);
     // description must be extracted from What Happened section
-    expect(rowAfterEnd.description).toBe("Fixed authentication bug in the login flow. Added retry logic for token refresh.");
+    expect(rowAfterEnd.description).toBe("Fixed persistGraph write race. Added retry for snapshot refresh.");
     // content must be the full summary
     expect(rowAfterEnd.summary).toContain("## What Happened");
     expect(rowAfterEnd.summary).toContain("## Key Facts");

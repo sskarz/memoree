@@ -1,6 +1,6 @@
 /**
  * `memoree memory backfill` — stage knowledge from a fresh user's own past
- * local agent sessions into team memory, WITHOUT requiring sign-in.
+ * local agent sessions into team memory, without requiring storage config.
  *
  * This is the memory analogue of `skillify mine-local`. Where mine-local
  * extracts reusable *skills*, this extracts the *knowledge graph* (entities,
@@ -9,7 +9,7 @@
  *
  * Two-phase, split at the upload boundary (see pending-memory-manifest.ts):
  *
- *   EXTRACT  (this command; no auth; runs in the background at install):
+ *   EXTRACT  (this command; local-only; runs in the background at install):
  *     1. Detect supported agents by session-dir presence (claude_code, codex).
  *     2. Enumerate local sessions, keep those modified within the window
  *        (default 6 weeks).
@@ -19,7 +19,7 @@
  *        compute the embedding LOCALLY via the embed daemon, and append an
  *        `uploaded: false` row to the manifest.
  *
- *   FLUSH    (separate, post-login): upload `uploaded: false` rows to the
+ *   FLUSH    (separate, `memoree memory flush`): upload `uploaded: false` rows to the
  *     chosen org's `memory` table. Pure upload — no LLM, no embedding work,
  *     because extract already did both locally.
  *
@@ -384,7 +384,7 @@ export function summarizeExtract(
     `staged ${result.staged}/${result.attempted} session(s) ` +
       `(${result.embedded} embedded, ${result.failed} failed` +
       `${result.timedOutOnBudget ? ", budget reached" : ""}). ` +
-      `Sign in and run the flush to push them into team memory.`,
+      `Run \`memoree memory flush\` to push them into team memory.`,
     ...renderFailures(result, verbose),
   ];
   const exitCode = result.failed > 0 && result.staged === 0 ? 1 : 0;

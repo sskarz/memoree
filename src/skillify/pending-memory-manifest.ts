@@ -3,10 +3,10 @@
  * ~/.claude/memoree/pending-memory.json.
  *
  * Why this exists: memory ingestion is split at the upload boundary so the
- * expensive, auth-free work happens at `memoree install` and the cheap,
- * auth-bound work happens after sign-in.
+ * expensive, local-only work happens at `memoree install` and the cheap
+ * upload happens once storage is configured.
  *
- *   - EXTRACT (no auth, runs at install in the background): replay the
+ *   - EXTRACT (local-only, runs at install in the background): replay the
  *     user's last 4-6 weeks of local agent sessions through the same
  *     wiki-prompt the live SessionEnd path uses, write each summary to
  *     ~/.claude/memoree/pending-memory/<session_id>.md, compute the
@@ -19,7 +19,7 @@
  *
  * This mirrors the skills path exactly: `mine-local` writes skills with
  * `uploaded: false` to local-mined.json, and a later `push-local` uploads
- * them after sign-in. Memory is the same shape, one table over.
+ * them once storage is configured. Memory is the same shape, one table over.
  *
  * The manifest does triple duty (same as local-manifest.ts):
  *   1. One-shot sentinel — the backfill orchestrator refuses to re-run an
@@ -27,13 +27,13 @@
  *      trigger refuses to re-fire when the file exists (unless --force).
  *   2. Provenance + flush queue — records the staged summary path, local
  *      embedding state, source session, and `uploaded` flag so the
- *      post-login flush uploads exactly the right rows, once.
+ *      flush uploads exactly the right rows, once.
  *   3. Read-only hint surface — SessionStart hooks can surface the count
- *      of pending (un-uploaded) summaries: "N past sessions staged. Sign
- *      in to push them into your team's memory."
+ *      of pending (un-uploaded) summaries: "N past sessions staged. Run
+ *      memoree memory flush to push them into your team's memory."
  *
  * Kept separate from the backfill orchestrator so the SessionStart hooks
- * and the login-time flush can read/write it without dragging the
+ * and the flush command can read/write it without dragging the
  * orchestrator's transitive deps (wiki-worker spawn, embed client,
  * local-source enumeration) into a hook bundle.
  */
@@ -57,7 +57,7 @@ export interface PendingMemoryEntry {
    * True once a local embedding vector has been computed and stored
    * alongside the summary (see embedding_path). When false, the flush
    * phase must compute the embedding itself before INSERT — but because
-   * the embed daemon is local and auth-free, extract normally fills this
+   * the embed daemon is local, extract normally fills this
    * in so flush stays a pure upload.
    */
   embedded: boolean;
@@ -65,7 +65,7 @@ export interface PendingMemoryEntry {
   embedding_path?: string;
   /** ISO 8601 UTC — when the extract phase wrote this row. */
   extracted_at: string;
-  /** False until the post-login flush uploads this summary to the org `memory` table. */
+  /** False until `memoree memory flush` uploads this summary to the org `memory` table. */
   uploaded: boolean;
   /** ISO 8601 UTC — when the flush uploaded the row. Absent until uploaded. */
   uploaded_at?: string;

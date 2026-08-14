@@ -77,7 +77,7 @@ Memoree can mine reusable skills from agent session logs and share them across y
 - `memoree skillify install <project|global>` — default install location for new skills
 - `memoree skillify promote <skill-name>` — move a project skill to the global location
 - `memoree skillify team add|remove|list <username>` — manage team member list
-- `memoree skillify mine-local` — one-shot: mine skills from local sessions, no auth needed
+- `memoree skillify mine-local` — one-shot: mine skills from local sessions
 
 ## Embeddings (semantic memory search)
 

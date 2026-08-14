@@ -142,7 +142,7 @@ describe("pushSnapshot — gating", () => {
     });
     // CodeRabbit Minor fix: distinct outcome for no-commit (previously
     // reused "skipped-no-config" which made runBuildCommand falsely
-    // suggest the removed cloud sign-in command).
+    // suggest `memoree doctor`).
     expect(result.kind).toBe("skipped-no-commit");
   });
 });

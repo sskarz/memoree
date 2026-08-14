@@ -4,7 +4,7 @@
  * This is the memory analogue of spawn-mine-local-worker.ts. Where that one
  * seeds local *skills*, this stages *memory* summaries from the user's past
  * agent sessions (claude_code, codex, …) into ~/.claude/memoree/pending-memory/
- * so a later `memoree memory flush` (post-login) can upload them.
+ * so a later `memoree memory flush` can upload them.
  *
  * Design constraints (same ordering as the mine-local spawner):
  *   1. Never block the caller (install / SessionStart). Detached spawn, no wait.
@@ -14,9 +14,9 @@
  *   4. Never run when there's nothing to mine. Skip when no agent session
  *      directory is present.
  *
- * Unlike mine-local, the EXTRACT phase needs NO auth (it stages locally), so
- * this is safe to fire at `memoree install` before the user signs in. The
- * auth-bound upload happens separately in the flush phase.
+ * Unlike mine-local, the EXTRACT phase needs no storage backend (it stages locally), so
+ * this is safe to fire at `memoree install` before storage is configured. The
+ * upload happens separately in the flush phase.
  *
  * The lock is a courtesy sentinel, not a hard mutex — the manifest sentinel
  * + the orchestrator's own per-session dedup make a double-fire benign.

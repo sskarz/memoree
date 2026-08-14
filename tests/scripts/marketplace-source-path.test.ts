@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Regression guard for the SSO/plugin-install failure where
+// Regression guard for the plugin-install failure where
 // `claude plugin install memoree` died with:
 //   "Subdirectory 'claude-code' not found in repository ... at the specified ref/s"
 //

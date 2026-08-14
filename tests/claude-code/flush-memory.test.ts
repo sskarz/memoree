@@ -1,7 +1,7 @@
 /**
- * Unit tests for the post-login flush (runFlushMemory). Config, query,
+ * Unit tests for `memoree memory flush` (runFlushMemory). Config, query,
  * upload and embed are injected; the manifest + summary files live in a
- * tmp dir, so no auth/network/$HOME is touched.
+ * tmp dir, so no network/$HOME is touched.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -66,19 +66,19 @@ function deps(over: Partial<FlushDeps> = {}): FlushDeps {
 }
 
 describe("runFlushMemory", () => {
-  it("returns not-logged-in when no config", async () => {
+  it("returns no-config when no config", async () => {
     const r = await runFlushMemory(deps({ loadConfig: () => null }));
-    expect(r.reason).toBe("not-logged-in");
+    expect(r.reason).toBe("no-config");
   });
 
   it("default deps (no injection) no-op without network", async () => {
-    // Exercises the real defaultDeps()/loadConfig() wiring. Robust to login
-    // state: with no creds it returns not-logged-in; with creds but no
+    // Exercises the real defaultDeps()/loadConfig() wiring. Robust to
+    // config state: with no config it returns no-config; with config but no
     // pending manifest it returns 0 pending. Either way no upload/network
     // happens — the point is to cover the default-construction path.
     const r = await runFlushMemory();
     expect(r.uploaded).toBe(0);
-    expect(r.reason === "not-logged-in" || r.pending === 0).toBe(true);
+    expect(r.reason === "no-config" || r.pending === 0).toBe(true);
   });
 
   it("no-op when nothing pending", async () => {

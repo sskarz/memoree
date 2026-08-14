@@ -31,7 +31,7 @@ describe("branchScope / parseScope", () => {
   });
 
   it("preserves branch names that contain slashes", () => {
-    expect(parseScope(branchScope("feat/auth/login"))).toEqual({ kind: "branch", branch: "feat/auth/login" });
+    expect(parseScope(branchScope("feat/graph/query"))).toEqual({ kind: "branch", branch: "feat/graph/query" });
   });
 });
 
