@@ -68,7 +68,7 @@ documentation ingestion, history backfill, and skill mining remain explicit.
 src/                    TypeScript core, CLI, hooks, storage, retrieval
 harnesses/              Claude Code and Codex manifests, skills, and bundles
 embeddings/             Standalone local embedding daemon entry
-docs/                   User and architecture documentation
+docs/                   User, architecture, and testing documentation
 scripts/                Build, runtime-management, and verification utilities
 tests/                   Runtime-specific and shared Vitest coverage
 library/                 Archived QA and requirements records

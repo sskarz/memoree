@@ -91,7 +91,7 @@ cat ~/.memoree/memory/graph/tour        # deterministic guided walkthrough
   file, prefer the live source for that file.
 - **Don't try to build it.** There is no user-facing build step in normal use;
   the hooks handle it. Just read the mount.
-- **`find/` is lexical.** Substring on node id + label — `find/auth` will not
-  surface `login`/`credentials` unless those strings appear. `query/` is hybrid
+- **`find/` is lexical.** Substring on node id + label — `find/write` will not
+  surface `persistGraph` unless that string appears. `query/` is hybrid
   when embeddings are on (exact name hits first, conceptual near-misses fill in).
   `impact/` and `show/` stay exact edge walks, not cosine "references."

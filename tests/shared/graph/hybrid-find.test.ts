@@ -43,42 +43,42 @@ function snap(nodes: GraphNode[]): GraphSnapshot {
 
 describe("patternIsSemanticFriendly", () => {
   it("accepts plain tokens and query AND separators", () => {
-    expect(patternIsSemanticFriendly("login")).toBe(true);
-    expect(patternIsSemanticFriendly("auth+middleware")).toBe(true);
+    expect(patternIsSemanticFriendly("writeSnapshot")).toBe(true);
+    expect(patternIsSemanticFriendly("write+snapshot")).toBe(true);
     expect(patternIsSemanticFriendly("a")).toBe(false);
     expect(patternIsSemanticFriendly("foo(bar)|baz")).toBe(false);
   });
 });
 
 describe("findMatches", () => {
-  const login = node("src/a.ts:login:function", "login");
-  const loginHelper = node("src/a.ts:loginHelper:function", "loginHelper");
-  const myLogin = node("src/a.ts:myLogin:function", "myLogin");
-  const fileHit = node("src/login.ts:foo:function", "foo");
+  const hash = node("src/a.ts:hash:function", "hash");
+  const hashHelper = node("src/a.ts:hashHelper:function", "hashHelper");
+  const myHash = node("src/a.ts:myHash:function", "myHash");
+  const fileHit = node("src/hash.ts:foo:function", "foo");
   const helper = node("src/a.ts:helper:function", "helper");
-  const graph = snap([login, loginHelper, myLogin, fileHit, helper]);
+  const graph = snap([hash, hashHelper, myHash, fileHit, helper]);
 
   it("ranks exact, prefix, contains, then id hits", () => {
-    const hits = findMatches(graph, "login");
-    expect(hits[0]?.label).toBe("login");
-    expect(hits.map((n) => n.label)).toContain("loginHelper");
-    expect(hits.map((n) => n.label)).toContain("myLogin");
-    expect(hits.map((n) => n.id)).toContain("src/login.ts:foo:function");
+    const hits = findMatches(graph, "hash");
+    expect(hits[0]?.label).toBe("hash");
+    expect(hits.map((n) => n.label)).toContain("hashHelper");
+    expect(hits.map((n) => n.label)).toContain("myHash");
+    expect(hits.map((n) => n.id)).toContain("src/hash.ts:foo:function");
   });
 
   it("AND-matches multi-token patterns and tie-breaks by id", () => {
-    const a = node("src/a.ts:authMiddleware:function", "authMiddleware");
-    const b = node("src/b.ts:authMiddleware:function", "authMiddleware");
-    const hits = findMatches(snap([a, b, helper]), "auth+middleware");
+    const a = node("src/a.ts:writeSnapshot:function", "writeSnapshot");
+    const b = node("src/b.ts:writeSnapshot:function", "writeSnapshot");
+    const hits = findMatches(snap([a, b, helper]), "write+snapshot");
     expect(hits.map((n) => n.id)).toEqual([
-      "src/a.ts:authMiddleware:function",
-      "src/b.ts:authMiddleware:function",
+      "src/a.ts:writeSnapshot:function",
+      "src/b.ts:writeSnapshot:function",
     ]);
   });
 
   it("falls back to fuzzy when there is no substring hit", () => {
-    const hits = findMatches(graph, "loginn");
-    expect(hits[0]?.label).toBe("login");
+    const hits = findMatches(graph, "hxsh");
+    expect(hits[0]?.label).toBe("hash");
   });
 
   it("returns no hits for an empty token list", () => {
@@ -87,53 +87,53 @@ describe("findMatches", () => {
 });
 
 describe("hybridFindNodes", () => {
-  const login = node("src/a.ts:login:function", "login");
-  const authenticate = node("src/a.ts:authenticate:function", "authenticate");
+  const writeSnapshot = node("src/a.ts:writeSnapshot:function", "writeSnapshot");
+  const persistGraph = node("src/a.ts:persistGraph:function", "persistGraph");
   const helper = node("src/a.ts:helper:function", "helper");
-  const graph = snap([login, authenticate, helper]);
+  const graph = snap([writeSnapshot, persistGraph, helper]);
 
   it("returns lexical-only when no sidecar or embedding is present", () => {
-    expect(hybridFindNodes(graph, "login")).toEqual(findMatches(graph, "login"));
-    expect(hybridFindNodes(graph, "login", { queryEmbedding: [1, 0], sidecar: null })).toEqual(
-      findMatches(graph, "login"),
+    expect(hybridFindNodes(graph, "writeSnapshot")).toEqual(findMatches(graph, "writeSnapshot"));
+    expect(hybridFindNodes(graph, "writeSnapshot", { queryEmbedding: [1, 0], sidecar: null })).toEqual(
+      findMatches(graph, "writeSnapshot"),
     );
   });
 
-  it("places a lexical login hit above a semantic authenticate fill", () => {
-    const merged = hybridFindNodes(graph, "login", {
+  it("places a lexical name hit above a semantic fill", () => {
+    const merged = hybridFindNodes(graph, "writeSnapshot", {
       queryEmbedding: [1, 0],
       sidecar: {
-        "src/a.ts:authenticate:function": [0.98, 0.1],
+        "src/a.ts:persistGraph:function": [0.98, 0.1],
         "src/a.ts:helper:function": [0, 1],
       },
     });
-    expect(merged[0]?.id).toBe("src/a.ts:login:function");
-    expect(merged.map((n) => n.id)).toContain("src/a.ts:authenticate:function");
-    expect(merged.map((n) => n.id).indexOf("src/a.ts:login:function")).toBeLessThan(
-      merged.map((n) => n.id).indexOf("src/a.ts:authenticate:function"),
+    expect(merged[0]?.id).toBe("src/a.ts:writeSnapshot:function");
+    expect(merged.map((n) => n.id)).toContain("src/a.ts:persistGraph:function");
+    expect(merged.map((n) => n.id).indexOf("src/a.ts:writeSnapshot:function")).toBeLessThan(
+      merged.map((n) => n.id).indexOf("src/a.ts:persistGraph:function"),
     );
   });
 
   it("skips semantic fills when the query vector dim does not match the sidecar", () => {
-    const merged = hybridFindNodes(graph, "login", {
+    const merged = hybridFindNodes(graph, "writeSnapshot", {
       queryEmbedding: [1, 0, 0],
-      sidecar: { "src/a.ts:authenticate:function": [0.98, 0.1] },
+      sidecar: { "src/a.ts:persistGraph:function": [0.98, 0.1] },
     });
-    expect(merged).toEqual(findMatches(graph, "login"));
+    expect(merged).toEqual(findMatches(graph, "writeSnapshot"));
   });
 
   it("dedupes a node that is both a lexical and semantic hit", () => {
-    const merged = mergeHybridMatches([login, helper], [login, authenticate]);
+    const merged = mergeHybridMatches([writeSnapshot, helper], [writeSnapshot, persistGraph]);
     expect(merged.map((n) => n.id)).toEqual([
-      "src/a.ts:login:function",
+      "src/a.ts:writeSnapshot:function",
       "src/a.ts:helper:function",
-      "src/a.ts:authenticate:function",
+      "src/a.ts:persistGraph:function",
     ]);
   });
 
   it("drops semantic hits below the cosine floor", () => {
     const semantic = semanticMatchesFromSidecar(graph, [1, 0], {
-      "src/a.ts:authenticate:function": [0.1, 0.99],
+      "src/a.ts:persistGraph:function": [0.1, 0.99],
     });
     expect(semantic).toEqual([]);
   });

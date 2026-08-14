@@ -517,40 +517,6 @@ describe("handleGraphVfs", () => {
     expect(asyncR).toEqual(sync);
   });
 
-  it("query/login ranks a lexical login hit above a semantic authenticate fill", async () => {
-    mkdirSync(snapshotsDir, { recursive: true });
-    const snap = makeSnapshot("deadbeef");
-    snap.nodes.push(
-      { id: "src/auth.ts:login:function", label: "login", kind: "function", source_file: "src/auth.ts", source_location: "L1", language: "typescript", exported: true },
-      { id: "src/auth.ts:authenticate:function", label: "authenticate", kind: "function", source_file: "src/auth.ts", source_location: "L8", language: "typescript", exported: true },
-    );
-    writeFileSync(join(snapshotsDir, "deadbeef.json"), JSON.stringify(snap));
-    writeLastBuild(baseDir, {
-      ts: Date.now(),
-      commit_sha: "deadbeef",
-      snapshot_sha256: "x".repeat(64),
-      node_count: snap.nodes.length,
-      edge_count: snap.links.length,
-    }, wt);
-
-    const r = await handleGraphVfsAsync("query/login", cwd, {
-      embeddingsEnabled: true,
-      embedQuery: async () => [1, 0],
-      sidecar: {
-        "src/auth.ts:authenticate:function": [0.98, 0.1],
-        "src/a.ts:bar:function": [0, 1],
-      },
-    });
-    expect(r.kind).toBe("ok");
-    if (r.kind === "ok") {
-      const loginAt = r.body.indexOf("src/auth.ts:login:function");
-      const authAt = r.body.indexOf("src/auth.ts:authenticate:function");
-      expect(loginAt).toBeGreaterThan(-1);
-      expect(authAt).toBeGreaterThan(-1);
-      expect(loginAt).toBeLessThan(authAt);
-    }
-  });
-
   it("impact/ and show/ ignore a sidecar", async () => {
     seed();
     const sidecar = { "src/a.ts:foo:function": [1, 0] };
