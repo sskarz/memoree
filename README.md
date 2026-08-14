@@ -159,6 +159,11 @@ directory yourself only after making any desired backup.
 
 ## Development checks
 
+See [docs/TESTING.md](docs/TESTING.md) for the full flow. Short version: `npm run
+verify` is the everyday gate (no install, no closing Claude or Codex). Installing
+a commit onto daily Claude Code / Codex (`runtime:promote`) is a separate, rare
+step.
+
 `npm run verify` is the routine local gate: strict TypeScript, a static check of
 the JavaScript runtime validator, and source-level Vitest, without rebuilding
 runtime bundles.

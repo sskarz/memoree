@@ -16,7 +16,7 @@ import { sqlLike } from "../utils/sql.js";
 import { log as _log } from "../utils/debug.js";
 import { isDirectRun } from "../utils/direct-run.js";
 import { type GrepParams, parseBashGrep, handleGrepDirect } from "./grep-direct.js";
-import { handleGraphVfs } from "../graph/vfs-handler.js";
+import { handleGraphVfsAsync } from "../graph/vfs-handler.js";
 import { handleDocsVfs } from "../docs/vfs-handler.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
 import { defaultGit } from "../docs/candidates.js";
@@ -152,6 +152,11 @@ function getReadTargetPath(toolInput: Record<string, unknown>): string | null {
 function isLikelyDirectoryPath(virtualPath: string): boolean {
   const normalized = virtualPath.replace(/\/+$/, "") || "/";
   if (normalized === "/") return true;
+  // Graph search endpoints are files even when the pattern has no extension
+  // (`query/store`, `find/writeSnapshot`, `layers`). Treating them as directories
+  // made Claude Read skip the graph VFS and SQL-list an empty path.
+  if (normalized === "/graph/layers" || normalized === "/graph/tour") return false;
+  if (/^\/graph\/(?:find|query|show|impact|path|neighborhood)\//.test(normalized)) return false;
   const base = normalized.split("/").pop() ?? "";
   return !base.includes(".");
 }
@@ -254,7 +259,7 @@ interface ClaudePreToolDeps {
   createApi?: (table: string, config: NonNullable<ReturnType<typeof loadConfig>>) => StorageBackend;
   executeCompiledBashCommandFn?: typeof executeCompiledBashCommand;
   handleGrepDirectFn?: typeof handleGrepDirect;
-  handleGraphVfsFn?: typeof handleGraphVfs;
+  handleGraphVfsFn?: typeof handleGraphVfsAsync;
   handleDocsVfsFn?: typeof handleDocsVfs;
   readVirtualPathContentsFn?: typeof readVirtualPathContents;
   readVirtualPathContentFn?: typeof readVirtualPathContent;
@@ -273,7 +278,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     createApi = (table, activeConfig) => createStorageBackend(activeConfig, table),
     executeCompiledBashCommandFn = executeCompiledBashCommand,
     handleGrepDirectFn = handleGrepDirect,
-    handleGraphVfsFn = handleGraphVfs,
+    handleGraphVfsFn = handleGraphVfsAsync,
     handleDocsVfsFn = handleDocsVfs,
     readVirtualPathContentsFn = readVirtualPathContents,
     readVirtualPathContentFn = readVirtualPathContent,
@@ -462,7 +467,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     if (virtualPath && virtualPath.startsWith("/graph/") && !virtualPath.endsWith("/")) {
       const subpath = virtualPath.slice("/graph/".length);
       logFn(`graph vfs: ${subpath}`);
-      const result = handleGraphVfsFn(subpath, process.cwd());
+      const result = await handleGraphVfsFn(subpath, input.cwd ?? process.cwd());
       const body = result.kind === "ok"
         ? result.body
         : `(${result.kind}) ${result.message}`;
@@ -474,16 +479,6 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         return buildReadDecision(file_path, `[memoree graph] ${virtualPath}`);
       }
       return buildAllowDecision(safeEchoCommand(body), `[memoree graph] /graph/${subpath}`);
-    }
-    if (lsDir === "/graph" || lsDir === "/graph/") {
-      const body = "index.md\nfind/\nshow/\n";
-      if (input.tool_name === "Read") {
-        // Synthetic leaf (not "/graph" itself) so later reads of
-        // /graph/index.md or /graph/show/... can still create children.
-        const file_path = writeReadCacheFileFn(input.session_id, "/graph/_listing.txt", body);
-        return buildReadDecision(file_path, "[memoree graph] ls /graph");
-      }
-      return buildAllowDecision(safeEchoCommand(body), `[memoree graph] ls /graph`);
     }
 
     // Docs VFS dispatch — the browsable per-directory docs index under
@@ -570,9 +565,18 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     } else if (input.tool_name === "Bash") {
       const lsMatch = shellCmd.match(/^ls\s+(?:-([a-zA-Z]+)\s+)?(\S+)?\s*$/);
       if (lsMatch) {
-        lsDir = lsMatch[2] ?? "/";
+        lsDir = rewritePaths(lsMatch[2] ?? "/") || "/";
         longFormat = (lsMatch[1] ?? "").includes("l");
       }
+    }
+
+    if (lsDir === "/graph" || lsDir === "/graph/") {
+      const body = "index.md\nfind/\nquery/\nshow/\nimpact/\nneighborhood/\nlayers\ntour\npath/\n";
+      if (input.tool_name === "Read") {
+        const file_path = writeReadCacheFileFn(input.session_id, "/graph/_listing.txt", body);
+        return buildReadDecision(file_path, "[memoree graph] ls /graph");
+      }
+      return buildAllowDecision(safeEchoCommand(body), `[memoree graph] ls /graph`);
     }
 
     if (lsDir) {

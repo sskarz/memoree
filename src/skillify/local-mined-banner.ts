@@ -1,7 +1,7 @@
 /**
  * Pure renderer for the SessionStart "local mined" surface — the text the
  * Claude Code hook appends to its model-visible `additionalContext` when
- * the user hasn't signed in but `memoree skillify mine-local` has
+ * the user has no storage config but `memoree skillify mine-local` has
  * produced at least one skill.
  *
  * MODEL-SAFE BY CONSTRUCTION: this output goes into the model's system
@@ -25,8 +25,8 @@ export interface LocalMinedBannerInput {
 /**
  * Render the SessionStart "local mined" note. Returns an empty string
  * when there are no entries at all — the hook then emits no extra
- * block. When entries exist, renders a count-only line with a sign-in
- * CTA. The text is appended to the "Not logged in" warning block, so
+ * block. When entries exist, renders a count-only line with a doctor
+ * CTA. The text is appended to the storage-unavailable warning block, so
  * it must lead with a newline gap.
  */
 export function renderLocalMinedNote(input: LocalMinedBannerInput): string {

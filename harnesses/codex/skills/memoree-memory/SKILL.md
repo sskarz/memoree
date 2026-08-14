@@ -45,20 +45,6 @@ Do NOT jump straight to rendered transcript views. Always start with index.md an
 - Edit a rule by overwriting the same file. Move it between `active/` and `done/` with `mv`, preserving the filename; `rm` on an active rule means mark done.
 - Never invoke Node, Python, `uuidgen`, or another helper to make the UUID. Rule text must be nonempty, single-line, and at most 2,000 characters.
 
-## Organization Management
-
-Each argument is separate — do NOT quote subcommands together. The auth command is at `$PLUGIN_ROOT/bundle/commands/auth-login.js` (or check the session context for the resolved path):
-- `node "<path>/auth-login.js" login` — SSO login
-- `node "<path>/auth-login.js" whoami` — show current user/org
-- `node "<path>/auth-login.js" org list` — list organizations
-- `node "<path>/auth-login.js" org switch <name-or-id>` — switch organization
-- `node "<path>/auth-login.js" workspaces` — list workspaces
-- `node "<path>/auth-login.js" workspace <id>` — switch workspace
-- `node "<path>/auth-login.js" invite <email> <ADMIN|WRITE|READ>` — invite member (ALWAYS ask user which role first)
-- `node "<path>/auth-login.js" members` — list members
-- `node "<path>/auth-login.js" remove <user-id>` — remove member
-- `node "<path>/auth-login.js" --help` — show all commands
-
 ## Skill Management (skillify)
 
 Memoree can mine reusable skills from agent session logs and share them across your team. Each argument is separate — do NOT quote subcommands together.
@@ -83,7 +69,7 @@ Memoree can mine reusable skills from agent session logs and share them across y
 - `memoree skillify install <project|global>` — default install location for new skills
 - `memoree skillify promote <skill-name>` — move a project skill to the global location
 - `memoree skillify team add|remove|list <username>` — manage team member list
-- `memoree skillify mine-local` — one-shot: mine skills from local sessions, no auth needed
+- `memoree skillify mine-local` — one-shot: mine skills from local sessions
 
 ## Embeddings (semantic memory search)
 
@@ -105,9 +91,7 @@ Do NOT spawn subagents to read Memoree memory. If a file returns empty after 2 a
 
 ## Getting Started
 
-After installing the plugin:
-1. Authenticate with `node "<AUTH_CMD>" login`
-2. Start using memory — ask questions, Codex automatically captures and searches
+After installing the plugin, restart Codex and run `memoree doctor`. Codex then captures and searches memory automatically.
 
 ## Configuration
 

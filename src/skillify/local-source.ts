@@ -1,7 +1,7 @@
 /**
  * Discover and pre-process local agent session transcripts WITHOUT touching
  * Memoree. Powers `memoree skillify mine-local`, which seeds skills for
- * fresh installs that haven't logged in yet.
+ * fresh installs that do not have storage configured yet.
  *
  * Two concerns live here:
  *  1. Agent + session detection: which agents have a session dir on disk,

@@ -5,6 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runGraphCommand } from "../../../src/commands/graph.js";
+import {
+  _setEnabledReaderForTesting,
+  _resetForTesting as _resetEmbeddingsForTesting,
+} from "../../../src/embeddings/disable.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -93,9 +97,14 @@ describe("runGraphCommand build — end-to-end against a tiny git repo", () => {
     workDir = mkdtempSync(join(tmpdir(), "graph-cmd-work-"));
     graphsHome = mkdtempSync(join(tmpdir(), "graph-cmd-home-"));
     process.env.MEMOREE_GRAPHS_HOME = graphsHome;
+    // Build writes a node-embedding sidecar when embeddings are on. These
+    // cases assert snapshot files, not the daemon — keep them off the
+    // 30s embed timeout.
+    _setEnabledReaderForTesting(() => false);
   });
 
   afterEach(() => {
+    _resetEmbeddingsForTesting();
     if (prevGraphsHome === undefined) delete process.env.MEMOREE_GRAPHS_HOME;
     else process.env.MEMOREE_GRAPHS_HOME = prevGraphsHome;
     rmSync(workDir, { recursive: true, force: true });
@@ -235,11 +244,11 @@ describe("runGraphCommand — dispatcher coverage for non-build subcommands", ()
     expect((out + err).length).toBeGreaterThan(0);
   });
 
-  it("pull: skipped-no-config when loadConfig returns null (no credentials)", async () => {
+  it("pull: skipped-no-config when loadConfig returns null (no storage config)", async () => {
     // workDir has no git repo; pull early-returns "skipped-no-head"
-    // (we don't need auth here — readHead null short-circuits). Either
-    // skipped-no-config or skipped-no-head is acceptable — both prove the
-    // dispatch branch ran without crashing.
+    // (readHead null short-circuits). Either skipped-no-config or
+    // skipped-no-head is acceptable — both prove the dispatch branch ran
+    // without crashing.
     const { out, err } = await captureOutput(() => runGraphCommand(["pull", "--cwd", workDir]));
     expect(`${out}\n${err}`).toMatch(/Skipped|no.backend.row|not in a git repo|storage unavailable/i);
   });

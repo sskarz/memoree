@@ -108,7 +108,7 @@ describe("session-end hook", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("returns without spawning when loadConfig returns null (no credentials)", async () => {
+  it("returns without spawning when loadConfig returns null (no storage config)", async () => {
     loadConfigMock.mockReturnValue(null);
     await runHook();
     expect(tryAcquireLockMock).not.toHaveBeenCalled();

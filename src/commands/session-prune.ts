@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Session prune CLI — scoped cleanup of session data by the logged-in author.
+ * Session prune CLI — scoped cleanup of session data by the configured author.
  *
  * Usage:
  *   memoree sessions prune                          — list pruneable sessions (dry run)

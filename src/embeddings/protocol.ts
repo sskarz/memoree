@@ -19,6 +19,28 @@ export interface EmbedResponse {
   error?: string;
 }
 
+/** One transformer forward pass for many documents. Additive; old daemons return unknown op. */
+export interface EmbedBatchRequest {
+  op: "embed_batch";
+  id: string;
+  kind: EmbedKind;
+  texts: string[];
+}
+
+export interface EmbedBatchResponse {
+  id: string;
+  embeddings?: number[][];
+  error?: string;
+}
+
+/**
+ * Daemon wire cap (not a nomic model-card limit). transformers.js pads the
+ * whole batch to the longest sequence; a huge array of long texts can pin
+ * RAM. Graph sidecar writes chunk at 32; this rejects accidental oversized
+ * embed_batch requests.
+ */
+export const MAX_EMBED_BATCH = 128;
+
 export interface PingRequest {
   op: "ping";
   id: string;
@@ -52,8 +74,8 @@ export interface HelloResponse {
   error?: string;
 }
 
-export type DaemonRequest = EmbedRequest | PingRequest | HelloRequest;
-export type DaemonResponse = EmbedResponse | PingResponse | HelloResponse;
+export type DaemonRequest = EmbedRequest | EmbedBatchRequest | PingRequest | HelloRequest;
+export type DaemonResponse = EmbedResponse | EmbedBatchResponse | PingResponse | HelloResponse;
 
 // Increment when the wire protocol changes in a non-backward-compatible
 // way. Used by the client's handshake mismatch check.

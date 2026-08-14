@@ -34,6 +34,9 @@ import { loadRoutedConfig } from "../dir-config.js";
 import { createStorageBackend } from "../storage/factory.js";
 import { runMineLocal } from "./mine-local.js";
 import { renderSubcommandUsageBlock } from "../cli/skillify-spec.js";
+import { parseHygieneCliArgs, runHygieneCycle } from "../skillify/hygiene.js";
+import { deriveProjectKey } from "../utils/repo-identity.js";
+import { detectHostAgent } from "../skillify/local-source.js";
 
 // Route through the shared `getStateDir()` so `MEMOREE_STATE_DIR`
 // redirects (tests, alternate installs) land in the same dir as the
@@ -345,14 +348,14 @@ async function unpullSkills(args: string[]): Promise<void> {
 
   // Unpull is a local filesystem operation: deleting `<root>/<dir>/` and
   // pruning `pulled.json`. The Memoree API is never queried. The only
-  // reason we need credentials is `--not-mine`, which compares each
-  // entry's author to `config.userName`. Skip the login check otherwise so
-  // a user who's been bounced from the org can still clean up their disk.
+  // reason we need config is `--not-mine`, which compares each entry's
+  // author to `config.userName`. Skip that lookup otherwise so a user
+  // without storage configured can still clean up their disk.
   let myUsername: string | undefined;
   if (notMine) {
     const config = loadConfig();
     if (!config) {
-      throw new Error("--not-mine requires a logged-in user. Run: memoree doctor");
+      throw new Error("--not-mine requires a configured userName. Run: memoree doctor");
     }
     myUsername = config.userName;
   }
@@ -446,6 +449,24 @@ export function runSkillifyCommand(args: string[]): void {
     });
     return;
   }
+  if (sub === "hygiene") {
+    const flags = parseHygieneCliArgs(args.slice(1));
+    const cwd = process.cwd();
+    const { key: projectKey } = deriveProjectKey(cwd);
+    const host = detectHostAgent();
+    const agent = host === "codex" ? "codex" as const : "claude_code" as const;
+    runHygieneCycle({ cwd, projectKey, agent, dryRun: flags.dryRun, force: flags.force })
+      .then((result) => {
+        for (const line of result.lines) console.log(line);
+        if (result.kind === "failed-llm" || result.kind === "failed-apply") process.exit(1);
+      })
+      .catch((e) => {
+        console.error(`hygiene error: ${e?.message ?? e}`);
+        process.exit(1);
+      })
+      .catch(() => { /* test-only safety net */ });
+    return;
+  }
   if (sub === "--help" || sub === "-h" || sub === "help") { usage(); return; }
   console.error(`Unknown skillify subcommand: ${sub}`);
   usage();
@@ -454,7 +475,7 @@ export function runSkillifyCommand(args: string[]): void {
 
 // Run as a standalone script only when invoked directly via Node — not when
 // imported by the unified CLI (`bundle/cli.js`). Identify by the entry
-// script's filename, the same pattern auth-login.ts uses.
+// script's filename.
 if (process.argv[1] && process.argv[1].endsWith("skillify.js")) {
   runSkillifyCommand(process.argv.slice(2));
 }

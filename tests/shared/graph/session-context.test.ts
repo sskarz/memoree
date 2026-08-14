@@ -89,6 +89,7 @@ describe("graphContextLine", () => {
     expect(line).toContain("~/.memoree/memory/graph/find/<pattern>");
     expect(line).toContain("~/.memoree/memory/graph/show/<handle-or-pattern>");
     expect(line).toContain("~/.memoree/memory/graph/query/<pattern>"); // C7: primary entry advertised
+    expect(line).toContain("discovery");
     // v1.2 reframe: graph positioned as a navigation INDEX, then Read the source.
     expect(line).toContain("fast INDEX to locate");
     // Cross-file resolution wording (replaces the old "intra-file only" caveat).

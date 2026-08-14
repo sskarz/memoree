@@ -76,6 +76,44 @@ describe("EmbedClient", () => {
     expect(vec).toEqual([0.1, 0.2, 0.3]);
   });
 
+  itNix("embedBatch returns one vector per text in a single round-trip", async () => {
+    const dir = makeTmpDir();
+    let batchCalls = 0;
+    await startFakeDaemon(dir, (req) => {
+      if (req.op === "embed_batch") {
+        batchCalls += 1;
+        return { id: req.id, embeddings: req.texts.map((_, i) => [i, 1]) };
+      }
+      return { id: req.id, ready: true };
+    });
+    const client = new EmbedClient({ socketDir: dir, timeoutMs: 500, autoSpawn: false, daemonEntry: "" });
+    const vecs = await client.embedBatch(["a", "b"], "document");
+    expect(batchCalls).toBe(1);
+    expect(vecs).toEqual([[0, 1], [1, 1]]);
+  });
+
+  itNix("embedBatch returns [] without contacting the daemon", async () => {
+    const dir = makeTmpDir();
+    const client = new EmbedClient({ socketDir: dir, timeoutMs: 100, autoSpawn: false, daemonEntry: "" });
+    expect(await client.embedBatch([])).toEqual([]);
+  });
+
+  itNix("embedBatch falls back to sequential embed when the daemon lacks embed_batch", async () => {
+    const dir = makeTmpDir();
+    const ops: string[] = [];
+    await startFakeDaemon(dir, (req) => {
+      ops.push(req.op);
+      if (req.op === "embed_batch") return { id: req.id, error: "unknown op" };
+      if (req.op === "embed") return { id: req.id, embedding: [7, 8] };
+      return { id: req.id, ready: true };
+    });
+    const client = new EmbedClient({ socketDir: dir, timeoutMs: 500, autoSpawn: false, daemonEntry: "" });
+    const vecs = await client.embedBatch(["x", "y"], "document");
+    expect(ops).toContain("embed_batch");
+    expect(ops.filter((o) => o === "embed")).toHaveLength(2);
+    expect(vecs).toEqual([[7, 8], [7, 8]]);
+  });
+
   itNix("returns null when the daemon returns an error", async () => {
     const dir = makeTmpDir();
     await startFakeDaemon(dir, (req) => ({ id: req.id, error: "boom" }));

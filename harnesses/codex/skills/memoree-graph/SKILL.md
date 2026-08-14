@@ -44,9 +44,11 @@ Activate when the user asks a *structural / relational* question about the code:
 cat ~/.memoree/memory/graph/index.md
 #   Overview: node/edge counts, kind breakdown, top files by node count.
 
-cat ~/.memoree/memory/graph/query/<pattern>   # START HERE (the 2-in-1)
-#   Search + expand the top matches with their 1-hop neighbors (callers,
-#   callees, imports, heritage). Multi-token AND: query/<a>+<b>.
+cat ~/.memoree/memory/graph/query/<pattern>   # START HERE (discovery)
+#   Hybrid search (lexical + semantic when embeddings are on) then expand
+#   the top matches with 1-hop neighbors. Multi-token AND: query/<a>+<b>.
+#   This is discovery, not a callers/callees walk — use show/ or impact/
+#   for exact references.
 
 cat ~/.memoree/memory/graph/find/<pattern>
 #   Case-insensitive substring search on node id + label (max 50 hits).
@@ -89,6 +91,7 @@ cat ~/.memoree/memory/graph/tour        # deterministic guided walkthrough
   file, prefer the live source for that file.
 - **Don't try to build it.** There is no user-facing build step in normal use;
   the hooks handle it. Just read the mount.
-- **`find/` is lexical, not semantic.** It matches substrings, not meaning —
-  `find/auth` won't surface `login`/`credentials` unless those strings appear in
-  the id/label. Try multiple keywords if the first misses.
+- **`find/` is lexical.** Substring on node id + label — `find/write` will not
+  surface `persistGraph` unless that string appears. `query/` is hybrid
+  when embeddings are on (exact name hits first, conceptual near-misses fill in).
+  `impact/` and `show/` stay exact edge walks, not cosine "references."

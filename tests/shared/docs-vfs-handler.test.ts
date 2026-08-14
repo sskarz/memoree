@@ -135,7 +135,7 @@ describe("handleDocsVfs", () => {
 
 describe("handleDocsVfs — find/ search route", () => {
   const hitRows = [
-    { path: "src/auth.ts", content: "# src/auth.ts\nHandles login and tokens." },
+    { path: "src/graph.ts", content: "# src/graph.ts\nHandles persistGraph and snapshots." },
     { path: "src/session.ts", content: "# src/session.ts\nSession lifecycle." },
   ];
 
@@ -149,11 +149,11 @@ describe("handleDocsVfs — find/ search route", () => {
 
   it("lexical (no embedder): lists ranked docs, marks (keyword)", async () => {
     const query = vi.fn(async (_sql: string) => hitRows);
-    const r = await handleDocsVfs("find/login token", query, TBL);
+    const r = await handleDocsVfs("find/persist graph", query, TBL);
     expect(r.kind).toBe("ok");
     const body = r.kind === "ok" ? r.body : "";
-    expect(body).toContain('2 doc(s) match "login token" (keyword)');
-    expect(body).toContain("## src/auth.ts");
+    expect(body).toContain('2 doc(s) match "persist graph" (keyword)');
+    expect(body).toContain("## src/graph.ts");
     expect(body).toContain("## src/session.ts");
     // searched with an ILIKE over content, no cosine (no embedding provided)
     const sql = query.mock.calls[0][0] as string;
@@ -164,7 +164,7 @@ describe("handleDocsVfs — find/ search route", () => {
   it("semantic (embedder returns a vector): marks (semantic + keyword) and runs cosine", async () => {
     const query = vi.fn(async (_sql: string) => hitRows);
     const embedQuery = vi.fn(async () => [0.1, 0.2, 0.3]);
-    const r = await handleDocsVfs("find/where are tokens minted", query, TBL, { embedQuery });
+    const r = await handleDocsVfs("find/where are snapshots written", query, TBL, { embedQuery });
     expect(embedQuery).toHaveBeenCalledOnce();
     const body = r.kind === "ok" ? r.body : "";
     expect(body).toContain("(semantic + keyword)");

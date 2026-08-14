@@ -28,6 +28,9 @@ vi.mock("../../src/embeddings/nomic.js", () => {
       return [0.1, 0.2, 0.3];
     }
     async embedBatch(texts: string[], _kind?: string) {
+      if ((globalThis as any).__embedMode === "throw") {
+        throw new Error("forced embed failure");
+      }
       return texts.map(() => [0.1, 0.2, 0.3]);
     }
   }
@@ -99,6 +102,34 @@ describe.skipIf(process.platform === "win32")("EmbedDaemon", () => {
     const resp = await sendLine(sock, { op: "embed", id: "e1", kind: "document", text: "hello" });
     expect(resp.id).toBe("e1");
     expect(resp.embedding).toEqual([0.1, 0.2, 0.3]);
+
+    exitSpy.mockRestore();
+  });
+
+  it("answers an embed_batch request with one vector per text", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    daemon = new EmbedDaemon({ socketDir: dir, idleTimeoutMs: 60_000 });
+    await daemon.start();
+
+    const uid = String(process.getuid?.() ?? "test");
+    const sock = join(dir, `memoree-embed-${uid}.sock`);
+    const resp = await sendLine(sock, { op: "embed_batch", id: "b1", kind: "document", texts: ["a", "b"] });
+    expect(resp.id).toBe("b1");
+    expect(resp.embeddings).toEqual([[0.1, 0.2, 0.3], [0.1, 0.2, 0.3]]);
+
+    exitSpy.mockRestore();
+  });
+
+  it("rejects an embed_batch larger than MAX_EMBED_BATCH", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    daemon = new EmbedDaemon({ socketDir: dir, idleTimeoutMs: 60_000 });
+    await daemon.start();
+
+    const uid = String(process.getuid?.() ?? "test");
+    const sock = join(dir, `memoree-embed-${uid}.sock`);
+    const texts = Array.from({ length: 129 }, (_, i) => `t${i}`);
+    const resp = await sendLine(sock, { op: "embed_batch", id: "b2", kind: "document", texts });
+    expect(resp.error).toMatch(/exceeds/);
 
     exitSpy.mockRestore();
   });

@@ -7,12 +7,12 @@
  *      re-run when the file exists (unless `--force` is passed).
  *   2. Provenance index — records every locally-mined skill's canonical
  *      path, source sessions, fan-out symlinks, and gate metadata for a
- *      future `push-local` flow (uploads `uploaded:false` rows after
- *      sign-in).
+ *      future `push-local` flow (uploads `uploaded:false` rows once
+ *      storage is configured).
  *   3. Read-only hint surface — the per-agent SessionStart hooks read
- *      the entry count when no credentials are present and surface it
+ *      the entry count when no storage config is present and surface it
  *      as part of the "storage unavailable" injection: "You have N local
- *      skills. Sign in to share new ones."
+ *      skills. Run memoree doctor to check storage."
  *
  * Pulled out of `src/commands/mine-local.ts` so the session-start hooks
  * don't have to depend on the CLI orchestrator (which transitively
@@ -39,7 +39,7 @@ export interface LocalManifestEntry {
    * One-line user-facing insight emitted by the gate alongside the skill —
    * concrete and counted, addressed to the user in second person ("You
    * revisited 4 merged PRs in the last month..."). Surfaced by the
-   * SessionStart banner when present so unauthenticated users see a real
+   * SessionStart banner when present so users without storage configured see a real
    * finding instead of an abstract skill count. Optional for backward
    * compatibility — entries written before this field landed parse fine
    * and fall back to the count-only banner.

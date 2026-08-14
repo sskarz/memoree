@@ -17,9 +17,11 @@
  * They're just filtered views of show. Prematurely freezing the path
  * taxonomy makes future API evolution painful (codex P1 review).
  *
- * Privacy: the handler reads ONLY the local snapshot file on disk.
- * Zero external service calls in the read path. Backend synchronization happens in
- * a separate async worker (src/hooks/graph-pull-worker.ts).
+ * Privacy: the handler reads the local snapshot file on disk. find/show/impact
+ * stay CPU-only. query/ may ask the local embed daemon for a query vector
+ * when a sidecar exists; daemon failure falls back to lexical search.
+ * Backend synchronization happens in a separate async worker
+ * (src/hooks/graph-pull-worker.ts).
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -35,6 +37,17 @@ import { renderLayers } from "./render/layers.js";
 import { renderTour } from "./render/tour.js";
 import { renderPath } from "./render/path.js";
 import { renderImpact } from "./render/impact.js";
+import {
+  embedQueryWithTimeout,
+  findMatches,
+  hybridFindNodes,
+  patternIsSemanticFriendly,
+  type QueryEmbedder,
+} from "./hybrid-find.js";
+import { loadNodeEmbeddingIndex } from "./node-embeddings.js";
+import { embeddingsDisabled } from "../embeddings/disable.js";
+import { EmbedClient } from "../embeddings/client.js";
+import { fileURLToPath } from "node:url";
 
 function workTreeIdFor(cwd: string): string {
   return createHash("sha256").update(cwd).digest("hex").slice(0, 16);
@@ -45,6 +58,31 @@ export type GraphVfsResult =
   | { kind: "not-found"; message: string }
   | { kind: "no-graph"; message: string };
 
+export interface GraphVfsAsyncDeps {
+  /** Override query embedder (tests). Production uses the nomic daemon. */
+  embedQuery?: QueryEmbedder;
+  /** Injected sidecar; when omitted, read the packed index from disk. */
+  sidecar?: Record<string, number[]> | null;
+  /** When false, skip semantic even if a sidecar exists. */
+  embeddingsEnabled?: boolean;
+}
+
+function defaultQueryEmbedder(): QueryEmbedder {
+  if (embeddingsDisabled()) return async () => null;
+  const bundled = join(dirname(fileURLToPath(import.meta.url)), "..", "embeddings", "embed-daemon.js");
+  const client = new EmbedClient(
+    existsSync(bundled) ? { daemonEntry: bundled, timeoutMs: 500 } : { timeoutMs: 500 },
+  );
+  return async (text: string) => {
+    try {
+      const vector = await client.embed(text, "query");
+      return vector && vector.length > 0 ? vector : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
 /**
  * Top-level dispatcher. `subpath` is whatever comes after
  * <memory>/graph/ — e.g. "index.md", "find/pushSnapshot", "show/3".
@@ -52,6 +90,10 @@ export type GraphVfsResult =
  * Best-effort: any error returns a "no-graph" result with the reason
  * inline; this keeps the agent unblocked even when the graph isn't
  * available (e.g. on a fresh checkout that hasn't built yet).
+ *
+ * `query/` on this sync path is lexical only (exists/stat, tests).
+ * Production reads go through handleGraphVfsAsync so query/ can union
+ * sidecar embeddings without blocking find/show/impact.
  */
 export function handleGraphVfs(subpath: string, cwd: string): GraphVfsResult {
   // Normalize leading slash so callers can pass either "/find/X" or "find/X".
@@ -159,12 +201,72 @@ export function handleGraphVfs(subpath: string, cwd: string): GraphVfsResult {
   };
 }
 
+/**
+ * Async dispatcher used by cat/Read. Non-query endpoints match handleGraphVfs
+ * exactly (CPU-only). query/ unions lexical findMatches with sidecar cosine
+ * hits when embeddings are on and a sidecar exists.
+ */
+export async function handleGraphVfsAsync(
+  subpath: string,
+  cwd: string,
+  deps: GraphVfsAsyncDeps = {},
+): Promise<GraphVfsResult> {
+  const path = subpath.replace(/^\/+/, "");
+  if (!path.startsWith("query/")) return handleGraphVfs(subpath, cwd);
+
+  const pattern = path.slice("query/".length);
+  if (pattern === "") {
+    return { kind: "not-found", message: "query/ requires a pattern: cat memory/graph/query/<keyword>" };
+  }
+
+  const loaded = loadSnapshot(cwd);
+  if (loaded.kind !== "loaded") return loaded;
+
+  const enabled = deps.embeddingsEnabled ?? !embeddingsDisabled();
+  let queryEmbedding: number[] | null = null;
+  let sidecar: Record<string, number[]> | null | undefined = deps.sidecar;
+  let index = sidecar === undefined
+    ? (enabled && patternIsSemanticFriendly(pattern)
+      ? loadNodeEmbeddingIndex(loaded.baseDir, loaded.snapshotSha256)
+      : null)
+    : null;
+  if (enabled && patternIsSemanticFriendly(pattern)) {
+    const hasVectors = sidecar !== undefined ? Boolean(sidecar) : Boolean(index);
+    if (hasVectors) {
+      const embed = deps.embedQuery ?? defaultQueryEmbedder();
+      queryEmbedding = await embedQueryWithTimeout(pattern, embed);
+    }
+  }
+  try {
+    return {
+      kind: "ok",
+      body: renderQuery(
+        loaded.snap,
+        pattern,
+        loaded.baseDir,
+        workTreeIdFor(cwd),
+        hybridFindNodes(loaded.snap, pattern, {
+          queryEmbedding,
+          sidecar: sidecar === undefined ? null : sidecar,
+          index,
+        }),
+      ),
+    };
+  } catch (e) {
+    return { kind: "no-graph", message: `Failed to render graph view: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 // ── Snapshot loading ───────────────────────────────────────────────────
 
-function loadSnapshotOrError(
-  cwd: string,
-  fn: (snap: GraphSnapshot, baseDir: string) => GraphVfsResult,
-): GraphVfsResult {
+interface LoadedSnapshot {
+  kind: "loaded";
+  snap: GraphSnapshot;
+  baseDir: string;
+  snapshotSha256: string;
+}
+
+function loadSnapshot(cwd: string): LoadedSnapshot | GraphVfsResult {
   let key: string;
   let baseDir: string;
   try {
@@ -208,8 +310,17 @@ function loadSnapshotOrError(
       !Array.isArray((snap as { links?: unknown }).links)) {
     return { kind: "no-graph", message: "Snapshot schema is invalid (missing nodes/links arrays)." };
   }
+  return { kind: "loaded", snap, baseDir, snapshotSha256: last.snapshot_sha256 };
+}
+
+function loadSnapshotOrError(
+  cwd: string,
+  fn: (snap: GraphSnapshot, baseDir: string) => GraphVfsResult,
+): GraphVfsResult {
+  const loaded = loadSnapshot(cwd);
+  if (loaded.kind !== "loaded") return loaded;
   try {
-    return fn(snap, baseDir);
+    return fn(loaded.snap, loaded.baseDir);
   } catch (e) {
     return { kind: "no-graph", message: `Failed to render graph view: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -308,99 +419,6 @@ function renderIndex(snap: GraphSnapshot, baseDir: string, cwd: string): string 
   return lines.join("\n");
 }
 
-/**
- * Substring search on node id + label, ranked (exact label > prefix > id
- * contains > label contains), tie-broken by id. Shared by find/ and query/.
- * Returns ALL matches sorted; callers cap as needed.
- *
- * D1 multi-token: a pattern may carry several tokens separated by whitespace
- * or `+` (e.g. `auth+middleware` or, quoted, `"auth middleware"`). A node
- * matches only when EVERY token appears in its id or label (AND), ranked by
- * the summed per-token rank. A single token preserves the original behavior
- * exactly.
- */
-function findMatches(snap: GraphSnapshot, pattern: string): GraphNode[] {
-  const tokens = pattern.toLowerCase().split(/[\s+]+/).filter((t) => t.length > 0);
-  if (tokens.length === 0) return [];
-
-  if (tokens.length === 1) {
-    const needle = tokens[0]!;
-    const matches: GraphNode[] = [];
-    for (const n of snap.nodes) {
-      if (n.id.toLowerCase().includes(needle) || n.label.toLowerCase().includes(needle)) matches.push(n);
-    }
-    matches.sort((a, b) => {
-      const ra = rank(a, needle);
-      const rb = rank(b, needle);
-      if (ra !== rb) return ra - rb;
-      return a.id.localeCompare(b.id);
-    });
-    // D3 zero-dep fuzzy FALLBACK: only when there's no exact substring hit, so
-    // the existing behavior is untouched when matches exist. Offers typo-
-    // tolerant suggestions (e.g. "pushSnaphot" → pushSnapshot).
-    if (matches.length === 0) return fuzzyMatches(snap, needle);
-    return matches;
-  }
-
-  // Multi-token: require ALL tokens present somewhere in id or label.
-  const matches: GraphNode[] = [];
-  for (const n of snap.nodes) {
-    const id = n.id.toLowerCase();
-    const lbl = n.label.toLowerCase();
-    if (tokens.every((t) => id.includes(t) || lbl.includes(t))) matches.push(n);
-  }
-  const score = (n: GraphNode): number => tokens.reduce((s, t) => s + rank(n, t), 0);
-  matches.sort((a, b) => {
-    const sa = score(a);
-    const sb = score(b);
-    if (sa !== sb) return sa - sb;
-    return a.id.localeCompare(b.id);
-  });
-  return matches;
-}
-
-/**
- * D3 zero-dependency fuzzy fallback. Returns nodes whose LABEL is within a
- * small edit distance of `needle`, sorted by distance then id. The threshold
- * scales with needle length (floor(len/4), min 1) so short tokens stay strict.
- * Deterministic; capped at 25 to keep output bounded.
- */
-function fuzzyMatches(snap: GraphSnapshot, needle: string): GraphNode[] {
-  if (needle.length < 3) return []; // too short for meaningful fuzzy matching
-  const maxDist = Math.max(1, Math.floor(needle.length / 4));
-  const scored: Array<{ n: GraphNode; d: number }> = [];
-  for (const n of snap.nodes) {
-    const d = editDistance(needle, n.label.toLowerCase(), maxDist);
-    if (d <= maxDist) scored.push({ n, d });
-  }
-  scored.sort((a, b) => (a.d !== b.d ? a.d - b.d : a.n.id.localeCompare(b.n.id)));
-  return scored.slice(0, 25).map((s) => s.n);
-}
-
-/**
- * Levenshtein edit distance with early exit once the running minimum of a row
- * exceeds `cap` (returns cap+1 — the caller only cares about "<= cap"). Bounded
- * O(len(a)*len(b)) but cheap for symbol-length strings.
- */
-function editDistance(a: string, b: string, cap: number): number {
-  if (Math.abs(a.length - b.length) > cap) return cap + 1;
-  let prev = new Array<number>(b.length + 1);
-  let cur = new Array<number>(b.length + 1);
-  for (let j = 0; j <= b.length; j++) prev[j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    cur[0] = i;
-    let rowMin = cur[0];
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
-      if (cur[j] < rowMin) rowMin = cur[j];
-    }
-    if (rowMin > cap) return cap + 1; // whole row already exceeds the cap
-    [prev, cur] = [cur, prev];
-  }
-  return prev[b.length]!;
-}
-
 function renderFind(snap: GraphSnapshot, pattern: string, baseDir: string, worktreeId: string): string {
   // Caps at 50 results to keep output short.
   const matches = findMatches(snap, pattern);
@@ -435,10 +453,16 @@ const QUERY_NEIGHBOR_CAP = 8;
  * query/<pattern> — the 2-in-1: find + show in a single read. Searches like
  * find/, takes the top matches, and expands each with its 1-hop neighborhood
  * (callers/callees/imports/heritage) grouped by relation. Saves handles so a
- * follow-up show/<N> works exactly like after find/.
+ * follow-up show/<N> works exactly like after find/. Optional `matches`
+ * lets the async hybrid path pass a lexical∪semantic list.
  */
-function renderQuery(snap: GraphSnapshot, pattern: string, baseDir: string, worktreeId: string): string {
-  const matches = findMatches(snap, pattern);
+function renderQuery(
+  snap: GraphSnapshot,
+  pattern: string,
+  baseDir: string,
+  worktreeId: string,
+  matches: GraphNode[] = findMatches(snap, pattern),
+): string {
   if (matches.length === 0) {
     return `No matches for "${pattern}" in ${snap.nodes.length} nodes.\nTry a shorter or different substring, or cat memory/graph/find/<pattern>.`;
   }
@@ -604,18 +628,6 @@ function renderNodeDetail(snap: GraphSnapshot, node: GraphNode): string {
     if (es.length > 20) lines.push(`    ... and ${es.length - 20} more`);
   }
   return lines.join("\n");
-}
-
-// ── Ranking ────────────────────────────────────────────────────────────
-
-function rank(n: GraphNode, needle: string): number {
-  const lbl = n.label.toLowerCase();
-  const id = n.id.toLowerCase();
-  if (lbl === needle) return 0;
-  if (lbl.startsWith(needle)) return 1;
-  if (lbl.includes(needle)) return 2;
-  if (id.includes(needle)) return 3;
-  return 4;
 }
 
 // ── Handle map persistence ─────────────────────────────────────────────

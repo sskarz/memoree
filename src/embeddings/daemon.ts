@@ -9,11 +9,13 @@ import { unlinkSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "nod
 import { NomicEmbedder } from "./nomic.js";
 import {
   DEFAULT_IDLE_TIMEOUT_MS,
+  MAX_EMBED_BATCH,
   PROTOCOL_VERSION,
   pidPathFor,
   socketPathFor,
   type DaemonRequest,
   type DaemonResponse,
+  type EmbedBatchRequest,
   type EmbedRequest,
   type HelloRequest,
   type PingRequest,
@@ -164,6 +166,17 @@ export class EmbedDaemon {
       const e = req as EmbedRequest;
       const vec = await this.embedder.embed(e.text, e.kind);
       return { id: e.id, embedding: vec };
+    }
+    if (req.op === "embed_batch") {
+      const e = req as EmbedBatchRequest;
+      if (!Array.isArray(e.texts)) {
+        return { id: e.id, error: "embed_batch requires texts[]" };
+      }
+      if (e.texts.length > MAX_EMBED_BATCH) {
+        return { id: e.id, error: `embed_batch exceeds ${MAX_EMBED_BATCH} texts` };
+      }
+      const embeddings = await this.embedder.embedBatch(e.texts, e.kind);
+      return { id: e.id, embeddings };
     }
     return { id: (req as { id: string }).id, error: "unknown op" };
   }

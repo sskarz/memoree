@@ -19,7 +19,7 @@
  *     slow Memoree never freezes SessionStart past that.
  *   - All failures swallowed — SessionStart must succeed regardless.
  *   - Hard opt-out via `MEMOREE_AUTOPULL_DISABLED=1`.
- *   - Not-logged-in is a silent skip (no nag).
+ *   - Missing storage config is a silent skip (no nag).
  *
  * Scope: install=global, users=[] (all-users), force=false. The result is
  * exactly equivalent to `memoree skillify pull --all-users --to global`.
@@ -69,7 +69,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Top-level entry. Decides whether to skip (env / not-logged-in) and otherwise
+ * Top-level entry. Decides whether to skip (env / no-config) and otherwise
  * runs a bounded, all-failures-swallowed pull.
  *
  * Always resolves; never rejects. The return value is informational only.
@@ -82,7 +82,7 @@ export async function autoPullSkills(deps: AutoPullDeps = {}): Promise<AutoPullR
   }
 
   // Local, remote-independent cap migration of legacy over-long installs.
-  // Runs BEFORE the network query — and before the config / not-logged-in
+  // Runs BEFORE the network query — and before the config / no-config
   // check — so a legacy managed install whose org/workspace isn't the
   // currently-routed one (or an offline session) still gets its frontmatter
   // `name` capped, instead of codex logging "invalid name: exceeds maximum
@@ -91,7 +91,7 @@ export async function autoPullSkills(deps: AutoPullDeps = {}): Promise<AutoPullR
   try { migrateLegacyCappedInstalls(); }
   catch (e: any) { log(`legacy-cap migration failed (swallowed): ${e?.message ?? e}`); }
 
-  // Not logged in → silent skip (no nag).
+  // No storage config → silent skip (no nag).
   // Real callers get the routed config (nearest `.memoree` for the session
   // cwd); tests inject their own loadConfigFn. No inline default fn so the
   // real path stays a plain call, not an extra uncovered closure.
@@ -100,7 +100,7 @@ export async function autoPullSkills(deps: AutoPullDeps = {}): Promise<AutoPullR
     : loadRoutedConfig(deps.cwd ?? process.cwd());
   if (!config) {
     log("skipped: storage unavailable");
-    return { pulled: 0, skipped: true, reason: "not-logged-in" };
+    return { pulled: 0, skipped: true, reason: "no-config" };
   }
 
   // Build the query function. Tests inject one; real callers get the API client.

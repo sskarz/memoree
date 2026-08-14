@@ -19,6 +19,7 @@ import { maybeAutoMineLocal } from "../../skillify/spawn-mine-local-worker.js";
 import { log as _log } from "../../utils/debug.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { autoPullSkills } from "../../skillify/auto-pull.js";
+import { maybeSpawnHygieneWorker } from "../../skillify/spawn-hygiene-worker.js";
 import { spawnGraphPullWorker } from "../../graph/spawn-pull-worker.js";
 import { loadConfig } from "../../config.js";
 const log = (msg: string) => _log("codex-session-start", msg);
@@ -79,6 +80,15 @@ async function main(): Promise<void> {
   // MEMOREE_AUTOPULL_DISABLED=1.
   const pullResult = await autoPullSkills();
   log(`autopull: pulled=${pullResult.pulled} skipped=${pullResult.skipped}`);
+  try {
+    maybeSpawnHygieneWorker({
+      cwd: input.cwd,
+      bundleDir: __bundleDir,
+      agent: "codex",
+    });
+  } catch {
+    // administrative; must never block SessionStart
+  }
 
   let versionNotice = "";
   const current = getInstalledVersion(__bundleDir, ".codex-plugin");

@@ -49,6 +49,10 @@ are generated and must not be edited by hand.
 - `npm run build` type-checks and builds the CLI and supported runtime bundles.
 - `npm test` runs the full source and built-artifact suite.
 - `npx vitest run tests/shared/atomic-write.test.ts` targets one test file.
+- `npx vitest run tests/shared/graph-query-and-hygiene.test.ts` is the isolated
+  VFS/product walkthrough for graph `query/` and skill hygiene.
+- `npx vitest run tests/shared/harness-wiring.test.ts` checks Claude Code and
+  Codex hook routing only. See `docs/TESTING.md`.
 - `git diff --check` catches whitespace errors before commit.
 
 ## Code and Tests

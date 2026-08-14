@@ -1,11 +1,11 @@
 /**
  * `memoree skillify mine-local` — seed reusable skills from a fresh user's
- * own local agent transcripts, no Memoree auth required.
+ * own local agent transcripts.
  *
- * Why this exists: a user who just installed memoree hasn't logged in yet
- * but already has weeks of local Claude Code sessions on disk. Mining those
- * once at install time produces an immediate "huh, this thing is useful"
- * moment without first asking them to sign up.
+ * Why this exists: a user who just installed memoree already has weeks of
+ * local Claude Code sessions on disk. Mining those once at install time
+ * produces an immediate "huh, this thing is useful" moment without waiting
+ * for storage to be configured.
  *
  * Pipeline (reuses everything from src/skillify/* except the session source):
  *   1. Detect installed agents by their session-dir presence.
@@ -16,8 +16,8 @@
  *
  * Manifest at ~/.claude/memoree/local-mined.json doubles as a one-shot
  * sentinel — re-runs require --force. The manifest also tracks which
- * skills came from local mining so a later `push-local` (when the user
- * signs in) can upload exactly those.
+ * skills came from local mining so a later `push-local` (once storage is
+ * configured) can upload exactly those.
  */
 
 import { spawn } from "node:child_process";

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { handleGraphVfs } from "../../../src/graph/vfs-handler.js";
+import { handleGraphVfs, handleGraphVfsAsync } from "../../../src/graph/vfs-handler.js";
 import { writeLastBuild } from "../../../src/graph/last-build.js";
 import { repoDir } from "../../../src/graph/snapshot.js";
 import { deriveProjectKey } from "../../../src/utils/repo-identity.js";
@@ -505,5 +505,47 @@ describe("handleGraphVfs", () => {
       expect(r.body).not.toContain("external:lodash:module");
       expect(r.body).toContain("Outgoing: (none)");
     }
+  });
+
+  it("query/ without a sidecar matches the lexical sync path", async () => {
+    seed();
+    const sync = handleGraphVfs("query/foo", cwd);
+    const asyncR = await handleGraphVfsAsync("query/foo", cwd, {
+      embeddingsEnabled: false,
+      sidecar: null,
+    });
+    expect(asyncR).toEqual(sync);
+  });
+
+  it("impact/ and show/ ignore a sidecar", async () => {
+    seed();
+    const sidecar = { "src/a.ts:foo:function": [1, 0] };
+    const impact = await handleGraphVfsAsync("impact/bar", cwd, {
+      embeddingsEnabled: true,
+      sidecar,
+      embedQuery: async () => [1, 0],
+    });
+    expect(impact).toEqual(handleGraphVfs("impact/bar", cwd));
+    const show = await handleGraphVfsAsync("show/foo", cwd, {
+      embeddingsEnabled: true,
+      sidecar,
+      embedQuery: async () => [1, 0],
+    });
+    expect(show).toEqual(handleGraphVfs("show/foo", cwd));
+  });
+
+  it("query/ skips semantic for regex-heavy patterns", async () => {
+    seed();
+    let embedCalls = 0;
+    const r = await handleGraphVfsAsync("query/foo(bar)|baz", cwd, {
+      embeddingsEnabled: true,
+      embedQuery: async () => {
+        embedCalls += 1;
+        return [1, 0];
+      },
+      sidecar: { "src/a.ts:foo:function": [1, 0] },
+    });
+    expect(embedCalls).toBe(0);
+    expect(r).toEqual(handleGraphVfs("query/foo(bar)|baz", cwd));
   });
 });

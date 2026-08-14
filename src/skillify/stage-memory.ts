@@ -2,15 +2,15 @@
  * Stage-only memory extractor for the install-time backfill (EXTRACT phase).
  *
  * Reuses the live SessionEnd knowledge extractor — the same WIKI_PROMPT_TEMPLATE
- * and the same local embed daemon — but WITHOUT any Memoree auth:
+ * and the same local embed daemon — but without a storage backend:
  *
  *   - The live wiki-worker fetches the session JSONL from the `sessions`
- *     table and uploads the summary to the `memory` table (both auth-gated).
+ *     table and uploads the summary to the `memory` table (both need storage).
  *   - Backfill already has the JSONL on disk (the user's local agent session
  *     file), and the prompt template takes a __JSONL__ path. So this path
  *     points claude -p at the local file, writes the summary into the
  *     staging dir, embeds it locally, and records an `uploaded: false`
- *     manifest row. The post-login flush uploads it later.
+ *     manifest row. `memoree memory flush` uploads it later.
  *
  * One session in → one staged (summary + embedding) record out. Pure on the
  * filesystem under PENDING_MEMORY_DIR; no network.
