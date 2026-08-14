@@ -175,6 +175,12 @@ describe("runtime validation agent responses", () => {
       .toThrow(/response=<empty>/);
   });
 
+  it("loads isolated Codex hooks instead of --ignore-user-config", () => {
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    expect(source).not.toMatch(/^\s*"--ignore-user-config",\s*$/m);
+    expect(source).toContain("features.hooks=true");
+  });
+
   it("routes every live response through the shared assertion without stale variable names", () => {
     const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
     expect(source).not.toContain("lexicalToken");

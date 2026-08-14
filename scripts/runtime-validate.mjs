@@ -351,11 +351,15 @@ export async function validateRuntime() {
       "cat ~/.memoree/memory/goals.md",
       `After attempting every command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
     ].join("\n");
+    // CODEX_HOME is already an isolated profile (auth.json + memoree install).
+    // `--ignore-user-config` skips that profile's config.toml, which turns the
+    // `hooks` feature off — PreToolUse never fires, printf writes never reach
+    // SQLite, and inspectStructuredDatabase sees 0 rule versions.
     const structuredResponse = run("codex", [
       "exec",
       "--skip-git-repo-check",
       "--ephemeral",
-      "--ignore-user-config",
+      "-c", "features.hooks=true",
       "-s", "read-only",
       structuredPrompt,
     ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
@@ -465,7 +469,7 @@ export async function validateRuntime() {
       "exec",
       "--skip-git-repo-check",
       "--ephemeral",
-      "--ignore-user-config",
+      "-c", "features.hooks=true",
       "-s", "read-only",
       codexPrompt,
     ], { cwd: repository, env: lexicalEnv });
