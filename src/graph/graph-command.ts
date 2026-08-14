@@ -14,7 +14,7 @@
  * "/", so a graph read looks like `cat /graph/index.md`.
  */
 
-import { handleGraphVfsAsync } from "./vfs-handler.js";
+import { handleGraphVfsAsync, type GraphVfsAsyncDeps } from "./vfs-handler.js";
 
 const GRAPH_ROOT = "/graph";
 const GRAPH_PREFIX = "/graph/";
@@ -99,7 +99,11 @@ export function hasTraversal(virtualPath: string): boolean {
  * result rather than raising, and we render those inline so the agent stays
  * unblocked.
  */
-export async function tryGraphRead(rewrittenCommand: string, cwd: string): Promise<string | null> {
+export async function tryGraphRead(
+  rewrittenCommand: string,
+  cwd: string,
+  vfsDeps: GraphVfsAsyncDeps = {},
+): Promise<string | null> {
   // `ls /graph` (and trailing-slash variants) → directory listing.
   const ls = rewrittenCommand.replace(/\s+2>\S+/g, "").trim().match(/^ls\s+(?:-\S+\s+)*(\S+)\s*$/);
   if (ls) {
@@ -120,6 +124,6 @@ export async function tryGraphRead(rewrittenCommand: string, cwd: string): Promi
   if (!virtualPath.startsWith(GRAPH_PREFIX)) return null;
 
   const subpath = virtualPath.slice(GRAPH_PREFIX.length);
-  const result = await handleGraphVfsAsync(subpath, cwd);
+  const result = await handleGraphVfsAsync(subpath, cwd, vfsDeps);
   return result.kind === "ok" ? result.body : `(${result.kind}) ${result.message}`;
 }
