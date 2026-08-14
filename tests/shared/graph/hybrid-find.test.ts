@@ -114,6 +114,14 @@ describe("hybridFindNodes", () => {
     );
   });
 
+  it("skips semantic fills when the query vector dim does not match the sidecar", () => {
+    const merged = hybridFindNodes(graph, "login", {
+      queryEmbedding: [1, 0, 0],
+      sidecar: { "src/a.ts:authenticate:function": [0.98, 0.1] },
+    });
+    expect(merged).toEqual(findMatches(graph, "login"));
+  });
+
   it("dedupes a node that is both a lexical and semantic hit", () => {
     const merged = mergeHybridMatches([login, helper], [login, authenticate]);
     expect(merged.map((n) => n.id)).toEqual([

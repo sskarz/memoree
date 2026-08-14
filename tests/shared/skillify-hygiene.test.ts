@@ -50,20 +50,21 @@ ${body}
 describe("parseHygieneActions", () => {
   const names = new Set(["foo", "bar", "baz"]);
 
-  it("parses unchanged, merge, shrink, and archive", () => {
+  it("parses a covering plan of unchanged, merge, shrink, and archive", () => {
+    const names = new Set(["foo", "bar", "baz", "qux", "zap"]);
     const parsed = parseHygieneActions(JSON.stringify({
       actions: [
         { op: "unchanged", name: "foo" },
-        { op: "merge", from: ["foo", "bar"], into: "foo", body: "merged", description: "d", trigger: "t" },
-        { op: "shrink", name: "baz", body: "short" },
-        { op: "archive", name: "bar", reason: "dup" },
+        { op: "merge", from: ["bar", "baz"], into: "bar", body: "merged", description: "d", trigger: "t" },
+        { op: "shrink", name: "qux", body: "short" },
+        { op: "archive", name: "zap", reason: "dup" },
       ],
     }), names);
     expect(parsed).toHaveLength(4);
     expect(parsed?.[0]).toEqual({ op: "unchanged", name: "foo" });
     expect(parsed?.[1]?.op).toBe("merge");
-    expect(parsed?.[2]).toEqual({ op: "shrink", name: "baz", body: "short" });
-    expect(parsed?.[3]).toEqual({ op: "archive", name: "bar", reason: "dup" });
+    expect(parsed?.[2]).toEqual({ op: "shrink", name: "qux", body: "short" });
+    expect(parsed?.[3]).toEqual({ op: "archive", name: "zap", reason: "dup" });
   });
 
   it("rejects unknown ops and unmanaged names", () => {
@@ -72,6 +73,21 @@ describe("parseHygieneActions", () => {
     expect(parseHygieneActions(`{"actions":[{"op":"merge","from":["foo","new"],"into":"foo","body":"x"}]}`, names)).toBeNull();
     expect(parseHygieneActions(`{"verdict":"KEEP"}`, names)).toBeNull();
     expect(parseHygieneActions("not json", names)).toBeNull();
+  });
+
+  it("rejects incomplete, empty, and duplicate-name plans", () => {
+    expect(parseHygieneActions(`{"actions":[]}`, names)).toBeNull();
+    expect(parseHygieneActions(JSON.stringify({
+      actions: [{ op: "archive", name: "foo", reason: "x" }],
+    }), names)).toBeNull();
+    expect(parseHygieneActions(JSON.stringify({
+      actions: [
+        { op: "unchanged", name: "foo" },
+        { op: "unchanged", name: "foo" },
+        { op: "unchanged", name: "bar" },
+        { op: "unchanged", name: "baz" },
+      ],
+    }), names)).toBeNull();
   });
 
   it("rejects merge into a name that is not in from", () => {
@@ -400,6 +416,82 @@ describe("runHygieneCycle + apply", () => {
     expect(text).toContain("tight");
     expect(text).not.toContain("padding");
     expect(text).toMatch(/version: 2/);
+  });
+
+  it("rejects an incomplete LLM plan without writing", async () => {
+    const foo = writeManaged("foo");
+    const bar = writeManaged("bar");
+    const result = await runHygieneCycle({
+      cwd,
+      projectKey,
+      agent: "claude_code",
+      force: true,
+      listSkillsFn: () => [foo, bar],
+      runGateFn: () => ({
+        stdout: JSON.stringify({ actions: [{ op: "archive", name: "foo", reason: "dup" }] }),
+        stderr: "",
+        errored: false,
+      }),
+    });
+    expect(result.kind).toBe("failed-llm");
+    expect(result.advancedLastRun).toBe(false);
+    expect(existsSync(join(skillsRoot, "foo", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(skillsRoot, "bar", "SKILL.md"))).toBe(true);
+  });
+
+  it("restores the shelf when a later apply op throws", () => {
+    const foo = writeManaged("foo");
+    const bar = writeManaged("bar");
+    expect(() => applyHygieneActions(
+      [
+        { op: "archive", name: "foo", reason: "x" },
+        { op: "shrink", name: "bar", body: "tiny" },
+      ],
+      [foo, bar],
+      cwd,
+      false,
+      {
+        afterBackup: () => {
+          rmSync(join(skillsRoot, "bar", "SKILL.md"));
+          mkdirSync(join(skillsRoot, "bar", "SKILL.md"));
+        },
+      },
+    )).toThrow();
+    expect(existsSync(join(skillsRoot, "foo", "SKILL.md"))).toBe(true);
+    expect(readFileSync(join(skillsRoot, "foo", "SKILL.md"), "utf-8")).toContain("For X.");
+    expect(existsSync(join(skillsRoot, "bar", "SKILL.md"))).toBe(true);
+  });
+
+  it("does not advance last-run when apply throws", async () => {
+    const foo = writeManaged("foo");
+    const bar = writeManaged("bar");
+    const result = await runHygieneCycle({
+      cwd,
+      projectKey,
+      agent: "claude_code",
+      force: true,
+      listSkillsFn: () => [foo, bar],
+      runGateFn: () => ({
+        stdout: JSON.stringify({
+          actions: [
+            { op: "archive", name: "foo", reason: "x" },
+            { op: "shrink", name: "bar", body: "tiny" },
+          ],
+        }),
+        stderr: "",
+        errored: false,
+      }),
+      applyDeps: {
+        afterBackup: () => {
+          rmSync(join(skillsRoot, "bar", "SKILL.md"));
+          mkdirSync(join(skillsRoot, "bar", "SKILL.md"));
+        },
+      },
+    });
+    expect(result.kind).toBe("failed-apply");
+    expect(result.advancedLastRun).toBe(false);
+    expect(readHygieneLastRun(projectKey)).toBeNull();
+    expect(existsSync(join(skillsRoot, "foo", "SKILL.md"))).toBe(true);
   });
 
   it("applyHygieneActions dry-run leaves files in place", () => {

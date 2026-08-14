@@ -7,11 +7,12 @@
  * no Memoree frontmatter.
  */
 
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync, renameSync, cpSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { listAllExistingSkills, type TaggedSkill } from "./existing-skills.js";
-import { parseFrontmatter, mergeSkill, resolveSkillsRoot } from "./skill-writer.js";
+import { parseFrontmatter, mergeSkill, resolveSkillsRoot, assertValidSkillName } from "./skill-writer.js";
 import { runGate, type Agent, type GateRunResult } from "./gate-runner.js";
 import { parseHygieneActions, type HygieneOp } from "./hygiene-parser.js";
 import { tryAcquireWorkerLock, releaseWorkerLock } from "./state.js";
@@ -24,7 +25,7 @@ export const HYGIENE_SKILLS_CHAR_CAP = 30_000;
 export type HygieneSkipReason = "recursion" | "quiet" | "lock" | "no-managed";
 
 export interface HygieneCycleResult {
-  kind: "applied" | "dry-run" | "failed-llm" | "skipped";
+  kind: "applied" | "dry-run" | "failed-llm" | "failed-apply" | "skipped";
   reason?: HygieneSkipReason;
   actions: HygieneOp[];
   lines: string[];
@@ -49,6 +50,7 @@ export interface HygieneCycleDeps {
   /** When true, caller already holds the worker lock (detached spawn). */
   lockHeld?: boolean;
   listSkillsFn?: (cwd: string) => TaggedSkill[];
+  applyDeps?: ApplyHygieneDeps;
 }
 
 export function hygieneLockKey(projectKey: string): string {
@@ -146,6 +148,11 @@ export interface AppliedHygiene {
   detail: string;
 }
 
+export interface ApplyHygieneDeps {
+  /** Test seam: run after the backup is taken, before mutations. */
+  afterBackup?: () => void;
+}
+
 function dropPulledManifest(installRoot: string, dirName: string): void {
   const manifest = loadManifest();
   for (const entry of manifest.entries) {
@@ -162,84 +169,156 @@ export function removeManagedSkillDir(skillsRoot: string, name: string): void {
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 }
 
+function skillDirFor(skill: TaggedSkill, cwd: string): string {
+  return join(skillsRootFor(skill, cwd), skill.name);
+}
+
+function mutatedSkills(actions: HygieneOp[], byName: Map<string, TaggedSkill>): TaggedSkill[] {
+  const names = new Set<string>();
+  for (const action of actions) {
+    if (action.op === "unchanged") continue;
+    if (action.op === "merge") {
+      for (const n of action.from) names.add(n);
+      continue;
+    }
+    names.add(action.name);
+  }
+  const out: TaggedSkill[] = [];
+  for (const name of names) {
+    const skill = byName.get(name);
+    if (skill) out.push(skill);
+  }
+  return out;
+}
+
+function preflightHygieneActions(actions: HygieneOp[], byName: Map<string, TaggedSkill>, cwd: string): void {
+  for (const action of actions) {
+    const names = action.op === "merge" ? action.from : [action.name];
+    for (const name of names) {
+      assertValidSkillName(name);
+      const skill = byName.get(name);
+      if (!skill) throw new Error(`hygiene: unknown skill ${name}`);
+      if (action.op === "unchanged") continue;
+      const dir = skillDirFor(skill, cwd);
+      if (!existsSync(dir)) throw new Error(`hygiene: missing skill dir ${dir}`);
+    }
+  }
+}
+
+function restoreHygieneBackup(mutated: TaggedSkill[], cwd: string, backupRoot: string): void {
+  for (const skill of mutated) {
+    const dest = skillDirFor(skill, cwd);
+    const src = join(backupRoot, skill.source, skill.name);
+    rmSync(dest, { recursive: true, force: true });
+    if (existsSync(src)) cpSync(src, dest, { recursive: true });
+  }
+}
+
 export function applyHygieneActions(
   actions: HygieneOp[],
   skills: TaggedSkill[],
   cwd: string,
   dryRun: boolean,
+  deps: ApplyHygieneDeps = {},
 ): AppliedHygiene[] {
   const byName = new Map(skills.map((s) => [s.name, s]));
   const applied: AppliedHygiene[] = [];
   const gone = new Set<string>();
 
-  for (const action of actions) {
-    if (action.op === "unchanged") {
-      applied.push({ op: "unchanged", names: [action.name], detail: "left as-is" });
-      continue;
-    }
-    if (action.op === "shrink") {
-      const skill = byName.get(action.name);
-      if (!skill || gone.has(action.name)) continue;
-      if (dryRun) {
+  if (dryRun) {
+    for (const action of actions) {
+      if (action.op === "unchanged") {
+        applied.push({ op: "unchanged", names: [action.name], detail: "left as-is" });
+        continue;
+      }
+      if (action.op === "shrink") {
         applied.push({ op: "shrink", names: [action.name], detail: "would rewrite body" });
         continue;
       }
-      mergeSkill({
-        skillsRoot: skillsRootFor(skill, cwd),
-        name: action.name,
-        body: action.body,
-        newSourceSessions: [],
-        agent: "hygiene",
-      });
-      applied.push({ op: "shrink", names: [action.name], detail: "rewrote body" });
-      continue;
-    }
-    if (action.op === "archive") {
-      const skill = byName.get(action.name);
-      if (!skill || gone.has(action.name)) continue;
-      if (dryRun) {
+      if (action.op === "archive") {
         applied.push({ op: "archive", names: [action.name], detail: action.reason ?? "would remove" });
         continue;
       }
-      removeManagedSkillDir(skillsRootFor(skill, cwd), action.name);
-      gone.add(action.name);
-      applied.push({ op: "archive", names: [action.name], detail: action.reason ?? "removed" });
-      continue;
-    }
-    // merge
-    const target = byName.get(action.into);
-    if (!target || gone.has(action.into)) continue;
-    const extras = action.from.filter((n) => n !== action.into && !gone.has(n));
-    if (dryRun) {
+      const extras = action.from.filter((n) => n !== action.into);
       applied.push({
         op: "merge",
         names: [action.into, ...extras],
         detail: `would merge ${extras.join(", ")} into ${action.into}`,
       });
-      continue;
     }
-    mergeSkill({
-      skillsRoot: skillsRootFor(target, cwd),
-      name: action.into,
-      body: action.body,
-      description: action.description,
-      trigger: action.trigger,
-      newSourceSessions: [],
-      agent: "hygiene",
-    });
-    for (const extra of extras) {
-      const extraSkill = byName.get(extra);
-      if (!extraSkill) continue;
-      removeManagedSkillDir(skillsRootFor(extraSkill, cwd), extra);
-      gone.add(extra);
-    }
-    applied.push({
-      op: "merge",
-      names: [action.into, ...extras],
-      detail: `merged ${extras.join(", ")} into ${action.into}`,
-    });
+    return applied;
   }
-  return applied;
+
+  preflightHygieneActions(actions, byName, cwd);
+  const mutated = mutatedSkills(actions, byName);
+  const backupRoot = mkdtempSync(join(tmpdir(), "memoree-hygiene-bak-"));
+  try {
+    for (const skill of mutated) {
+      const src = skillDirFor(skill, cwd);
+      if (!existsSync(src)) continue;
+      const dest = join(backupRoot, skill.source, skill.name);
+      mkdirSync(join(backupRoot, skill.source), { recursive: true });
+      cpSync(src, dest, { recursive: true });
+    }
+    deps.afterBackup?.();
+
+    for (const action of actions) {
+      if (action.op === "unchanged") {
+        applied.push({ op: "unchanged", names: [action.name], detail: "left as-is" });
+        continue;
+      }
+      if (action.op === "shrink") {
+        const skill = byName.get(action.name);
+        if (!skill || gone.has(action.name)) continue;
+        mergeSkill({
+          skillsRoot: skillsRootFor(skill, cwd),
+          name: action.name,
+          body: action.body,
+          newSourceSessions: [],
+          agent: "hygiene",
+        });
+        applied.push({ op: "shrink", names: [action.name], detail: "rewrote body" });
+        continue;
+      }
+      if (action.op === "archive") {
+        const skill = byName.get(action.name);
+        if (!skill || gone.has(action.name)) continue;
+        removeManagedSkillDir(skillsRootFor(skill, cwd), action.name);
+        gone.add(action.name);
+        applied.push({ op: "archive", names: [action.name], detail: action.reason ?? "removed" });
+        continue;
+      }
+      const target = byName.get(action.into);
+      if (!target || gone.has(action.into)) continue;
+      const extras = action.from.filter((n) => n !== action.into && !gone.has(n));
+      mergeSkill({
+        skillsRoot: skillsRootFor(target, cwd),
+        name: action.into,
+        body: action.body,
+        description: action.description,
+        trigger: action.trigger,
+        newSourceSessions: [],
+        agent: "hygiene",
+      });
+      for (const extra of extras) {
+        const extraSkill = byName.get(extra);
+        if (!extraSkill) continue;
+        removeManagedSkillDir(skillsRootFor(extraSkill, cwd), extra);
+        gone.add(extra);
+      }
+      applied.push({
+        op: "merge",
+        names: [action.into, ...extras],
+        detail: `merged ${extras.join(", ")} into ${action.into}`,
+      });
+    }
+    return applied;
+  } catch (e) {
+    try { restoreHygieneBackup(mutated, cwd, backupRoot); } catch { /* restore is best-effort */ }
+    throw e;
+  } finally {
+    try { rmSync(backupRoot, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
 }
 
 function skipped(reason: HygieneSkipReason): HygieneCycleResult {
@@ -308,7 +387,17 @@ export async function runHygieneCycle(deps: HygieneCycleDeps): Promise<HygieneCy
       actions.push(...parsed);
     }
 
-    const applied = applyHygieneActions(actions, listed, deps.cwd, Boolean(deps.dryRun));
+    let applied;
+    try {
+      applied = applyHygieneActions(actions, listed, deps.cwd, Boolean(deps.dryRun), deps.applyDeps);
+    } catch (e) {
+      return {
+        kind: "failed-apply",
+        actions: [],
+        lines: [`hygiene apply failed: ${e instanceof Error ? e.message : String(e)}`],
+        advancedLastRun: false,
+      };
+    }
     const lines = applied.map((a) => `${a.op}: ${a.names.join(", ")} (${a.detail})`);
     if (lines.length === 0) lines.push("hygiene: no actions");
 

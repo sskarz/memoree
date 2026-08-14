@@ -19,8 +19,9 @@ function isNonEmptyString(value: unknown): value is string {
 
 /**
  * Parse a hygiene plan. Returns null when the payload is missing, malformed,
- * or contains an unknown op / unmanaged name — the worker then applies
- * nothing and does not advance last-run.
+ * contains an unknown op / unmanaged name, or does not mention every listed
+ * name in exactly one action — the worker then applies nothing and does not
+ * advance last-run.
  */
 export function parseHygieneActions(raw: string, managedNames: ReadonlySet<string>): HygieneOp[] | null {
   const block = extractJsonBlock(raw);
@@ -36,12 +37,24 @@ export function parseHygieneActions(raw: string, managedNames: ReadonlySet<strin
   if (!Array.isArray(actions)) return null;
 
   const out: HygieneOp[] = [];
+  const claimed = new Set<string>();
   for (const item of actions) {
     const op = parseOne(item, managedNames);
     if (op === null) return null;
+    const names = claimedNames(op);
+    for (const name of names) {
+      if (claimed.has(name)) return null;
+      claimed.add(name);
+    }
     out.push(op);
   }
+  if (claimed.size !== managedNames.size) return null;
   return out;
+}
+
+function claimedNames(op: HygieneOp): string[] {
+  if (op.op === "merge") return op.from;
+  return [op.name];
 }
 
 function parseOne(item: unknown, managedNames: ReadonlySet<string>): HygieneOp | null {

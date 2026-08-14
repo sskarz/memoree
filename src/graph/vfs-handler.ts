@@ -44,7 +44,7 @@ import {
   patternIsSemanticFriendly,
   type QueryEmbedder,
 } from "./hybrid-find.js";
-import { readNodeEmbeddings } from "./node-embeddings.js";
+import { loadNodeEmbeddingIndex } from "./node-embeddings.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
 import { EmbedClient } from "../embeddings/client.js";
 import { fileURLToPath } from "node:url";
@@ -61,7 +61,7 @@ export type GraphVfsResult =
 export interface GraphVfsAsyncDeps {
   /** Override query embedder (tests). Production uses the nomic daemon. */
   embedQuery?: QueryEmbedder;
-  /** Injected sidecar; when omitted, read from disk for this snapshot. */
+  /** Injected sidecar; when omitted, read the packed index from disk. */
   sidecar?: Record<string, number[]> | null;
   /** When false, skip semantic even if a sidecar exists. */
   embeddingsEnabled?: boolean;
@@ -225,11 +225,14 @@ export async function handleGraphVfsAsync(
   const enabled = deps.embeddingsEnabled ?? !embeddingsDisabled();
   let queryEmbedding: number[] | null = null;
   let sidecar: Record<string, number[]> | null | undefined = deps.sidecar;
+  let index = sidecar === undefined
+    ? (enabled && patternIsSemanticFriendly(pattern)
+      ? loadNodeEmbeddingIndex(loaded.baseDir, loaded.snapshotSha256)
+      : null)
+    : null;
   if (enabled && patternIsSemanticFriendly(pattern)) {
-    if (sidecar === undefined) {
-      sidecar = readNodeEmbeddings(loaded.baseDir, loaded.snapshotSha256);
-    }
-    if (sidecar) {
+    const hasVectors = sidecar !== undefined ? Boolean(sidecar) : Boolean(index);
+    if (hasVectors) {
       const embed = deps.embedQuery ?? defaultQueryEmbedder();
       queryEmbedding = await embedQueryWithTimeout(pattern, embed);
     }
@@ -242,7 +245,11 @@ export async function handleGraphVfsAsync(
         pattern,
         loaded.baseDir,
         workTreeIdFor(cwd),
-        hybridFindNodes(loaded.snap, pattern, { queryEmbedding, sidecar: sidecar ?? null }),
+        hybridFindNodes(loaded.snap, pattern, {
+          queryEmbedding,
+          sidecar: sidecar === undefined ? null : sidecar,
+          index,
+        }),
       ),
     };
   } catch (e) {

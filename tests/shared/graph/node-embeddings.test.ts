@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync, openSync, ftruncateSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,8 +8,12 @@ import {
   readNodeEmbeddings,
   writeNodeEmbeddings,
   nodeEmbeddingSidecarPath,
+  nodeEmbeddingSidecarBinPath,
   readCachedNodeVector,
   writeCachedNodeVector,
+  loadNodeEmbeddingIndex,
+  QUERY_SIDECAR_MAX_BYTES,
+  _clearNodeEmbeddingIndexCacheForTesting,
 } from "../../../src/graph/node-embeddings.js";
 import { fileContentHash } from "../../../src/graph/cache.js";
 import {
@@ -65,6 +69,7 @@ describe("writeNodeEmbeddings", () => {
 
   beforeEach(() => {
     baseDir = mkdtempSync(join(tmpdir(), "node-embed-"));
+    _clearNodeEmbeddingIndexCacheForTesting();
   });
   afterEach(() => {
     rmSync(baseDir, { recursive: true, force: true });
@@ -235,6 +240,44 @@ describe("writeNodeEmbeddings", () => {
     const vectors = readNodeEmbeddings(baseDir, sha);
     expect(vectors?.["src/a.ts:f0:function"]).toEqual([1, 0]);
     expect(vectors?.["src/a.ts:copy:function"]).toEqual([1, 0]);
+  });
+
+  it("writes a packed .f32 sidecar and reads it back as an index", async () => {
+    const graph = snap([node({ id: "src/a.ts:foo:function", label: "foo" })]);
+    await writeNodeEmbeddings(graph, baseDir, sha, { enabled: true, embed: async () => [1, 0, 0] });
+    expect(existsSync(nodeEmbeddingSidecarBinPath(baseDir, sha))).toBe(true);
+    const index = loadNodeEmbeddingIndex(baseDir, sha);
+    expect(index?.dim).toBe(3);
+    expect(index?.ids).toEqual(["src/a.ts:foo:function"]);
+    expect(Array.from(index?.data ?? [])).toEqual([1, 0, 0]);
+    const again = loadNodeEmbeddingIndex(baseDir, sha);
+    expect(again).toBe(index);
+  });
+
+  it("reads a legacy schema-1 JSON sidecar", () => {
+    mkdirSync(join(baseDir, ".cache", "node-embeddings"), { recursive: true });
+    writeFileSync(nodeEmbeddingSidecarPath(baseDir, sha), JSON.stringify({
+      schema: 1,
+      snapshot_sha256: sha,
+      vectors: { "src/a.ts:foo:function": [0.5, 0.25] },
+    }));
+    const vectors = readNodeEmbeddings(baseDir, sha);
+    expect(vectors?.["src/a.ts:foo:function"]).toEqual([0.5, 0.25]);
+  });
+
+  it("skips an oversized packed blob", () => {
+    mkdirSync(join(baseDir, ".cache", "node-embeddings"), { recursive: true });
+    writeFileSync(nodeEmbeddingSidecarPath(baseDir, sha), JSON.stringify({
+      schema: 2,
+      snapshot_sha256: sha,
+      dim: 1,
+      ids: ["src/a.ts:foo:function"],
+    }));
+    const bin = nodeEmbeddingSidecarBinPath(baseDir, sha);
+    const fd = openSync(bin, "w");
+    ftruncateSync(fd, QUERY_SIDECAR_MAX_BYTES + 4);
+    closeSync(fd);
+    expect(loadNodeEmbeddingIndex(baseDir, sha)).toBeNull();
   });
 
   it("skips remaining default embeds after the first miss", async () => {

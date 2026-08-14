@@ -458,7 +458,7 @@ export function runSkillifyCommand(args: string[]): void {
     runHygieneCycle({ cwd, projectKey, agent, dryRun: flags.dryRun, force: flags.force })
       .then((result) => {
         for (const line of result.lines) console.log(line);
-        if (result.kind === "failed-llm") process.exit(1);
+        if (result.kind === "failed-llm" || result.kind === "failed-apply") process.exit(1);
       })
       .catch((e) => {
         console.error(`hygiene error: ${e?.message ?? e}`);

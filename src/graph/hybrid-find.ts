@@ -5,20 +5,28 @@
  */
 
 import type { GraphNode, GraphSnapshot } from "./types.js";
-import { scoreVectorRows } from "../storage/vector-search.js";
 
 /** Max semantic fills after lexical hits. */
 export const SEMANTIC_TOP_K = 20;
 /** Drop weak cosine hits so random sidecar rows don't pollute query/. */
 export const SEMANTIC_SCORE_FLOOR = 0.25;
 /** Same budget as memory grep's embed round-trip. */
-export const QUERY_EMBED_TIMEOUT_MS = Number(process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS ?? "500");
+const DEFAULT_QUERY_EMBED_TIMEOUT_MS = 500;
+export const QUERY_EMBED_TIMEOUT_MS = Number(process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS ?? String(DEFAULT_QUERY_EMBED_TIMEOUT_MS));
 
 export type QueryEmbedder = (text: string) => Promise<number[] | null>;
+
+/** Packed sidecar: `data[i * dim + j]` is dimension j of `ids[i]`. */
+export interface NodeEmbeddingIndex {
+  dim: number;
+  ids: string[];
+  data: Float32Array;
+}
 
 export interface HybridFindOptions {
   queryEmbedding?: number[] | null;
   sidecar?: Record<string, number[]> | null;
+  index?: NodeEmbeddingIndex | null;
 }
 
 /**
@@ -142,23 +150,74 @@ export function mergeHybridMatches(
   return out;
 }
 
-export function semanticMatchesFromSidecar(
+export function sidecarRecordToIndex(sidecar: Record<string, number[]>): NodeEmbeddingIndex | null {
+  const ids = Object.keys(sidecar);
+  if (ids.length === 0) return null;
+  const dim = sidecar[ids[0]!]!.length;
+  if (dim === 0) return null;
+  const data = new Float32Array(ids.length * dim);
+  for (let i = 0; i < ids.length; i++) {
+    const vec = sidecar[ids[i]!]!;
+    if (vec.length !== dim) return null;
+    data.set(vec, i * dim);
+  }
+  return { dim, ids, data };
+}
+
+export function semanticMatchesFromIndex(
   snap: GraphSnapshot,
   queryEmbedding: readonly number[],
-  sidecar: Record<string, number[]>,
+  index: NodeEmbeddingIndex,
 ): GraphNode[] {
+  if (queryEmbedding.length !== index.dim || index.dim === 0) return [];
   const byId = new Map(snap.nodes.map((n) => [n.id, n]));
-  const rows = Object.entries(sidecar).map(([id, embedding]) => ({ id, embedding }));
-  const scored = scoreVectorRows(rows, "embedding", queryEmbedding);
+  const scored: Array<{ i: number; score: number }> = [];
+  for (let i = 0; i < index.ids.length; i++) {
+    const score = cosineAt(index.data, index.dim, i, queryEmbedding);
+    if (score === null || score < SEMANTIC_SCORE_FLOOR) continue;
+    scored.push({ i, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
   const out: GraphNode[] = [];
-  for (const { row, score } of scored) {
-    if (score < SEMANTIC_SCORE_FLOOR) continue;
-    const node = byId.get(String(row.id ?? ""));
+  for (const { i } of scored) {
+    const node = byId.get(index.ids[i]!);
     if (!node) continue;
     out.push(node);
     if (out.length >= SEMANTIC_TOP_K) break;
   }
   return out;
+}
+
+function cosineAt(
+  data: Float32Array,
+  dim: number,
+  row: number,
+  query: readonly number[],
+): number | null {
+  const off = row * dim;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let j = 0; j < dim; j++) {
+    const a = data[off + j]!;
+    const b = query[j]!;
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    dot += a * b;
+    leftNorm += a * a;
+    rightNorm += b * b;
+  }
+  if (leftNorm === 0 || rightNorm === 0) return null;
+  return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+}
+
+export function semanticMatchesFromSidecar(
+  snap: GraphSnapshot,
+  queryEmbedding: readonly number[],
+  sidecar: Record<string, number[]>,
+): GraphNode[] {
+  const index = sidecarRecordToIndex(sidecar);
+  if (!index) return [];
+  return semanticMatchesFromIndex(snap, queryEmbedding, index);
 }
 
 /**
@@ -172,24 +231,31 @@ export function hybridFindNodes(
 ): GraphNode[] {
   const lexical = findMatches(snap, pattern);
   const embedding = opts.queryEmbedding;
-  const sidecar = opts.sidecar;
-  if (!embedding || embedding.length === 0 || !sidecar) return lexical;
-  const semantic = semanticMatchesFromSidecar(snap, embedding, sidecar);
+  if (!embedding || embedding.length === 0) return lexical;
+  const index = opts.index ?? (opts.sidecar ? sidecarRecordToIndex(opts.sidecar) : null);
+  if (!index) return lexical;
+  const semantic = semanticMatchesFromIndex(snap, embedding, index);
   return mergeHybridMatches(lexical, semantic);
 }
 
 export async function embedQueryWithTimeout(
   pattern: string,
   embedQuery: QueryEmbedder,
-  timeoutMs: number = QUERY_EMBED_TIMEOUT_MS,
+  timeoutMs: number = Number.isFinite(QUERY_EMBED_TIMEOUT_MS) ? QUERY_EMBED_TIMEOUT_MS : DEFAULT_QUERY_EMBED_TIMEOUT_MS,
 ): Promise<number[] | null> {
+  const budget = Number.isFinite(timeoutMs) && timeoutMs >= 0 ? timeoutMs : DEFAULT_QUERY_EMBED_TIMEOUT_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
       embedQuery(pattern),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), budget);
+      }),
     ]);
     return result && result.length > 0 ? result : null;
   } catch {
     return null;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }

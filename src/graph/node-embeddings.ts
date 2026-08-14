@@ -8,32 +8,38 @@
  *
  * Layout (next to the per-repo AST cache):
  *   ~/.memoree/graphs/<repo>/.cache/node-embeddings/<snapshot_sha256>.json
- *     { schema, snapshot_sha256, vectors: { node_id: float[] } }
+ *     { schema, snapshot_sha256, dim, ids: string[] }
+ *   ~/.memoree/graphs/<repo>/.cache/node-embeddings/<snapshot_sha256>.f32
+ *     little-endian float32, length ids.length * dim
  *   ~/.memoree/graphs/<repo>/.cache/node-embed-vectors/<text_sha256>.json
  *     { schema, content_sha256, vector: float[] }
  *
- * The text-hash cache is the same trick as the per-file AST cache: unchanged
- * symbol documents skip the daemon on rebuild. Missing sidecar → lexical query/.
+ * Query/ reads the packed .f32 blob instead of JSON-parsing every float.
+ * Missing sidecar → lexical query/.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { fileContentHash } from "./cache.js";
 import type { GraphNode, GraphSnapshot } from "./types.js";
+import type { NodeEmbeddingIndex } from "./hybrid-find.js";
 import { EmbedClient } from "../embeddings/client.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
 
-export const NODE_EMBED_SCHEMA = 1;
+export const NODE_EMBED_SCHEMA = 2;
+/** Skip semantic query/ when the packed blob is larger than this (lexical fallback). */
+export const QUERY_SIDECAR_MAX_BYTES = 32 * 1024 * 1024;
 
 export type NodeEmbedder = (text: string) => Promise<number[] | null>;
 export type NodeBatchEmbedder = (texts: string[]) => Promise<Array<number[] | null>>;
 
-export interface NodeEmbeddingSidecar {
+export interface NodeEmbeddingSidecarMeta {
   schema: number;
   snapshot_sha256: string;
-  vectors: Record<string, number[]>;
+  dim: number;
+  ids: string[];
 }
 
 export interface WriteNodeEmbeddingsResult {
@@ -75,6 +81,10 @@ export function nodeEmbedText(n: GraphNode): string {
 
 export function nodeEmbeddingSidecarPath(baseDir: string, snapshotSha256: string): string {
   return join(baseDir, ".cache", "node-embeddings", `${snapshotSha256}.json`);
+}
+
+export function nodeEmbeddingSidecarBinPath(baseDir: string, snapshotSha256: string): string {
+  return join(baseDir, ".cache", "node-embeddings", `${snapshotSha256}.f32`);
 }
 
 export function nodeVectorCachePath(baseDir: string, textSha256: string): string {
@@ -121,28 +131,110 @@ export function writeCachedNodeVector(baseDir: string, textSha256: string, vecto
   }
 }
 
+function atomicWriteBytes(path: string, bytes: Uint8Array): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp.${process.pid}.${Date.now()}`;
+  writeFileSync(tmp, bytes);
+  renameSync(tmp, path);
+}
+
+const indexCache = new Map<string, NodeEmbeddingIndex | null>();
+
+export function _clearNodeEmbeddingIndexCacheForTesting(): void {
+  indexCache.clear();
+}
+
+function cacheKey(baseDir: string, snapshotSha256: string): string {
+  return `${baseDir}\0${snapshotSha256}`;
+}
+
+function floatsToBuffer(data: Float32Array): Buffer {
+  return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+}
+
+function bufferToFloat32(buf: Buffer, expectedLength: number): Float32Array | null {
+  if (buf.byteLength !== expectedLength * 4) return null;
+  if (buf.byteOffset % 4 === 0) {
+    return new Float32Array(buf.buffer, buf.byteOffset, expectedLength);
+  }
+  const copy = new Float32Array(expectedLength);
+  for (let i = 0; i < expectedLength; i++) copy[i] = buf.readFloatLE(i * 4);
+  return copy;
+}
+
 /**
- * Load the sidecar for a snapshot. Returns null when missing, corrupt, or
- * schema-mismatched so query/ can fall back to lexical search.
+ * Load the packed sidecar. Returns null when missing, oversized, corrupt,
+ * or schema-mismatched so query/ can fall back to lexical search.
  */
-export function readNodeEmbeddings(baseDir: string, snapshotSha256: string): Record<string, number[]> | null {
-  const path = nodeEmbeddingSidecarPath(baseDir, snapshotSha256);
-  if (!existsSync(path)) return null;
+export function loadNodeEmbeddingIndex(baseDir: string, snapshotSha256: string): NodeEmbeddingIndex | null {
+  const key = cacheKey(baseDir, snapshotSha256);
+  if (indexCache.has(key)) return indexCache.get(key)!;
+  const loaded = loadNodeEmbeddingIndexUncached(baseDir, snapshotSha256);
+  indexCache.set(key, loaded);
+  return loaded;
+}
+
+function loadNodeEmbeddingIndexUncached(baseDir: string, snapshotSha256: string): NodeEmbeddingIndex | null {
+  const metaPath = nodeEmbeddingSidecarPath(baseDir, snapshotSha256);
+  if (!existsSync(metaPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<NodeEmbeddingSidecar>;
-    if (parsed.schema !== NODE_EMBED_SCHEMA) return null;
+    const parsed = JSON.parse(readFileSync(metaPath, "utf8")) as {
+      schema?: number;
+      snapshot_sha256?: string;
+      dim?: number;
+      ids?: unknown;
+      vectors?: unknown;
+    };
+    if (parsed.schema !== NODE_EMBED_SCHEMA && parsed.schema !== 1) return null;
     if (parsed.snapshot_sha256 !== snapshotSha256) return null;
+
+    if (parsed.schema === NODE_EMBED_SCHEMA && Array.isArray(parsed.ids) && typeof parsed.dim === "number") {
+      const dim = parsed.dim;
+      const ids = parsed.ids.filter((id): id is string => typeof id === "string");
+      if (dim <= 0 || ids.length === 0 || ids.length !== parsed.ids.length) return null;
+      const binPath = nodeEmbeddingSidecarBinPath(baseDir, snapshotSha256);
+      if (!existsSync(binPath)) return null;
+      if (statSync(binPath).size > QUERY_SIDECAR_MAX_BYTES) return null;
+      const buf = readFileSync(binPath);
+      const data = bufferToFloat32(buf, ids.length * dim);
+      if (!data) return null;
+      return { dim, ids, data };
+    }
+
+    // Legacy schema-1 JSON map (tests / older sidecars).
     if (parsed.vectors === null || typeof parsed.vectors !== "object" || Array.isArray(parsed.vectors)) {
       return null;
     }
-    const vectors: Record<string, number[]> = {};
-    for (const [id, vec] of Object.entries(parsed.vectors)) {
-      if (typeof id === "string" && isFiniteVector(vec)) vectors[id] = vec;
+    const ids: string[] = [];
+    const packed: number[] = [];
+    let dim = 0;
+    for (const [id, vec] of Object.entries(parsed.vectors as Record<string, unknown>)) {
+      if (typeof id !== "string" || !isFiniteVector(vec)) continue;
+      if (dim === 0) dim = vec.length;
+      if (vec.length !== dim) continue;
+      ids.push(id);
+      packed.push(...vec);
     }
-    return Object.keys(vectors).length > 0 ? vectors : null;
+    if (ids.length === 0 || dim === 0) return null;
+    if (ids.length * dim * 4 > QUERY_SIDECAR_MAX_BYTES) return null;
+    return { dim, ids, data: Float32Array.from(packed) };
   } catch {
     return null;
   }
+}
+
+/**
+ * Load the sidecar as a node-id map. Tests and callers that need random
+ * access; query/ uses loadNodeEmbeddingIndex to avoid the JSON float tax.
+ */
+export function readNodeEmbeddings(baseDir: string, snapshotSha256: string): Record<string, number[]> | null {
+  const index = loadNodeEmbeddingIndex(baseDir, snapshotSha256);
+  if (!index) return null;
+  const vectors: Record<string, number[]> = {};
+  for (let i = 0; i < index.ids.length; i++) {
+    vectors[index.ids[i]!] = Array.from(index.data.subarray(i * index.dim, (i + 1) * index.dim));
+  }
+  return vectors;
 }
 
 function defaultNodeBatchEmbedder(): NodeBatchEmbedder {
@@ -264,11 +356,23 @@ export async function writeNodeEmbeddings(
   }
 
   try {
-    atomicWriteJson(nodeEmbeddingSidecarPath(baseDir, snapshotSha256), {
+    const ids = Object.keys(vectors);
+    const dim = vectors[ids[0]!]!.length;
+    const data = new Float32Array(ids.length * dim);
+    for (let i = 0; i < ids.length; i++) {
+      const vec = vectors[ids[i]!]!;
+      if (vec.length !== dim) continue;
+      data.set(vec, i * dim);
+    }
+    const meta: NodeEmbeddingSidecarMeta = {
       schema: NODE_EMBED_SCHEMA,
       snapshot_sha256: snapshotSha256,
-      vectors,
-    } satisfies NodeEmbeddingSidecar);
+      dim,
+      ids,
+    };
+    atomicWriteJson(nodeEmbeddingSidecarPath(baseDir, snapshotSha256), meta);
+    atomicWriteBytes(nodeEmbeddingSidecarBinPath(baseDir, snapshotSha256), floatsToBuffer(data));
+    indexCache.delete(cacheKey(baseDir, snapshotSha256));
     return { written: true, embedded, cached };
   } catch {
     return { written: false, embedded, cached };
