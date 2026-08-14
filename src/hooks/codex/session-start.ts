@@ -17,6 +17,7 @@ import { readStdin } from "../../utils/stdin.js";
 import { countLocalManifestEntries } from "../../skillify/local-manifest.js";
 import { maybeAutoMineLocal } from "../../skillify/spawn-mine-local-worker.js";
 import { log as _log } from "../../utils/debug.js";
+import { isDirectRun } from "../../utils/direct-run.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { autoPullSkills } from "../../skillify/auto-pull.js";
 import { maybeSpawnHygieneWorker } from "../../skillify/spawn-hygiene-worker.js";
@@ -34,7 +35,7 @@ const __bundleDir = dirname(fileURLToPath(import.meta.url));
 // and the model can discover memory tiers and CLI flags on demand via bash.
 // See src/notifications/AGENT_CHANNELS.md → "Codex" for the source-level reasoning.
 
-interface CodexSessionStartInput {
+export interface CodexSessionStartInput {
   session_id: string;
   transcript_path?: string | null;
   cwd: string;
@@ -43,11 +44,29 @@ interface CodexSessionStartInput {
   source?: string;
 }
 
-async function main(): Promise<void> {
+export interface CodexSessionStartDeps {
+  autoPullFn?: typeof autoPullSkills;
+  spawnHygieneFn?: typeof maybeSpawnHygieneWorker;
+  loadConfigFn?: typeof loadConfig;
+  spawnGraphPullFn?: typeof spawnGraphPullWorker;
+  spawnFn?: typeof spawn;
+}
+
+export async function processCodexSessionStart(
+  input: CodexSessionStartInput,
+  deps: CodexSessionStartDeps = {},
+): Promise<void> {
   if (process.env.MEMOREE_WIKI_WORKER === "1") return;
 
-  const input = await readStdin<CodexSessionStartInput>();
-  const config = loadConfig();
+  const {
+    autoPullFn = autoPullSkills,
+    spawnHygieneFn = maybeSpawnHygieneWorker,
+    loadConfigFn = loadConfig,
+    spawnGraphPullFn = spawnGraphPullWorker,
+    spawnFn = spawn,
+  } = deps;
+
+  const config = loadConfigFn();
   const storageAvailable = Boolean(config);
 
   // Spawn async setup (graph-deps provisioning, table creation, placeholder,
@@ -58,7 +77,7 @@ async function main(): Promise<void> {
   // setup do not block the SessionStart fast path.
   {
     const setupScript = join(__bundleDir, "session-start-setup.js");
-    const child = spawn("node", [setupScript], {
+    const child = spawnFn("node", [setupScript], {
       detached: true,
       stdio: ["pipe", "ignore", "ignore"],
       // SW_HIDE: libuv applies it alongside detached. No-op on POSIX.
@@ -78,10 +97,10 @@ async function main(): Promise<void> {
   // disk; the only per-call cost is the SQL round-trip. autoPullSkills
   // never rejects — all errors are swallowed inside. Hard opt-out:
   // MEMOREE_AUTOPULL_DISABLED=1.
-  const pullResult = await autoPullSkills();
+  const pullResult = await autoPullFn();
   log(`autopull: pulled=${pullResult.pulled} skipped=${pullResult.skipped}`);
   try {
-    maybeSpawnHygieneWorker({
+    spawnHygieneFn({
       cwd: input.cwd,
       bundleDir: __bundleDir,
       agent: "codex",
@@ -135,7 +154,7 @@ async function main(): Promise<void> {
   // src/hooks/graph-pull-worker.ts. Lands for the NEXT SessionStart.
   //
   // Skip the worker when the selected storage backend is unavailable.
-  if (storageAvailable) spawnGraphPullWorker(input.cwd, __bundleDir);
+  if (storageAvailable) spawnGraphPullFn(input.cwd, __bundleDir);
 
   const provider = config?.storage.kind ?? "sqlite";
   const additionalContext = storageAvailable
@@ -155,4 +174,11 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(output));
 }
 
-main().catch((e) => { log(`fatal: ${e.message}`); process.exit(0); });
+async function main(): Promise<void> {
+  if (process.env.MEMOREE_WIKI_WORKER === "1") return;
+  await processCodexSessionStart(await readStdin<CodexSessionStartInput>());
+}
+
+if (isDirectRun(import.meta.url)) {
+  main().catch((e) => { log(`fatal: ${e.message}`); process.exit(0); });
+}

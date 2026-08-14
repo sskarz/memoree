@@ -24,8 +24,9 @@ should not. Hygiene dry-run must not delete files.
 npx vitest run tests/shared/harness-wiring.test.ts
 ```
 
-Only checks routing: `cat` / Read / `ls` hit the graph mount. It does not re-prove
-ranking.
+Only checks routing: `cat` / Read / `ls` hit the graph mount, and SessionStart
+calls the hygiene worker after auto-pull. It does not re-prove ranking or the
+hygiene quiet/lock/recursion rules.
 
 You can run both from any session. You do not need to close Claude or Codex.
 That does **not** mean your daily apps already load this code.

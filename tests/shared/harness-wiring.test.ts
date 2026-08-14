@@ -1,7 +1,8 @@
 /**
- * Claude Code and Codex hook wiring for graph query/.
- * Asserts routing only: the VFS was reached. Product ranking lives in
- * graph-query-and-hygiene.test.ts.
+ * Claude Code and Codex hook wiring for graph query/ and SessionStart hygiene.
+ * Asserts routing only: the VFS was reached, and SessionStart calls the
+ * hygiene worker after auto-pull. Product ranking and spawn quiet/lock
+ * live in graph-query-and-hygiene.test.ts and skillify-hygiene.test.ts.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,8 @@ import { join } from "node:path";
 
 import { processPreToolUse } from "../../src/hooks/pre-tool-use.js";
 import { processCodexPreToolUse } from "../../src/hooks/codex/pre-tool-use.js";
+import { processClaudeSessionStart } from "../../src/hooks/session-start.js";
+import { processCodexSessionStart } from "../../src/hooks/codex/session-start.js";
 import { tryGraphRead } from "../../src/graph/graph-command.js";
 import { handleGraphVfsAsync } from "../../src/graph/vfs-handler.js";
 import { writeLastBuild } from "../../src/graph/last-build.js";
@@ -22,6 +25,7 @@ import {
 } from "../../src/graph/node-embeddings.js";
 import { deriveProjectKey } from "../../src/utils/repo-identity.js";
 import type { GraphSnapshot } from "../../src/graph/types.js";
+import type { HygieneSpawnOptions } from "../../src/skillify/spawn-hygiene-worker.js";
 
 const SNAPSHOT_SHA = "a".repeat(64);
 const COMMIT = "deadbeef";
@@ -135,7 +139,10 @@ describe("harness wiring: graph query/", () => {
       {
         config: dummyConfig,
         createApi: vi.fn(() => ({ query: vi.fn() })) as any,
-        executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        executeCompiledBashCommandFn: vi.fn(async () => {
+          throw new Error("compiled bash must not handle graph query/");
+        }) as any,
+        tryGraphReadFn: (cmd, graphCwd) => tryGraphRead(cmd, graphCwd, vfsDeps),
         handleGraphVfsFn: (subpath, graphCwd) => handleGraphVfsAsync(subpath, graphCwd, vfsDeps),
         logFn: vi.fn(),
       },
@@ -156,6 +163,7 @@ describe("harness wiring: graph query/", () => {
       {
         config: dummyConfig,
         createApi: vi.fn(() => ({ query: vi.fn() })) as any,
+        tryGraphReadFn: (cmd, graphCwd) => tryGraphRead(cmd, graphCwd, vfsDeps),
         handleGraphVfsFn: (subpath, graphCwd) => handleGraphVfsAsync(subpath, graphCwd, vfsDeps),
         logFn: vi.fn(),
       },
@@ -164,7 +172,8 @@ describe("harness wiring: graph query/", () => {
     expect(readFileSync(decision!.file_path!, "utf8")).toContain("persistGraph");
   });
 
-  it("Claude ls of the graph mount lists query/", async () => {
+  it("Claude ls of the graph mount lists query/ before compiled bash", async () => {
+    const compiled = vi.fn(async () => "ls: cannot access '/graph': No such file or directory");
     const decision = await processPreToolUse(
       {
         cwd,
@@ -176,10 +185,88 @@ describe("harness wiring: graph query/", () => {
       {
         config: dummyConfig,
         createApi: vi.fn(() => ({ query: vi.fn() })) as any,
-        executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        executeCompiledBashCommandFn: compiled as any,
         logFn: vi.fn(),
       },
     );
+    expect(compiled).not.toHaveBeenCalled();
     expect(decision?.command).toContain("query/");
+    expect(decision?.command).not.toContain("cannot access");
+    expect(decision?.description).toBe("[memoree graph] ls /graph");
+  });
+});
+
+describe("harness wiring: SessionStart hygiene", () => {
+  let cwd: string;
+
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), "harness-hygiene-"));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    try { rmSync(cwd, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it("Claude SessionStart spawns hygiene after auto-pull", async () => {
+    const order: string[] = [];
+    let hygiene: HygieneSpawnOptions | undefined;
+
+    await processClaudeSessionStart(
+      { session_id: "", cwd },
+      {
+        autoPullFn: async () => {
+          order.push("pull");
+          return { pulled: 0, skipped: true };
+        },
+        spawnHygieneFn: (opts) => {
+          order.push("hygiene");
+          hygiene = opts;
+          return { triggered: true };
+        },
+        loadConfigFn: () => null,
+        spawnGraphPullFn: vi.fn(),
+      },
+    );
+
+    expect(order).toEqual(["pull", "hygiene"]);
+    expect(hygiene).toMatchObject({ cwd, agent: "claude_code" });
+    expect(hygiene?.bundleDir).toBeTruthy();
+  });
+
+  it("Codex SessionStart spawns hygiene after auto-pull", async () => {
+    const order: string[] = [];
+    let hygiene: HygieneSpawnOptions | undefined;
+
+    await processCodexSessionStart(
+      {
+        session_id: "s",
+        cwd,
+        hook_event_name: "SessionStart",
+        model: "test",
+      },
+      {
+        autoPullFn: async () => {
+          order.push("pull");
+          return { pulled: 0, skipped: true };
+        },
+        spawnHygieneFn: (opts) => {
+          order.push("hygiene");
+          hygiene = opts;
+          return { triggered: true };
+        },
+        loadConfigFn: () => null,
+        spawnGraphPullFn: vi.fn(),
+        spawnFn: (() => ({
+          stdin: { write: vi.fn(), end: vi.fn() },
+          unref: vi.fn(),
+        })) as any,
+      },
+    );
+
+    expect(order).toEqual(["pull", "hygiene"]);
+    expect(hygiene).toMatchObject({ cwd, agent: "codex" });
+    expect(hygiene?.bundleDir).toBeTruthy();
   });
 });

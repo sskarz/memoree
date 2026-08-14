@@ -11,7 +11,7 @@ export const SEMANTIC_TOP_K = 20;
 /** Drop weak cosine hits so random sidecar rows don't pollute query/. */
 export const SEMANTIC_SCORE_FLOOR = 0.25;
 /** Same budget as memory grep's embed round-trip. */
-const DEFAULT_QUERY_EMBED_TIMEOUT_MS = 500;
+const DEFAULT_QUERY_EMBED_TIMEOUT_MS = 3_000;
 export const QUERY_EMBED_TIMEOUT_MS = Number(process.env.MEMOREE_SEMANTIC_EMBED_TIMEOUT_MS ?? String(DEFAULT_QUERY_EMBED_TIMEOUT_MS));
 
 export type QueryEmbedder = (text: string) => Promise<number[] | null>;
