@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { homedir } from "node:os";
 import { join, dirname, sep } from "node:path";
@@ -31,10 +32,10 @@ import {
   readCachedIndexContent,
   writeCachedIndexContent,
 } from "./query-cache.js";
-import { isSafe, touchesMemory, rewritePaths, bashTouchesMemory } from "./memory-path-utils.js";
+import { commandTouchesOutsideMemoryPath, isSafe, touchesMemory, rewritePaths, bashTouchesMemory, shouldRouteThroughStructuredVfs } from "./memory-path-utils.js";
 import { capOutputForClaude } from "../utils/output-cap.js";
 import { MEMORY_COMMAND_GUIDANCE } from "./shared/memory-command-contract.js";
-import { safeStdoutReplacement } from "./shared/shell-replacement.js";
+import { safeProcessReplacement, safeStdoutReplacement } from "./shared/shell-replacement.js";
 import { ensureSessionOwner } from "./summary-state.js";
 
 export { isSafe, touchesMemory, rewritePaths };
@@ -140,7 +141,7 @@ const WRITE_EDIT_DENY_REASON =
   "The pre-tool-use hook only intercepts Bash, Read, Grep, and Glob; tool-shape mismatches make a " +
   "Write/Edit rewrite unsafe. Use the Bash tool instead:\n" +
   "  - Single-line:  echo '<content>' > '<path>'\n" +
-  "  - Multi-line:   cat > '<path>' <<'EOF'\\n<content>\\nEOF\n" +
+  "  - Multi-line:   printf '%s\\n' '<line1>' '<line2>' > '<path>'\n" +
   "Bash IS intercepted and writes through to the team-shared SQL backend.";
 
 function getReadTargetPath(toolInput: Record<string, unknown>): string | null {
@@ -183,6 +184,7 @@ export function getShellCommand(toolName: string, toolInput: Record<string, unkn
     case "Bash": {
       const cmd = toolInput.command as string | undefined;
       if (!cmd || !bashTouchesMemory(cmd)) break;
+      if (commandTouchesOutsideMemoryPath(cmd)) return null;
       const rewritten = rewritePaths(cmd);
       if (!isSafe(rewritten)) {
         log(`unsafe command blocked: ${rewritten}`);
@@ -261,6 +263,7 @@ interface ClaudePreToolDeps {
   readCachedIndexContentFn?: typeof readCachedIndexContent;
   writeCachedIndexContentFn?: typeof writeCachedIndexContent;
   writeReadCacheFileFn?: typeof writeReadCacheFile;
+  runVfsShellFn?: (command: string) => { status: number | null; stdout: string; stderr: string };
   logFn?: (msg: string) => void;
 }
 
@@ -279,6 +282,14 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     readCachedIndexContentFn = readCachedIndexContent,
     writeCachedIndexContentFn = writeCachedIndexContent,
     writeReadCacheFileFn = writeReadCacheFile,
+    runVfsShellFn = (command: string) => {
+      const shellBundle = join(__bundleDir, "shell", "memoree-shell.js");
+      const proc = spawnSync(process.execPath, [shellBundle, "-c", command], {
+        encoding: "utf-8",
+        timeout: 10_000,
+      });
+      return { status: proc.status, stdout: proc.stdout ?? "", stderr: proc.stderr ?? "" };
+    },
     logFn = log,
   } = deps;
 
@@ -359,6 +370,26 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   };
 
   try {
+    if (shouldRouteThroughStructuredVfs(shellCmd)) {
+      logFn(`structured vfs intercept: ${shellCmd}`);
+      const proc = runVfsShellFn(shellCmd);
+      if (input.tool_name === "Read") {
+        const body = proc.status === 0 ? proc.stdout : (proc.stderr || proc.stdout);
+        const requested = rewritePaths(getReadTargetPath(input.tool_input) ?? "") || "/";
+        const virtualPath = isLikelyDirectoryPath(requested)
+          ? `${requested.replace(/\/+$/, "")}/_listing.txt`
+          : requested;
+        const file_path = writeReadCacheFileFn(input.session_id, virtualPath, body);
+        return buildReadDecision(file_path, `[Memoree structured] ${shellCmd}`);
+      }
+      const stdout = capOutputForClaude(proc.stdout ?? "", { kind: "structured" });
+      const stderr = capOutputForClaude(proc.stderr ?? "", { kind: "structured" });
+      return buildAllowDecision(
+        safeProcessReplacement(stdout, stderr, proc.status),
+        `[Memoree structured] ${shellCmd}`,
+      );
+    }
+
     if (input.tool_name === "Bash") {
       const compiled = await executeCompiledBashCommandFn(api, table, sessionsTable, shellCmd, {
         readVirtualPathContentsFn: async (_api, _memoryTable, _sessionsTable, cachePaths) => readVirtualPathContentsWithCache(cachePaths),
@@ -615,24 +646,17 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     logFn(`direct query failed: ${e.message}`);
   }
 
-  // No compiled handler matched (or a direct query failed). Route through the
-  // VFS shell bundle — it is a sandboxed Node.js interpreter that operates
-  // entirely against the SQL backend, so no host filesystem access occurs.
-  // Do NOT return null: that would hand the original command to Claude Code's
-  // real host shell, which is unsafe.
-  const shellBundle = join(__bundleDir, "shell", "memoree-shell.js");
+  // No compiled handler matched (or a direct query failed). Execute through
+  // the bundled VFS now and replace the host command with literal output.
   logFn(`unroutable memory command, falling back to shell: ${shellCmd}`);
   // Read needs file_path, not a command-shaped decision.
   if (input.tool_name === "Read") {
     return buildDenyDecision(MEMORY_RETRY_GUIDANCE, "[Memoree] memory Read unavailable — use sandboxed commands");
   }
-  // Single-quote both arguments so $(), backticks, and variable expansion
-  // cannot escape into the host shell before memoree-shell.js receives them.
-  const sq = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`;
-  return buildAllowDecision(
-    `node ${sq(shellBundle)} -c ${sq(shellCmd)}`,
-    `[Memoree shell] ${shellCmd}`,
-  );
+  const proc = runVfsShellFn(shellCmd);
+  const stdout = capOutputForClaude(proc.stdout ?? "", { kind: "command" });
+  const stderr = capOutputForClaude(proc.stderr ?? "", { kind: "command" });
+  return buildAllowDecision(safeProcessReplacement(stdout, stderr, proc.status), `[Memoree shell] ${shellCmd}`);
 }
 
 /* c8 ignore start */

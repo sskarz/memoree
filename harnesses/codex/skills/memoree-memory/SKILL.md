@@ -12,7 +12,13 @@ You have persistent memory at `~/.memoree/memory/` — global memory shared acro
 
 ```
 ~/.memoree/memory/
-├── index.md                          ← START HERE — table of all sessions
+├── identity.json                     ← routed user, org, workspace, backend
+├── rules.md                          ← active shared-rule inventory
+├── goals.md                          ← your opened/in-progress goals
+├── rules/{active,done}/<rule-id>.md
+├── goal/<owner>/{opened,in_progress,closed}/<goal-id>.md
+├── kpi/<goal-id>/<kpi-id>.md
+├── index.md                          ← table of past sessions
 ├── summaries/
 │   ├── session-abc.md                ← AI-generated wiki summary
 │   └── session-xyz.md
@@ -24,12 +30,20 @@ You have persistent memory at `~/.memoree/memory/` — global memory shared acro
 
 ## How to Search
 
-1. **First**: Read `~/.memoree/memory/index.md` — quick scan of all sessions with dates, projects, descriptions
-2. **If you need details**: Read the specific summary at `~/.memoree/memory/summaries/<session>.md`
-3. **If you need transcript detail**: Read the rendered session view at `~/.memoree/memory/sessions/<user>/<file>.jsonl`
-4. **Keyword search**: `grep -r "keyword" ~/.memoree/memory/`
+1. **First**: Read `~/.memoree/memory/identity.json`, `rules.md`, and `goals.md` for routed identity and current work.
+2. Read `~/.memoree/memory/index.md` for a quick scan of past sessions.
+3. **If you need details**: Read the specific summary at `~/.memoree/memory/summaries/<session>.md`.
+4. **If you need transcript detail**: Read the rendered session view at `~/.memoree/memory/sessions/<user>/<file>.jsonl`.
+5. **Keyword search**: `grep -r "keyword" ~/.memoree/memory/`.
 
 Do NOT jump straight to rendered transcript views. Always start with index.md and summaries.
+
+## Rules through the filesystem
+
+- List active rules with `cat ~/.memoree/memory/rules.md`.
+- Create a rule by generating a UUIDv4 directly and running `printf '%s' '<single-line rule>' > ~/.memoree/memory/rules/active/<uuid>.md`.
+- Edit a rule by overwriting the same file. Move it between `active/` and `done/` with `mv`, preserving the filename; `rm` on an active rule means mark done.
+- Never invoke Node, Python, `uuidgen`, or another helper to make the UUID. Rule text must be nonempty, single-line, and at most 2,000 characters.
 
 ## Organization Management
 
@@ -73,7 +87,7 @@ Memoree can mine reusable skills from agent session logs and share them across y
 
 ## Embeddings (semantic memory search)
 
-Opt-in, persisted in `~/.memoree/config.json`.
+Enabled by default, with an explicit opt-out.
 
 - `memoree embeddings install` — download deps (~600MB), symlink agents, set enabled:true
 - `memoree embeddings enable` — flip enabled:true (run install first if deps missing)
@@ -83,7 +97,7 @@ Opt-in, persisted in `~/.memoree/config.json`.
 
 ## Sandboxed commands
 
-Supported sandboxed commands: cat, ls, grep, head, tail, wc, find, jq, echo, printf, tee. Reading and searching use cat, ls, grep, head, tail, wc, and find; writing is limited to echo, printf, and tee with narrowly validated redirects. Use jq only for content known to be JSON; rendered session files ending in .jsonl are human-readable transcript views and are not guaranteed JSON. sed and awk are unavailable because their scripting features expand the security surface. Interpreters, network clients, command substitution, and command-executing find options such as -exec are denied.
+Supported sandboxed commands: cat, ls, grep, head, tail, wc, find, jq, echo, printf, tee, mv, rm. Reading and searching use cat, ls, grep, head, tail, wc, and find; writing is limited to echo, printf, and tee with narrowly validated redirects. mv is limited to one rule-to-rule or goal-to-goal move with the same ID; rm is limited to one rule or goal file and performs a lifecycle transition, not a hard delete. Use jq only for content known to be JSON; rendered session files ending in .jsonl are human-readable transcript views and are not guaranteed JSON. Compound commands, shell substitutions, unsupported flags, globs for mv/rm, paths outside this virtual filesystem, interpreters, network clients, and command-executing find options such as -exec are denied.
 
 ## Limits
 

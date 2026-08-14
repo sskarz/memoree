@@ -16,12 +16,15 @@ import { embeddingsDisabled } from "../embeddings/disable.js";
 import { buildVirtualIndexContent, INDEX_LIMIT_PER_SECTION } from "../hooks/virtual-table-query.js";
 import {
   classifyPath,
+  composeRulePath,
   composeGoalPath,
   composeKpiPath,
+  decomposeRulePath,
   decomposeGoalPath,
   decomposeKpiPath,
   type PathKind,
 } from "./goal-paths.js";
+import { editRule, getRuleLatest, insertRuleAtId, listRules } from "../rules/index.js";
 import { handleGraphVfs } from "../graph/vfs-handler.js";
 import { handleDocsVfs } from "../docs/vfs-handler.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
@@ -116,6 +119,22 @@ interface PendingRow {
   contentText: string; mimeType: string; sizeBytes: number;
   project?: string; description?: string;
   creationDate?: string; lastUpdateDate?: string;
+}
+
+export interface StructuredIdentity {
+  userName: string;
+  organization: string;
+  workspace: string;
+  backend: string;
+}
+
+const READ_ONLY_STRUCTURED_FILES = new Set(["/identity.json", "/rules.md", "/goals.md"]);
+
+function isStructuredNamespace(p: string): boolean {
+  return p === "/rules" || p.startsWith("/rules/") ||
+    p === "/goal" || p.startsWith("/goal/") ||
+    p === "/kpi" || p.startsWith("/kpi/") ||
+    READ_ONLY_STRUCTURED_FILES.has(p);
 }
 
 // ── MemoreeFs ────────────────────────────────────────────────────────────────
@@ -226,6 +245,8 @@ export class MemoreeFs implements IFileSystem {
   // the goal/kpi routing is disabled (test or legacy configurations).
   private goalsTable: string | null = null;
   private kpisTable: string | null = null;
+  private rulesTable: string | null = null;
+  private identity: StructuredIdentity | null = null;
   // Per-file docs table, for /docs/ VFS reads + docs/find search. Null = off.
   private docsTable: string | null = null;
   /** Project scope for docs reads on shared tables (legacy '' rows included). */
@@ -248,12 +269,21 @@ export class MemoreeFs implements IFileSystem {
     table: string,
     mount = "/memory",
     sessionsTable?: string,
-    extra?: { goalsTable?: string; kpisTable?: string; docsTable?: string; docsProject?: string },
+    extra?: {
+      rulesTable?: string;
+      goalsTable?: string;
+      kpisTable?: string;
+      docsTable?: string;
+      docsProject?: string;
+      identity?: StructuredIdentity;
+    },
   ): Promise<MemoreeFs> {
     const fs = new MemoreeFs(client, table, mount);
     fs.sessionsTable = sessionsTable ?? null;
     fs.goalsTable = extra?.goalsTable ?? null;
     fs.kpisTable = extra?.kpisTable ?? null;
+    fs.rulesTable = extra?.rulesTable ?? null;
+    fs.identity = extra?.identity ?? null;
     fs.docsTable = extra?.docsTable ?? null;
     fs.docsProject = extra?.docsProject ?? null;
     // Ensure the memory table + goal/kpi tables exist before
@@ -262,6 +292,10 @@ export class MemoreeFs implements IFileSystem {
     // up; the shell will report them but stay alive (the
     // memory-side bootstrap catches its own errors below).
     await client.ensureTable();
+    if (fs.rulesTable) {
+      try { await client.ensureRulesTable(fs.rulesTable); }
+      catch { /* keep bootstrap moving — rule routing degrades gracefully */ }
+    }
     if (fs.goalsTable) {
       try { await client.ensureGoalsTable(fs.goalsTable); }
       catch { /* keep bootstrap moving — goal routing degrades gracefully */ }
@@ -290,7 +324,9 @@ export class MemoreeFs implements IFileSystem {
           // configured, goal routing is off and these rows are the only
           // copy, so we keep them.)
           const kind = classifyPath(p);
-          if ((kind === "goal" && fs.goalsTable) || (kind === "kpi" && fs.kpisTable)) {
+          if ((kind === "rule" && fs.rulesTable) ||
+              (kind === "goal" && fs.goalsTable) ||
+              (kind === "kpi" && fs.kpisTable)) {
             continue;
           }
           fs.files.set(p, null);
@@ -335,10 +371,34 @@ export class MemoreeFs implements IFileSystem {
       }
     })() : Promise.resolve();
 
-    // Goals + KPIs bootstrap — read the latest version of each row in
+    // Rules + goals + KPIs bootstrap — read the latest version of each row in
     // the structured tables and synthesize VFS paths for the cache.
     // ls / cat then work naturally against the file map, while
     // writes route to upsertRow which dispatches by path classifier.
+    const rulesBootstrap = fs.rulesTable ? (async () => {
+      try {
+        const rules = await listRules(client.query.bind(client), fs.rulesTable!, {
+          status: "all",
+          limit: 10_000,
+        });
+        for (const rule of rules) {
+          if (rule.status !== "active" && rule.status !== "done") continue;
+          const p = composeRulePath({ status: rule.status, rule_id: rule.rule_id });
+          const content = rule.text;
+          fs.files.set(p, Buffer.from(content, "utf-8"));
+          fs.meta.set(p, {
+            size: Buffer.byteLength(content, "utf-8"),
+            mime: "text/markdown",
+            mtime: new Date(rule.created_at || Date.now()),
+          });
+          fs.addToTree(p);
+          fs.flushed.add(p);
+        }
+      } catch {
+        // Rules table may not exist yet — start empty.
+      }
+    })() : Promise.resolve();
+
     const goalsBootstrap = fs.goalsTable ? (async () => {
       try {
         const goalRows = await client.query(
@@ -396,7 +456,9 @@ export class MemoreeFs implements IFileSystem {
       }
     })() : Promise.resolve();
 
-    await Promise.all([memoryBootstrap, sessionsBootstrap, goalsBootstrap, kpisBootstrap]);
+    await Promise.all([memoryBootstrap, sessionsBootstrap, rulesBootstrap, goalsBootstrap, kpisBootstrap]);
+    fs.ensureStructuredDirectories();
+    fs.refreshInventories();
 
     return fs;
   }
@@ -418,6 +480,80 @@ export class MemoreeFs implements IFileSystem {
     this.flushed.delete(filePath);
     const parent = parentOf(filePath);
     this.dirs.get(parent)?.delete(basename(filePath));
+  }
+
+  private ensureDirInTree(path: string): void {
+    const p = normPath(path);
+    if (!this.dirs.has(p)) this.dirs.set(p, new Set());
+    if (p !== "/") {
+      const parent = parentOf(p);
+      this.ensureDirInTree(parent);
+      this.dirs.get(parent)!.add(basename(p));
+    }
+  }
+
+  private ensureStructuredDirectories(): void {
+    if (this.rulesTable) {
+      this.ensureDirInTree("/rules/active");
+      this.ensureDirInTree("/rules/done");
+    }
+    if (this.goalsTable) {
+      this.ensureDirInTree("/goal");
+      const owners = new Set<string>();
+      if (this.identity?.userName) owners.add(this.identity.userName);
+      for (const p of this.files.keys()) {
+        if (classifyPath(p) === "goal") owners.add(decomposeGoalPath(p).owner);
+      }
+      for (const owner of owners) {
+        this.ensureDirInTree(`/goal/${owner}/opened`);
+        this.ensureDirInTree(`/goal/${owner}/in_progress`);
+        this.ensureDirInTree(`/goal/${owner}/closed`);
+      }
+    }
+    if (this.kpisTable) this.ensureDirInTree("/kpi");
+  }
+
+  private setSynthesizedFile(path: string, content: string, mime: string): void {
+    const buf = Buffer.from(content, "utf-8");
+    this.files.set(path, buf);
+    this.meta.set(path, { size: buf.length, mime, mtime: new Date() });
+    this.addToTree(path);
+  }
+
+  private refreshInventories(): void {
+    if (this.identity) {
+      this.setSynthesizedFile("/identity.json", `${JSON.stringify(this.identity, null, 2)}\n`, "application/json");
+    }
+    if (this.rulesTable) {
+      const active = [...this.files.keys()]
+        .filter(p => classifyPath(p) === "rule" && decomposeRulePath(p).status === "active")
+        .sort();
+      const lines = ["# Active Rules", ""];
+      if (active.length === 0) lines.push("(no active rules)");
+      for (const p of active) {
+        const id = decomposeRulePath(p).rule_id;
+        const text = this.files.get(p)?.toString("utf-8") ?? "";
+        lines.push(`- [${id}](${p.slice(1)}) ${text}`);
+      }
+      this.setSynthesizedFile("/rules.md", `${lines.join("\n")}\n`, "text/markdown");
+    }
+    if (this.goalsTable && this.identity) {
+      const current = [...this.files.keys()]
+        .filter(p => {
+          if (classifyPath(p) !== "goal") return false;
+          const goal = decomposeGoalPath(p);
+          return goal.owner === this.identity!.userName && goal.status !== "closed";
+        })
+        .sort();
+      const lines = ["# My Open Goals", ""];
+      if (current.length === 0) lines.push("(no open goals)");
+      for (const p of current) {
+        const goal = decomposeGoalPath(p);
+        const text = (this.files.get(p)?.toString("utf-8") ?? "").split(/\r?\n/, 1)[0];
+        lines.push(`- [${goal.goal_id}](${p.slice(1)}) [${goal.status}] ${text}`);
+      }
+      this.setSynthesizedFile("/goals.md", `${lines.join("\n")}\n`, "text/markdown");
+    }
   }
 
   // ── flush / write batching ────────────────────────────────────────────────
@@ -458,6 +594,8 @@ export class MemoreeFs implements IFileSystem {
     if (failures > 0) {
       throw new Error(`flush: ${failures}/${rows.length} writes failed and were re-queued`);
     }
+    this.ensureStructuredDirectories();
+    this.refreshInventories();
   }
 
   private async computeEmbeddings(rows: PendingRow[]): Promise<(number[] | null)[]> {
@@ -482,6 +620,10 @@ export class MemoreeFs implements IFileSystem {
     // INSERT shape below. Failures here propagate up to the flush
     // chain which re-queues the row on the next tick.
     const kind: PathKind = classifyPath(r.path);
+    if (kind === "rule" && this.rulesTable) {
+      await this.upsertRuleRow(r);
+      return;
+    }
     if (kind === "goal" && this.goalsTable) {
       await this.upsertGoalRow(r);
       return;
@@ -521,6 +663,34 @@ export class MemoreeFs implements IFileSystem {
       );
       this.flushed.add(r.path);
     }
+  }
+
+  private async upsertRuleRow(r: PendingRow): Promise<void> {
+    if (!this.rulesTable) throw new Error("rulesTable not configured");
+    const parts = decomposeRulePath(r.path);
+    const query = this.client.query.bind(this.client);
+    const previous = await getRuleLatest(query, this.rulesTable, parts.rule_id);
+    if (!previous) {
+      if (parts.status !== "active") {
+        throw fsErr("EPERM", "a new rule must be created under rules/active", r.path);
+      }
+      await insertRuleAtId(query, this.rulesTable, {
+        rule_id: parts.rule_id,
+        text: r.contentText,
+        assigned_by: this.identity?.userName ?? "local",
+      }, this.client.dialect);
+    } else {
+      if (previous.status !== parts.status) {
+        throw fsErr("EPERM", "change rule status with mv", r.path);
+      }
+      await editRule(query, this.rulesTable, {
+        rule_id: parts.rule_id,
+        text: r.contentText,
+        status: parts.status,
+        assigned_by: this.identity?.userName ?? "local",
+      }, this.client.dialect);
+    }
+    this.flushed.add(r.path);
   }
 
   /**
@@ -853,12 +1023,22 @@ export class MemoreeFs implements IFileSystem {
 
   // ── IFileSystem: writes ───────────────────────────────────────────────────
 
+  private assertWritablePath(p: string): void {
+    if (READ_ONLY_STRUCTURED_FILES.has(p)) {
+      throw fsErr("EPERM", "virtual inventory files are read-only", p);
+    }
+    if (isStructuredNamespace(p) && classifyPath(p) === "memory") {
+      throw fsErr("EPERM", "malformed structured Memoree path", p);
+    }
+  }
+
   /** Write a file with optional row-level metadata (project, description, dates). */
   async writeFileWithMeta(
     path: string, content: FileContent,
     meta: { project?: string; description?: string; creationDate?: string; lastUpdateDate?: string },
   ): Promise<void> {
     const p = normPath(path);
+    this.assertWritablePath(p);
     if (this.sessionPaths.has(p)) throw fsErr("EPERM", "session files are read-only", p);
     if (this.dirs.has(p) && !this.files.has(p)) throw fsErr("EISDIR", "illegal operation on a directory", p);
 
@@ -882,6 +1062,7 @@ export class MemoreeFs implements IFileSystem {
 
   async writeFile(path: string, content: FileContent, _opts?: WriteFileOptions | BufferEncoding): Promise<void> {
     const p = normPath(path);
+    this.assertWritablePath(p);
     if (this.sessionPaths.has(p)) throw fsErr("EPERM", "session files are read-only", p);
     if (this.dirs.has(p) && !this.files.has(p)) throw fsErr("EISDIR", "illegal operation on a directory", p);
 
@@ -904,6 +1085,10 @@ export class MemoreeFs implements IFileSystem {
 
   async appendFile(path: string, content: FileContent, opts?: WriteFileOptions | BufferEncoding): Promise<void> {
     const p = normPath(path);
+    this.assertWritablePath(p);
+    if (classifyPath(p) !== "memory") {
+      throw fsErr("EPERM", "structured files must be overwritten, not appended", p);
+    }
     const add = typeof content === "string" ? content : Buffer.from(content).toString("utf-8");
 
     // Session files are read-only (multi-row in sessions table, not memory table)
@@ -1120,9 +1305,33 @@ export class MemoreeFs implements IFileSystem {
   async rm(path: string, opts?: RmOptions): Promise<void> {
     const p = normPath(path);
     if (this.sessionPaths.has(p)) throw fsErr("EPERM", "session files are read-only", p);
+    if (READ_ONLY_STRUCTURED_FILES.has(p)) throw fsErr("EPERM", "virtual inventory files are read-only", p);
+    if (classifyPath(p) === "kpi") throw fsErr("EPERM", "KPI removal is not supported", p);
+    if (isStructuredNamespace(p) && classifyPath(p) === "memory") {
+      throw fsErr("EPERM", "only one rule or goal file may be removed", p);
+    }
     if (!this.files.has(p) && !this.dirs.has(p)) {
       if (opts?.force) return;
       throw fsErr("ENOENT", "no such file or directory", p);
+    }
+
+    if (this.rulesTable && classifyPath(p) === "rule") {
+      const parts = decomposeRulePath(p);
+      if (parts.status === "done") return;
+      const donePath = composeRulePath({ ...parts, status: "done" });
+      const content = this.files.get(p)?.toString("utf-8") ?? "";
+      await editRule(this.client.query.bind(this.client), this.rulesTable, {
+        rule_id: parts.rule_id,
+        status: "done",
+        assigned_by: this.identity?.userName ?? "local",
+      }, this.client.dialect);
+      this.files.set(donePath, Buffer.from(content, "utf-8"));
+      this.meta.set(donePath, this.meta.get(p) ?? { size: Buffer.byteLength(content), mime: "text/markdown", mtime: new Date() });
+      this.addToTree(donePath);
+      this.flushed.add(donePath);
+      this.removeFromTree(p);
+      this.refreshInventories();
+      return;
     }
 
     // Path-routed soft-close: `rm` on a goal path does NOT delete the
@@ -1139,7 +1348,6 @@ export class MemoreeFs implements IFileSystem {
         // a true hard-delete request? For v1 we make it a no-op so
         // the audit trail is fully preserved and the agent can not
         // accidentally wipe history.
-        this.removeFromTree(p);
         return;
       }
       const closedPath = composeGoalPath({ ...parts, status: "closed" });
@@ -1160,6 +1368,7 @@ export class MemoreeFs implements IFileSystem {
       this.addToTree(closedPath);
       this.flushed.add(closedPath);
       this.removeFromTree(p);
+      this.refreshInventories();
       return;
     }
 
@@ -1212,17 +1421,45 @@ export class MemoreeFs implements IFileSystem {
     if (this.sessionPaths.has(s)) throw fsErr("EPERM", "session files are read-only", s);
     if (this.sessionPaths.has(d)) throw fsErr("EPERM", "session files are read-only", d);
 
-    // Goal status transition: single INSERT v=N+1 with the new
+    const sourceKind = classifyPath(s);
+    const destKind = classifyPath(d);
+    if (sourceKind === "kpi" || destKind === "kpi") {
+      throw fsErr("EPERM", "KPI moves are not supported", d);
+    }
+    if ((isStructuredNamespace(s) || isStructuredNamespace(d)) && sourceKind !== destKind) {
+      throw fsErr("EPERM", "cannot move between structured Memoree types", d);
+    }
+    if (this.rulesTable && sourceKind === "rule" && destKind === "rule") {
+      const from = decomposeRulePath(s);
+      const to = decomposeRulePath(d);
+      if (from.rule_id !== to.rule_id) throw fsErr("EPERM", "cannot rename rule_id via mv", d);
+      if (!this.files.has(s)) throw fsErr("ENOENT", "no such file or directory", s);
+      if (s === d) return;
+      const content = this.files.get(s)?.toString("utf-8") ?? "";
+      await editRule(this.client.query.bind(this.client), this.rulesTable, {
+        rule_id: from.rule_id,
+        status: to.status,
+        assigned_by: this.identity?.userName ?? "local",
+      }, this.client.dialect);
+      this.files.set(d, Buffer.from(content, "utf-8"));
+      this.meta.set(d, this.meta.get(s) ?? { size: Buffer.byteLength(content), mime: "text/markdown", mtime: new Date() });
+      this.addToTree(d);
+      this.flushed.add(d);
+      this.removeFromTree(s);
+      this.refreshInventories();
+      return;
+    }
+
+    // Goal status/owner transition: a single UPDATE with the same stable ID.
     // status, no cp+rm dance (which would otherwise double-write to
     // the goals table). Also enforces the goal_id invariant: a goal
     // path mv cannot rename the UUID, only the status component.
     if (this.goalsTable && classifyPath(s) === "goal" && classifyPath(d) === "goal") {
       const from = decomposeGoalPath(s);
       const to = decomposeGoalPath(d);
-      if (from.goal_id !== to.goal_id || from.owner !== to.owner) {
-        throw fsErr("EPERM", "cannot rename goal_id or owner via mv (only status)", d);
-      }
+      if (from.goal_id !== to.goal_id) throw fsErr("EPERM", "cannot rename goal_id via mv", d);
       if (!this.files.has(s)) throw fsErr("ENOENT", "no such file or directory", s);
+      if (s === d) return;
       const contentBuf = this.files.get(s);
       const content = contentBuf instanceof Buffer ? contentBuf.toString("utf-8") : "";
       await this.upsertGoalRow({
@@ -1239,7 +1476,13 @@ export class MemoreeFs implements IFileSystem {
       this.addToTree(d);
       this.flushed.add(d);
       this.removeFromTree(s);
+      this.ensureStructuredDirectories();
+      this.refreshInventories();
       return;
+    }
+
+    if (isStructuredNamespace(s) || isStructuredNamespace(d)) {
+      throw fsErr("EPERM", "only rule-to-rule or goal-to-goal moves are supported", d);
     }
 
     await this.cp(src, dest, { recursive: true });

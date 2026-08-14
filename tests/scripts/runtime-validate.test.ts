@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
+  copyCodexAuthentication,
   isolatedCounts,
   lexicalValidationPrompt,
   waitForCapture,
@@ -118,6 +119,20 @@ describe("runtime validation Claude configuration", () => {
   });
 });
 
+describe("runtime validation Codex isolation", () => {
+  it("copies only auth material into a clean Codex profile", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-auth-"));
+    const realHome = join(root, "real");
+    const isolated = join(root, "isolated", ".codex");
+    mkdirSync(join(realHome, ".codex"), { recursive: true });
+    writeFileSync(join(realHome, ".codex", "auth.json"), "{\"token\":\"test\"}\n");
+    writeFileSync(join(realHome, ".codex", "config.toml"), "approval = 'saved'\n");
+    copyCodexAuthentication(realHome, isolated);
+    expect(readFileSync(join(isolated, "auth.json"), "utf8")).toContain("test");
+    expect(existsSync(join(isolated, "config.toml"))).toBe(false);
+  });
+});
+
 describe("runtime validation lexical marker", () => {
   it("survives capture redaction as an exact searchable identifier", () => {
     const identifier = "3b4aa504-2da6-4ad1-995b-293f1254d6c3";
@@ -164,6 +179,6 @@ describe("runtime validation agent responses", () => {
     const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
     expect(source).not.toContain("lexicalToken");
     expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
-    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(5);
+    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(6);
   });
 });

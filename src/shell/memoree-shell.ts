@@ -52,6 +52,7 @@ async function main(): Promise<void> {
   const sessionsTable = process.env["MEMOREE_SESSIONS_TABLE"] ?? "sessions";
   const goalsTable = process.env["MEMOREE_GOALS_TABLE"] ?? config.goalsTableName;
   const kpisTable = process.env["MEMOREE_KPIS_TABLE"] ?? config.kpisTableName;
+  const rulesTable = process.env["MEMOREE_RULES_TABLE"] ?? config.rulesTableName;
   const docsTable = process.env["MEMOREE_DOCS_TABLE"] ?? config.docsTableName;
   const mount = process.env["MEMOREE_MOUNT"] ?? "/";
 
@@ -61,7 +62,19 @@ async function main(): Promise<void> {
     process.stderr.write(`Connecting to Memoree ${config.storage.kind} storage ...\n`);
   }
 
-  const fs = await MemoreeFs.create(client, table, mount, sessionsTable, { goalsTable, kpisTable, docsTable, docsProject: deriveProjectKey(process.cwd()).key });
+  const fs = await MemoreeFs.create(client, table, mount, sessionsTable, {
+    rulesTable,
+    goalsTable,
+    kpisTable,
+    docsTable,
+    docsProject: deriveProjectKey(process.cwd()).key,
+    identity: {
+      userName: config.userName,
+      organization: config.orgName,
+      workspace: config.workspaceId,
+      backend: config.storage.kind,
+    },
+  });
 
   if (!isOneShot) {
     const fileCount = fs.getAllPaths().filter(p => !!p).length;

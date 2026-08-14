@@ -1,39 +1,14 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { classifyPath, decomposeGoalPath, decomposeRulePath } from "../shell/goal-paths.js";
 
 export const MEMORY_PATH = join(homedir(), ".memoree", "memory");
 export const TILDE_PATH = "~/.memoree/memory";
 export const HOME_VAR_PATH = "$HOME/.memoree/memory";
 
 export const SAFE_BUILTINS = new Set([
-  "cat", "ls", "cp", "mv", "rm", "rmdir", "mkdir", "touch", "ln", "chmod",
-  "stat", "readlink", "du", "tree", "file",
-  // sed and awk removed: sed supports `-e '1e <cmd>'` (execute shell command)
-  // and awk supports `system()` / `|` pipelines — both enable arbitrary code
-  // execution through the just-bash fallback.
-  "grep", "egrep", "fgrep", "rg", "cut", "tr", "sort", "uniq",
-  "wc", "head", "tail", "tac", "rev", "nl", "fold", "expand", "unexpand",
-  "paste", "join", "comm", "column", "diff", "strings", "split",
-  // xargs removed: it executes its input as a child command (`… | xargs curl`).
-  // `find` stays because the VFS serves `find -name`, but isSafe() rejects the
-  // command-dispatching `-exec/-execdir/-ok/-okdir` primaries below.
-  "find", "which",
-  "jq", "yq", "xan", "base64", "od",
-  // tar removed: --to-command=<cmd> executes an arbitrary program per entry.
-  // env removed: `env <cmd>` runs an arbitrary program.
-  "gzip", "gunzip", "zcat",
-  "md5sum", "sha1sum", "sha256sum",
-  "echo", "printf", "tee",
-  "pwd", "cd", "basename", "dirname", "printenv", "hostname", "whoami",
-  // timeout and time removed: both are wrappers that run an arbitrary child
-  // command (`timeout 1 curl …`, `time curl …`).
-  "date", "seq", "expr", "sleep", "true", "false", "test",
-  "alias", "unalias", "history", "help", "clear",
-  // Shell control keywords removed: as a stage's first token they let a child
-  // command ride in as a later token (`if true; then curl …; fi` splits into a
-  // `then curl …` stage whose leading `then` would otherwise pass). No VFS
-  // handler emulates control flow, so dropping them only sends such commands to
-  // the guidance/deny path — they never reach a real shell.
+  "cat", "ls", "grep", "head", "tail", "wc", "find", "jq",
+  "echo", "printf", "tee", "mv", "rm",
 ]);
 
 // A quoted heredoc (`<<'EOF'` / `<<"EOF"`) disables shell expansion, so its
@@ -62,26 +37,110 @@ function stripHeredocBodies(cmd: string): string {
 }
 
 export function isSafe(cmd: string): boolean {
-  const validated = stripHeredocBodies(cmd);
-  // $'...' is ANSI-C quoting: bash expands escape sequences inside it before
-  // the child process sees them, bypassing the single-quote stripping below.
-  if (/\$\(|`|<\(|\$'/.test(validated)) return false;
-  const stripped = validated.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
-  // `find … -exec/-execdir/-ok/-okdir <cmd>` runs an arbitrary program per
-  // match. `find` itself must stay allowlisted for the `-name` read shape, so
-  // reject the command-dispatching primaries explicitly. Checked post-strip so
-  // a quoted grep pattern containing "-exec" can't trip a false positive.
-  if (/(?:^|\s)-(?:exec|execdir|ok|okdir)\b/.test(stripped)) return false;
-  // Note: we deliberately do NOT split on a bare `&` — it collides with fd
-  // redirections like `2>&1`. A backgrounded second command (`cat x & curl …`)
-  // still can't reach the host: it matches no handler, so it falls through to
-  // the retry-guidance path which rewrites it to a harmless echo.
-  const stages = stripped.split(/\||;|&&|\|\||\n/);
-  for (const stage of stages) {
-    const firstToken = stage.trim().split(/\s+/)[0] ?? "";
-    if (firstToken && !SAFE_BUILTINS.has(firstToken)) return false;
+  if (/(?:^|\s)\d+>/.test(cmd)) return false;
+  const tokens = tokenizePolicyCommand(cmd);
+  if (!tokens || tokens.length === 0 || !SAFE_BUILTINS.has(tokens[0])) return false;
+  const [program, ...args] = tokens;
+  const isPath = (value: string): boolean =>
+    value.startsWith("/") && !value.split("/").includes("..") && !value.includes("\0");
+  const noRedirect = !args.includes(">");
+
+  if (program === "cat") return noRedirect && args.length > 0 && args.every(isPath);
+  if (program === "ls") {
+    return noRedirect && args.every(arg => isPath(arg) || /^-[al]+$/.test(arg));
   }
-  return true;
+  if (program === "head" || program === "tail") {
+    if (!noRedirect || args.length === 0 || !isPath(args.at(-1)!)) return false;
+    const flags = args.slice(0, -1);
+    return flags.length === 0 ||
+      (flags.length === 1 && /^-\d+$/.test(flags[0])) ||
+      (flags.length === 2 && flags[0] === "-n" && /^\d+$/.test(flags[1]));
+  }
+  if (program === "wc") {
+    return noRedirect && args.length >= 2 && args[0] === "-l" && args.slice(1).every(isPath);
+  }
+  if (program === "grep") {
+    if (!noRedirect || args.length < 2) return false;
+    let i = 0;
+    while (i < args.length && args[i].startsWith("-")) {
+      if (!/^-([rRinlcvwFEHh]+)$/.test(args[i])) return false;
+      i++;
+    }
+    if (i >= args.length - 1) return false;
+    return args.slice(i + 1).every(isPath);
+  }
+  if (program === "find") {
+    if (!noRedirect || args.length < 3 || !isPath(args[0])) return false;
+    let i = 1;
+    if (args[i] === "-type") {
+      if (args[i + 1] !== "f") return false;
+      i += 2;
+    }
+    return args.length === i + 2 && args[i] === "-name" && args[i + 1].length > 0;
+  }
+  if (program === "jq") {
+    return noRedirect && args.length === 2 && isPath(args[1]);
+  }
+  if (program === "echo" || program === "printf") {
+    const redirect = args.indexOf(">");
+    return redirect > 0 && redirect === args.length - 2 && isPath(args[redirect + 1]);
+  }
+  if (program === "tee") {
+    return noRedirect && (args.length === 1 || (args.length === 2 && args[0] === "-a")) && isPath(args.at(-1)!);
+  }
+  if (program === "rm") {
+    return noRedirect && args.length === 1 && !/[?*\[]/.test(args[0]) &&
+      (classifyPath(args[0]) === "rule" || classifyPath(args[0]) === "goal");
+  }
+  if (program === "mv") {
+    if (!noRedirect || args.length !== 2 || args.some(arg => /[?*\[]/.test(arg))) return false;
+    const fromKind = classifyPath(args[0]);
+    const toKind = classifyPath(args[1]);
+    if (fromKind === "rule" && toKind === "rule") {
+      return decomposeRulePath(args[0]).rule_id === decomposeRulePath(args[1]).rule_id;
+    }
+    if (fromKind === "goal" && toKind === "goal") {
+      return decomposeGoalPath(args[0]).goal_id === decomposeGoalPath(args[1]).goal_id;
+    }
+    return false;
+  }
+  return false;
+}
+
+/** Tokenize one literal command while rejecting every shell execution feature. */
+export function tokenizePolicyCommand(cmd: string): string[] | null {
+  if (!cmd.trim() || /\r|\n|\$\(|`|<\(|\$\{|\$'/.test(cmd)) return null;
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | "\"" | null = null;
+  let escaped = false;
+  const push = () => {
+    if (current.length > 0) tokens.push(current);
+    current = "";
+  };
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (escaped) { current += ch; escaped = false; continue; }
+    if (ch === "\\" && quote !== "'") { escaped = true; continue; }
+    if (quote) {
+      if (ch === quote) quote = null;
+      else current += ch;
+      continue;
+    }
+    if (ch === "'" || ch === "\"") { quote = ch; continue; }
+    if (/\s/.test(ch)) { push(); continue; }
+    if (ch === ">") {
+      if (cmd[i + 1] === ">") return null;
+      push();
+      tokens.push(">");
+      continue;
+    }
+    if (ch === ";" || ch === "|" || ch === "&" || ch === "<") return null;
+    current += ch;
+  }
+  if (quote || escaped) return null;
+  push();
+  return tokens;
 }
 
 function escapeRe(s: string): string {
@@ -110,6 +169,39 @@ export function rewritePaths(cmd: string): string {
     .replace(new RegExp(escapeRe(TILDE_PATH) + tail, "g"), "/")
     .replace(new RegExp('"' + escapeRe(HOME_VAR_PATH) + tail + '"', "g"), '"/"')
     .replace(new RegExp(escapeRe(HOME_VAR_PATH) + tail, "g"), "/");
+}
+
+export function shouldRouteThroughStructuredVfs(rewrittenCommand: string): boolean {
+  const tokens = tokenizePolicyCommand(rewrittenCommand);
+  if (!tokens || tokens.length === 0) return false;
+  const structured = (token: string): boolean =>
+    token === "/identity.json" || token === "/rules.md" || token === "/goals.md" ||
+    token === "/rules" || token.startsWith("/rules/") ||
+    token === "/goal" || token.startsWith("/goal/") ||
+    token === "/kpi" || token.startsWith("/kpi/");
+  if (tokens.some(structured)) return true;
+  return (tokens[0] === "ls" || tokens[0] === "find" || tokens[0] === "grep") &&
+    tokens.includes("/");
+}
+
+export function commandTouchesOutsideMemoryPath(command: string): boolean {
+  const tokens = tokenizePolicyCommand(command);
+  if (!tokens || tokens.length === 0) return false;
+  const [program, ...args] = tokens;
+  let candidates: string[] = [];
+  if (program === "cat" || program === "mv" || program === "rm") candidates = args;
+  else if (program === "ls") candidates = args.filter(arg => !arg.startsWith("-"));
+  else if (program === "head" || program === "tail" || program === "jq" || program === "tee") candidates = args.slice(-1);
+  else if (program === "wc") candidates = args.slice(1);
+  else if (program === "find") candidates = args.slice(0, 1);
+  else if (program === "grep") candidates = args.slice(-1);
+  else if (program === "echo" || program === "printf") {
+    const redirect = args.indexOf(">");
+    if (redirect >= 0) candidates = args.slice(redirect + 1);
+  }
+  return candidates.some(token =>
+    (token.startsWith("/") || token.startsWith("~") || token.startsWith("$HOME")) && !touchesMemory(token),
+  );
 }
 
 // Split a bash command into pipe/chain stages, each an argv array, respecting

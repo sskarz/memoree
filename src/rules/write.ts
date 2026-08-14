@@ -32,6 +32,11 @@ export interface InsertRuleInput {
   plugin_version?: string;
 }
 
+export interface InsertRuleAtIdInput extends InsertRuleInput {
+  /** Stable identifier encoded in a newly-created VFS filename. */
+  rule_id: string;
+}
+
 export interface EditRuleInput {
   /** Stable rule_id (NOT the per-version `id`). */
   rule_id: string;
@@ -88,9 +93,25 @@ export async function insertRule(
   input: InsertRuleInput,
   dialect: StorageDialect = "postgres",
 ): Promise<WriteResult> {
+  return insertRuleAtId(query, tableName, {
+    ...input,
+    rule_id: randomUUID(),
+  }, dialect);
+}
+
+/** Insert a new rule using the stable ID chosen by the VFS path. */
+export async function insertRuleAtId(
+  query: QueryFn,
+  tableName: string,
+  input: InsertRuleAtIdInput,
+  dialect: StorageDialect = "postgres",
+): Promise<WriteResult> {
   assertValidText(input.text);
+  if (!input.rule_id || /[\/\\\0]/.test(input.rule_id)) {
+    throw new Error("Rule ID must be a nonempty filename-safe value");
+  }
   const safe = sqlIdent(tableName);
-  const ruleId = randomUUID();
+  const ruleId = input.rule_id;
   const rowId = randomUUID();
   const now = new Date().toISOString();
   const agent = input.agent ?? "manual";

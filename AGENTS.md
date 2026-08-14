@@ -14,6 +14,15 @@ and Codex sessions closed. Use only `npm run runtime:init`,
 detached checkout at `~/.local/share/memoree-runtime`; never terminate sessions
 to force a promotion.
 
+Promotion is not completion. For every major or runtime-affecting change,
+promote the exact committed SHA and require `npm run runtime:validate` to exit
+successfully before reporting the runtime change complete. If validation
+fails, diagnose the first failed phase, fix and commit the defect, push it,
+promote the new SHA, and repeat validation. If an external dependency blocks
+validation, report the exact failing phase and evidence instead of claiming
+success. This authenticated global-runtime check is manual: never run it from
+an active agent session or unattended PR automation.
+
 Production state belongs under `~/.memoree`. Automated tests and validation
 must use isolated temporary homes, config paths, and SQLite databases. Never
 write synthetic records to the real database. Claude Code and Codex are the
@@ -35,7 +44,8 @@ are generated and must not be edited by hand.
 ## Commands
 
 - `npm ci` installs dependencies; Node.js 22.13 or newer is required.
-- `npm run verify` runs strict type checking and source-level Vitest without rebuilding bundles.
+- `npm run verify` runs TypeScript checks, the runtime-validator JavaScript
+  check, and source-level Vitest without rebuilding bundles.
 - `npm run build` type-checks and builds the CLI and supported runtime bundles.
 - `npm test` runs the full source and built-artifact suite.
 - `npx vitest run tests/shared/atomic-write.test.ts` targets one test file.
@@ -58,6 +68,11 @@ home directories. Add new source files to the per-file coverage thresholds in
 
 Use focused Conventional Commits such as `fix(runtime): ...`, `feat(graph): ...`,
 `test(summary): ...`, or `docs: ...`. PRs need a clear summary and test plan,
-relevant tests, and confirmation of `npm run verify`; include `npm run build`
-and `npm test` when runtime artifacts change. Do not bump the package version
+relevant tests, and confirmation of `npm run verify`. Major or runtime-affecting
+PRs also require `npm run build`, `npm test`, and `git diff --check`. Record the
+exact committed SHA and its successful `npm run runtime:validate` result before
+declaring the runtime change complete. If authenticated validation must happen
+after merge because sessions must be closed, mark it pending in the PR and do
+not treat the rollout as complete until it passes. Documentation-only and
+other non-runtime PRs do not require promotion. Do not bump the package version
 unless a release is explicitly intended.

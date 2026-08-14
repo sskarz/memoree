@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -41,6 +42,18 @@ function runHook(bundlePath, input, options) {
   });
 }
 
+function runHookResult(bundlePath, input, options) {
+  const result = spawnSync(process.execPath, [bundlePath], {
+    cwd: options.cwd,
+    env: options.env,
+    encoding: "utf8",
+    input: `${JSON.stringify(input)}\n`,
+    timeout: 30_000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+}
+
 function status(message) {
   process.stdout.write(`  ${message}\n`);
 }
@@ -63,6 +76,13 @@ export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
 
 export function lexicalValidationPrompt(identifier) {
   return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
+}
+
+export function copyCodexAuthentication(realHome, isolatedCodexHome) {
+  const source = join(realHome, ".codex", "auth.json");
+  assert(existsSync(source), `Codex authentication material is missing: ${source}`);
+  mkdirSync(isolatedCodexHome, { recursive: true, mode: 0o700 });
+  copyFileSync(source, join(isolatedCodexHome, "auth.json"));
 }
 
 export function assertAgentResponseContainsIdentifier(response, identifier, phase) {
@@ -195,6 +215,26 @@ function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexical
   }
 }
 
+function inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2) {
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const rules = db.prepare(
+      "SELECT version, status, text FROM memoree_rules WHERE rule_id = ? ORDER BY version",
+    ).all(ruleId);
+    assert(rules.length === 5, `Expected five persisted rule versions, got ${rules.length}`);
+    assert(rules.at(-1)?.status === "done", "Runtime validation rule was not soft-completed");
+    assert(rules.at(-1)?.text === ruleV2, "Runtime validation rule edit did not persist");
+    const goal = db.prepare(
+      "SELECT owner, status, content FROM memoree_goals WHERE goal_id = ?",
+    ).get(goalId);
+    assert(goal?.owner === "runtime-validation-bob", "Runtime validation goal owner move did not persist");
+    assert(goal?.status === "closed", "Runtime validation goal soft-close did not persist");
+    assert(goal?.content === goalV2, "Runtime validation goal edit did not persist");
+  } finally {
+    db.close();
+  }
+}
+
 export async function validateRuntime() {
   assertNoActiveAgentSessions();
   const { runtimeDir } = runtimePaths();
@@ -207,6 +247,8 @@ export async function validateRuntime() {
     join(claudeBundle, "session-end.js"),
     join(codexBundle, "capture.js"),
     join(codexBundle, "stop.js"),
+    join(codexBundle, "pre-tool-use.js"),
+    join(codexBundle, "command", "memoree.js"),
   ];
   for (const bundle of requiredBundles) {
     assert(existsSync(bundle), `Installed runtime bundle is missing: ${bundle}`);
@@ -216,6 +258,7 @@ export async function validateRuntime() {
   const repository = join(root, "repo");
   const state = join(root, "state");
   const isolatedHome = join(root, "home");
+  const isolatedCodexHome = join(isolatedHome, ".codex");
   const databasePath = join(state, "memoree.sqlite3");
   const claudeSettings = join(state, "claude-settings.json");
   const realHome = homedir();
@@ -227,7 +270,7 @@ export async function validateRuntime() {
     ...process.env,
     HOME: isolatedHome,
     CLAUDE_CONFIG_DIR: join(isolatedHome, ".claude"),
-    CODEX_HOME: process.env.CODEX_HOME ?? join(realHome, ".codex"),
+    CODEX_HOME: isolatedCodexHome,
     MEMOREE_BACKEND: "sqlite",
     MEMOREE_SQLITE_PATH: databasePath,
     MEMOREE_CONFIG_PATH: join(state, "config.json"),
@@ -248,10 +291,18 @@ export async function validateRuntime() {
     CLAUDE_CODE_ENTRYPOINT: "cli",
   };
   const claudeEnv = authenticatedClaudeEnvironment(env, realHome, realClaudeConfigDir);
+  const ruleId = crypto.randomUUID();
+  const goalId = crypto.randomUUID();
+  const ruleV1 = `runtime rule ${crypto.randomUUID()}`;
+  const ruleV2 = `${ruleV1} verified`;
+  const goalV1 = `runtime goal ${crypto.randomUUID()}`;
+  const goalV2 = `${goalV1} edited`;
+  const structuredMarker = crypto.randomUUID();
 
   try {
     mkdirSync(state, { recursive: true });
     mkdirSync(isolatedHome, { recursive: true });
+    copyCodexAuthentication(realHome, isolatedCodexHome);
     writeFileSync(claudeSettings, `${JSON.stringify({
       autoMemoryDirectory: join(state, "claude-auto-memory"),
     }, null, 2)}\n`, { mode: 0o600 });
@@ -269,6 +320,81 @@ export async function validateRuntime() {
 
     status("checking the isolated SQLite backend");
     run(process.execPath, [cli, "backend", "check"], { cwd: repository, env });
+
+    status("installing the promoted Codex runtime into a clean profile");
+    run(process.execPath, [cli, "codex", "install"], { cwd: repository, env });
+
+    status("checking filesystem-native Memoree through authenticated Codex");
+    const structuredPrompt = [
+      "Use the shell and run every command below as its own tool call, in order.",
+      "Do not combine commands with pipes, semicolons, &&, substitutions, or scripts.",
+      "Expected failures are intentional; continue after them.",
+      "cat ~/.memoree/memory/identity.json",
+      "cat ~/.memoree/memory/rules.md",
+      "cat ~/.memoree/memory/goals.md",
+      "memoree rules list",
+      "cat ~/.memoree/memory/rules/active/missing-runtime-validation.md",
+      "rm -rf ~/.memoree/memory/rules",
+      `printf '%s' '${ruleV1}' > ~/.memoree/memory/rules/active/${ruleId}.md`,
+      `printf '%s' '${ruleV2}' > ~/.memoree/memory/rules/active/${ruleId}.md`,
+      `mv ~/.memoree/memory/rules/active/${ruleId}.md ~/.memoree/memory/rules/done/${ruleId}.md`,
+      `mv ~/.memoree/memory/rules/done/${ruleId}.md ~/.memoree/memory/rules/active/${ruleId}.md`,
+      `rm ~/.memoree/memory/rules/active/${ruleId}.md`,
+      `printf '%s' '${goalV1}' > ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md`,
+      `printf '%s' '${goalV2}' > ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md`,
+      `mv ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md ~/.memoree/memory/goal/runtime-validation-bob/in_progress/${goalId}.md`,
+      `rm ~/.memoree/memory/goal/runtime-validation-bob/in_progress/${goalId}.md`,
+      `cat ~/.memoree/memory/rules/done/${ruleId}.md`,
+      `cat ~/.memoree/memory/goal/runtime-validation-bob/closed/${goalId}.md`,
+      "cat ~/.memoree/memory/identity.json",
+      "cat ~/.memoree/memory/rules.md",
+      "cat ~/.memoree/memory/goals.md",
+      `After attempting every command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
+    ].join("\n");
+    const structuredResponse = run("codex", [
+      "exec",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "--ignore-user-config",
+      "-s", "read-only",
+      structuredPrompt,
+    ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
+    assertAgentResponseContainsIdentifier(
+      structuredResponse,
+      structuredMarker,
+      "Codex structured filesystem workflow",
+    );
+    inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2);
+
+    const codexPreTool = join(codexBundle, "pre-tool-use.js");
+    const hookBase = {
+      session_id: crypto.randomUUID(), tool_name: "shell", tool_use_id: "runtime-validation",
+      cwd: repository, hook_event_name: "pre_tool_use", model: "runtime-validation",
+    };
+    const missingResult = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/rules/active/definitely-missing.md" },
+    }, { cwd: repository, env });
+    assert(missingResult.status === 0, "Missing VFS path was incorrectly treated as a hook denial");
+    const missingWire = JSON.parse(missingResult.stdout);
+    const missingReplacement = missingWire?.hookSpecificOutput?.updatedInput?.command ?? "";
+    assert(missingReplacement.includes("exit 1"), "Missing VFS path did not preserve a normal nonzero command failure");
+    assert(!missingReplacement.includes(".memoree/memory"), "Missing-path replacement exposed the original host path");
+
+    const unsafeResult = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "rm -rf ~/.memoree/memory/rules" },
+    }, { cwd: repository, env });
+    assert(unsafeResult.status === 2, "Unsafe VFS command was not rejected by the hook security policy");
+
+    const brokerResult = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "memoree rules list" },
+    }, { cwd: repository, env });
+    assert(brokerResult.status === 0, "Codex compatibility broker did not handle memoree rules list");
+    const brokerWire = JSON.parse(brokerResult.stdout);
+    const brokerReplacement = brokerWire?.hookSpecificOutput?.updatedInput?.command ?? "";
+    assert(!brokerReplacement.includes("memoree rules list"), "Compatibility replacement exposed executable user input");
 
     const claudeSession = crypto.randomUUID();
     const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
@@ -319,7 +445,6 @@ export async function validateRuntime() {
       "exec",
       "--skip-git-repo-check",
       "--ephemeral",
-      "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       "Recall the unusual observatory object and its exact identifier from Memoree. Answer with only that fact.",
     ], { cwd: repository, env: recallEnv });

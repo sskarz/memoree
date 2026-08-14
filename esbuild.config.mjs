@@ -86,6 +86,7 @@ const codexEntries = [
   ["src/hooks/codex/pre-tool-use", "pre-tool-use"],
   ["src/hooks/codex/stop", "stop"],
   ["src/hooks/codex/wiki-worker", "wiki-worker"],
+  ["src/cli/index", "command/memoree"],
   ["src/hooks/graph-pull-worker", "graph-pull-worker"],
   ["src/hooks/graph-deps-worker", "graph-deps-worker"],
   ["src/skillify/skillify-worker", "skillify-worker"],

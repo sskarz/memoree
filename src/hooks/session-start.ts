@@ -44,10 +44,15 @@ export const CLAUDE_MEMORY_CONTEXT = `MEMOREE MEMORY: You have TWO memory source
 1. Your built-in memory (~/.claude/) — personal per-project notes
 2. Memoree memory (~/.memoree/memory/) — persistent memory for the selected repository and backend
 
-Memoree memory has THREE tiers — pick the right one for the question:
-1. ~/.memoree/memory/index.md   — auto-generated index, top 50 most-recently-updated entries with \`Created\` + \`Last Updated\` + \`Project\` + \`Description\` columns. ~5 KB. **For "what's recent / who did X this week / since <date>" queries, START HERE** and trust the \`Last Updated\` column over any \`Started:\` line in summary bodies.
-2. ~/.memoree/memory/summaries/ — condensed wiki summaries per session (~3 KB each). For keyword/topic recall, search these.
-3. ~/.memoree/memory/sessions/  — rendered human-readable transcript views (~5 KB each). FALLBACK only — use when summaries don't contain the exact quote/turn you need. The .jsonl suffix does not guarantee JSON.
+Memoree is a virtual filesystem backed by SQLite. Start with the read-only routed views:
+- ~/.memoree/memory/identity.json — current userName, organization, workspace, and backend
+- ~/.memoree/memory/rules.md — active shared rules
+- ~/.memoree/memory/goals.md — the current user's opened and in-progress goals
+
+For past-session recall, pick the right tier:
+1. ~/.memoree/memory/index.md — recent session inventory.
+2. ~/.memoree/memory/summaries/ — condensed wiki summaries per session.
+3. ~/.memoree/memory/sessions/ — rendered transcript fallback; .jsonl does not guarantee JSON.
 
 Search workflow:
   - Time-based ("last week", "today", "since X"): \`cat ~/.memoree/memory/index.md\` and read the most-recent rows.
@@ -56,8 +61,7 @@ Search workflow:
 
 Tool choice on this mount:
   ✅ Bash tool with \`grep -r\` / \`cat\` / \`ls\` / \`head\` / \`tail\` — supported, fast.
-  ❌ Built-in Grep tool — not supported on this path; use Bash grep instead.
-  ❌ \`grep\` without a \`summaries/\` or \`sessions/\` suffix — too noisy, drowns the answer.
+  ✅ Root-wide \`ls\`, \`find\`, and \`grep\` include identity, rules, goals, KPIs, summaries, and sessions through one authoritative view.
 
 Resuming work (user says "pick up where I left off" / "load that from memoree" / "continue where we stopped"):
   The resume target is the most recent session summary for the CURRENT project. Find and load it from the VFS — do not wait for or expect it to be pre-loaded:

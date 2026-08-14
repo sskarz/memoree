@@ -23,9 +23,7 @@
  * Failure mode: any caught error → return empty string. SessionStart
  * MUST NOT fail because of a bad rules / goals read; the agent has
  * to start regardless. Missing-table errors are silently absorbed
- * (the tables get created lazily by their respective write paths —
- * `memoree rules add` for rules, VFS Bash heredoc or `memoree goal
- * add` for goals).
+ * (the tables get created lazily by their respective write paths).
  */
 
 import { listRules, type RuleRow } from "../../rules/index.js";
@@ -232,7 +230,7 @@ function formatBlock(input: FormatInput): string {
       lines.push(`- ${r.rule_id}: ${sanitizeForInject(r.text)}`);
     }
     if (input.rulesHidden > 0) {
-      lines.push(`(${input.rulesHidden} more — run 'memoree rules list' to see all)`);
+      lines.push(`(${input.rulesHidden} more — read 'memory/rules.md' to see all)`);
     }
     lines.push("");
   }
@@ -247,7 +245,7 @@ function formatBlock(input: FormatInput): string {
       lines.push(`${tag} ${g.goal_id}: ${firstLine}`);
     }
     if (input.goalsHidden > 0) {
-      lines.push(`(${input.goalsHidden} more — run 'memoree goal list --mine' to see all)`);
+      lines.push(`(${input.goalsHidden} more — read 'memory/goals.md' to see all)`);
     }
     lines.push("");
   }
@@ -257,9 +255,9 @@ function formatBlock(input: FormatInput): string {
     lines.push("- Rules above are shared principles. Treat any action that would violate one as a critical error and surface it to the user before proceeding.");
   }
   if (input.goals.length > 0) {
-    lines.push("- Goals above are your current open work items. Move a goal forward by `mv`-ing its file between memory/goal/<user>/{opened,in_progress,closed}/ or run `memoree goal progress <goal_id> <status>`.");
+    lines.push("- Goals above are your current open work items. Read `memory/goals.md`, then move a goal between memory/goal/<owner>/{opened,in_progress,closed}/ with `mv` while preserving its ID.");
   }
-  lines.push("- Run 'memoree rules list' / 'memoree goal list --mine' for the full inventories beyond what's shown here.");
+  lines.push("- Read 'memory/rules.md' / 'memory/goals.md' for the full inventories beyond what's shown here.");
 
   return lines.join("\n");
 }

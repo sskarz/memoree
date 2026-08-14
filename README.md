@@ -44,6 +44,7 @@ stable runtime only after closing every Claude Code and Codex session:
 ```sh
 npm run verify
 npm run runtime:init -- HEAD
+npm run runtime:validate
 ```
 
 The runtime command resolves `HEAD` (or another supplied Git ref) to an
@@ -64,7 +65,8 @@ after all agent sessions are closed:
 ```sh
 git status --short
 npm run verify
-npm run runtime:promote -- <git-ref>
+npm run runtime:promote -- <commit-sha>
+npm run runtime:validate
 ```
 
 Promotion refuses a dirty runtime checkout or active Claude/Codex processes.
@@ -72,18 +74,23 @@ It records the prior SHA under `~/.local/state/memoree/runtime.json` and
 automatically restores that revision if checkout, build, installation, or
 doctor fails. It never terminates an agent process.
 
-Run the authenticated cross-agent smoke test with no interactive sessions
-open:
-
-```sh
-npm run runtime:validate
-```
-
 Validation creates a disposable Git repository and isolated SQLite/config/
 memory paths, checks Claude-to-Codex semantic recall, lexical fallback with
 embeddings disabled, SQLite integrity and WAL mode, captured events and
 summaries, and 768-element embeddings. It removes the disposable state even on
 failure; synthetic records never use the real database.
+
+Promotion is not completion. A major or runtime-affecting change is complete
+only after `npm run runtime:validate` exits successfully for the exact promoted
+commit. If any phase fails, fix the defect in the development checkout,
+commit and push it, promote the new SHA, and validate again. If authentication
+or another external dependency blocks validation, record the exact failing
+phase and evidence; do not report a successful rollout.
+
+Validation requires authenticated Claude Code and Codex CLIs and closed
+interactive sessions. It exercises the globally installed integrations against
+disposable state. Run it manually with explicit authorization, not in
+unattended PR automation.
 
 Restore the previously recorded revision with:
 
@@ -104,6 +111,7 @@ git pull --ff-only
 npm ci
 npm run verify
 npm run runtime:promote -- origin/main
+npm run runtime:validate
 ```
 
 ## Everyday commands
@@ -112,8 +120,10 @@ npm run runtime:promote -- origin/main
 memoree doctor
 memoree status
 memoree context
-memoree rules list
-memoree goal list
+cat ~/.memoree/memory/identity.json
+cat ~/.memoree/memory/rules.md
+cat ~/.memoree/memory/goals.md
+ls ~/.memoree/memory/
 memoree docs list
 memoree graph build
 memoree embeddings status
@@ -149,15 +159,24 @@ directory yourself only after making any desired backup.
 
 ## Development checks
 
-`npm run verify` is the routine local gate: strict TypeScript plus source-level
-Vitest, without rebuilding runtime bundles. Before promoting a runtime change,
-also run:
+`npm run verify` is the routine local gate: strict TypeScript, a static check of
+the JavaScript runtime validator, and source-level Vitest, without rebuilding
+runtime bundles.
+
+Every PR must report `npm run verify`. Major or runtime-affecting PRs must also
+run:
 
 ```sh
 npm run build
 npm test
 git diff --check
 ```
+
+For a major or runtime-affecting PR, record the exact committed SHA and its
+successful `npm run runtime:validate` result before declaring the rollout
+complete. When validation cannot run before merge because authenticated agent
+sessions must be closed, mark that gate pending and complete it manually after
+merge. Documentation-only and other non-runtime PRs do not require promotion.
 
 ## License
 

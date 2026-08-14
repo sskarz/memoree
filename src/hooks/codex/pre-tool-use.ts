@@ -47,10 +47,11 @@ import {
 } from "../query-cache.js";
 import { log as _log } from "../../utils/debug.js";
 import { isDirectRun } from "../../utils/direct-run.js";
-import { isSafe, touchesMemory, rewritePaths } from "../memory-path-utils.js";
+import { commandTouchesOutsideMemoryPath, isSafe, touchesMemory, rewritePaths, shouldRouteThroughStructuredVfs } from "../memory-path-utils.js";
+import { parseCodexCompatibilityCommand } from "./compatibility-broker.js";
 import { armSkillOptOnSkillUse } from "../shared/skillopt-hook.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
-import { safeFailureReplacement, safeStdoutReplacement } from "../shared/shell-replacement.js";
+import { safeFailureReplacement, safeProcessReplacement, safeStdoutReplacement } from "../shared/shell-replacement.js";
 import { capOutputForClaude } from "../../utils/output-cap.js";
 
 export { isSafe, touchesMemory, rewritePaths };
@@ -140,6 +141,7 @@ interface CodexPreToolDeps {
   readCachedIndexContentFn?: typeof readCachedIndexContent;
   writeCachedIndexContentFn?: typeof writeCachedIndexContent;
   runVfsShellFn?: (command: string) => { status: number | null; stdout: string; stderr: string };
+  runCompatibilityCommandFn?: (args: string[]) => { status: number | null; stdout: string; stderr: string };
   tryGraphReadFn?: typeof tryGraphRead;
   logFn?: (msg: string) => void;
 }
@@ -161,9 +163,18 @@ export async function processCodexPreToolUse(
     writeCachedIndexContentFn = writeCachedIndexContent,
     runVfsShellFn = (command: string) => {
       const shellBundle = join(__bundleDir, "shell", "memoree-shell.js");
-      const proc = spawnSync("node", [shellBundle, "-c", command], {
+      const proc = spawnSync(process.execPath, [shellBundle, "-c", command], {
         encoding: "utf-8",
         timeout: 10_000,
+      });
+      return { status: proc.status, stdout: proc.stdout ?? "", stderr: proc.stderr ?? "" };
+    },
+    runCompatibilityCommandFn = (args: string[]) => {
+      const commandEntry = join(__bundleDir, "command", "memoree.js");
+      const proc = spawnSync(process.execPath, [commandEntry, ...args], {
+        encoding: "utf-8",
+        timeout: 10_000,
+        maxBuffer: 4 * 1024 * 1024,
       });
       return { status: proc.status, stdout: proc.stdout ?? "", stderr: proc.stderr ?? "" };
     },
@@ -180,7 +191,27 @@ export async function processCodexPreToolUse(
   const cmd = input.tool_input?.command ?? "";
   logFn(`hook fired: cmd=${cmd}`);
 
+  const compatibility = parseCodexCompatibilityCommand(cmd);
+  if (compatibility.kind === "deny") {
+    return { action: "block", output: compatibility.reason };
+  }
+  if (compatibility.kind === "run") {
+    const proc = runCompatibilityCommandFn(compatibility.args);
+    const stdout = capOutputForClaude(proc.stdout ?? "", { kind: "command" });
+    const stderr = capOutputForClaude(proc.stderr ?? "", { kind: "command" });
+    return {
+      action: "allow",
+      output: stdout || stderr,
+      replacementCommand: safeProcessReplacement(stdout, stderr, proc.status),
+      rewrittenCommand: "memoree",
+    };
+  }
+
   if (!touchesMemory(cmd)) return { action: "pass" };
+
+  if (commandTouchesOutsideMemoryPath(cmd)) {
+    return { action: "block", output: buildUnsupportedGuidance() };
+  }
 
   const rewritten = rewritePaths(cmd);
 
@@ -256,6 +287,16 @@ export async function processCodexPreToolUse(
     };
 
     try {
+      if (shouldRouteThroughStructuredVfs(rewritten)) {
+        logFn(`structured vfs intercept: ${rewritten}`);
+        const proc = runVfsShellFn(rewritten);
+        if (proc.status === 0) {
+          const output = proc.stdout ?? "";
+          return buildHandledSuccess(output, rewritten, "structured");
+        }
+        return buildHandledFailure(proc.stderr ?? "", proc.status, rewritten, proc.stdout ?? "");
+      }
+
       // `ls /docs` belongs to the docs VFS — intercept BEFORE the compiled
       // bash executor (which owns generic ls) so the root index renders the
       // same view the cat branch and the Claude hook serve.

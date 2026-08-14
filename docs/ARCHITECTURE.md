@@ -32,7 +32,25 @@ uses the local `claude` executable. The embedding daemon runs locally from
 vectors back through the same storage contract.
 
 The virtual memory filesystem under `~/.memoree/memory` exposes indexes,
-summaries, and session records without introducing another source of truth.
+summaries, session records, and structured rule/goal state without introducing
+another source of truth. SQLite remains authoritative; physical database and
+configuration files are outside the virtual mount.
+
+```text
+~/.memoree/memory/
+├── identity.json
+├── rules.md
+├── goals.md
+├── rules/{active,done}/<rule-id>.md
+├── goal/<owner>/{opened,in_progress,closed}/<goal-id>.md
+└── kpi/<goal-id>/<kpi-id>.md
+```
+
+The inventory and identity files are read-only. Rule and goal files support
+their narrow lifecycle operations through ordinary filesystem commands; KPI
+files support creation and overwrite but not moves or removal. The hooks route
+these commands through the VFS so the host shell never receives a virtual
+filesystem operation.
 
 ## Integration model
 

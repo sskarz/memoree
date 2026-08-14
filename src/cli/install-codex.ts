@@ -23,8 +23,9 @@ export const CODEX_AGENTS_BLOCK = `${MEMOREE_BLOCK_START}
 
 You have global team memory at \`~/.memoree/memory/\`, shared across all sessions, users, and agents in your org. Proactively consult it before starting a task — and whenever the user asks you to recall, look up, or remember anything:
 
-- Team rules: \`memoree rules list\`
-- Your open goals: \`memoree goal list --mine\`
+- Routed identity: \`cat ~/.memoree/memory/identity.json\`
+- Team rules: \`cat ~/.memoree/memory/rules.md\`
+- Your open goals: \`cat ~/.memoree/memory/goals.md\`
 - Past sessions: start at \`~/.memoree/memory/index.md\`, then read \`~/.memoree/memory/summaries/<user>/<session>.md\`; only fall back to rendered transcript views under \`~/.memoree/memory/sessions/<user>/\` when a summary lacks the detail.
 - Keyword search: \`grep -ri "keyword" ~/.memoree/memory/summaries/\` (use \`grep\`, NOT \`rg\`/ripgrep — it may not be installed).
 

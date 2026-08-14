@@ -1,5 +1,5 @@
 /**
- * Path classifier + decompose/compose helpers for goal and KPI paths
+ * Path classifier + decompose/compose helpers for rule, goal, and KPI paths
  * inside the Memoree VFS.
  *
  * The agent operates on a normal-looking filesystem under the memory
@@ -13,6 +13,7 @@
  * Path conventions (always absolute, always start with the memory
  * mount; the mount prefix itself is stripped before classification):
  *
+ *   /memory/rules/<status>/<rule_id>.md
  *   /memory/goal/<owner>/<status>/<goal_id>.md
  *   /memory/kpi/<goal_id>/<kpi_id>.md
  *
@@ -28,9 +29,15 @@
  */
 
 const VALID_STATUS = new Set(["opened", "in_progress", "closed"]);
+const VALID_RULE_STATUS = new Set(["active", "done"]);
 
 /** Classification result for a VFS path. */
-export type PathKind = "goal" | "kpi" | "memory";
+export type PathKind = "rule" | "goal" | "kpi" | "memory";
+
+export interface RulePathParts {
+  status: "active" | "done";
+  rule_id: string;
+}
 
 export interface GoalPathParts {
   owner: string;
@@ -79,28 +86,54 @@ function segmentsUnderMemory(p: string): string[] | null {
 }
 
 /**
- * Classify a VFS path into "goal", "kpi", or "memory". Performs the
+ * Classify a VFS path into "rule", "goal", "kpi", or "memory". Performs the
  * minimum validation needed to dispatch — full validation (status
  * enum, segment count, .md extension) happens via decompose helpers.
  */
 export function classifyPath(p: string): PathKind {
   const segs = segmentsUnderMemory(p);
   if (!segs) return "memory";
+  if (segs[0] === "rules") {
+    if (segs.length === 3 && segs[2].length > 3 && segs[2].endsWith(".md") && VALID_RULE_STATUS.has(segs[1])) {
+      return "rule";
+    }
+    return "memory";
+  }
   if (segs[0] === "goal") {
     // /memory/goal/<owner>/<status>/<goal_id>.md → 4 segs after stripping "memory/"
-    if (segs.length === 4 && segs[3].endsWith(".md") && VALID_STATUS.has(segs[2])) {
+    if (segs.length === 4 && segs[1].length > 0 && segs[3].length > 3 && segs[3].endsWith(".md") && VALID_STATUS.has(segs[2])) {
       return "goal";
     }
     return "memory";
   }
   if (segs[0] === "kpi") {
     // /memory/kpi/<goal_id>/<kpi_id>.md → 3 segs
-    if (segs.length === 3 && segs[2].endsWith(".md")) {
+    if (segs.length === 3 && segs[1].length > 0 && segs[2].length > 3 && segs[2].endsWith(".md")) {
       return "kpi";
     }
     return "memory";
   }
   return "memory";
+}
+
+export function decomposeRulePath(p: string): RulePathParts {
+  const segs = segmentsUnderMemory(p);
+  if (!segs || segs.length !== 3 || segs[0] !== "rules") {
+    throw new Error(`Not a rule path: ${p}`);
+  }
+  const status = segs[1];
+  if (!VALID_RULE_STATUS.has(status)) {
+    throw new Error(`Invalid rule status in path: ${p} (got '${status}')`);
+  }
+  const filename = segs[2];
+  if (!filename.endsWith(".md")) {
+    throw new Error(`Rule path must end with .md: ${p}`);
+  }
+  if (filename === ".md") throw new Error(`Rule path must include a rule ID: ${p}`);
+  return {
+    status: status as RulePathParts["status"],
+    rule_id: filename.slice(0, -".md".length),
+  };
 }
 
 /**
@@ -118,9 +151,11 @@ export function decomposeGoalPath(p: string): GoalPathParts {
     throw new Error(`Invalid goal status in path: ${p} (got '${status}')`);
   }
   const filename = segs[3];
+  if (!segs[1]) throw new Error(`Goal path must include an owner: ${p}`);
   if (!filename.endsWith(".md")) {
     throw new Error(`Goal path must end with .md: ${p}`);
   }
+  if (filename === ".md") throw new Error(`Goal path must include a goal ID: ${p}`);
   return {
     owner: segs[1],
     status: status as GoalPathParts["status"],
@@ -138,9 +173,11 @@ export function decomposeKpiPath(p: string): KpiPathParts {
     throw new Error(`Not a kpi path: ${p}`);
   }
   const filename = segs[2];
+  if (!segs[1]) throw new Error(`KPI path must include a goal ID: ${p}`);
   if (!filename.endsWith(".md")) {
     throw new Error(`KPI path must end with .md: ${p}`);
   }
+  if (filename === ".md") throw new Error(`KPI path must include a KPI ID: ${p}`);
   return {
     goal_id: segs[1],
     kpi_id: filename.slice(0, -".md".length),
@@ -154,6 +191,10 @@ export function decomposeKpiPath(p: string): KpiPathParts {
  */
 export function composeGoalPath(parts: GoalPathParts): string {
   return `/goal/${parts.owner}/${parts.status}/${parts.goal_id}.md`;
+}
+
+export function composeRulePath(parts: RulePathParts): string {
+  return `/rules/${parts.status}/${parts.rule_id}.md`;
 }
 
 /**

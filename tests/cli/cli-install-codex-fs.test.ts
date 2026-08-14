@@ -405,8 +405,9 @@ describe("installCodex — AGENTS.md memory block", () => {
     // The whole point: proactive memory + rules/goals guidance is injected
     // here (silent model context), not in the user-visible session-start hook.
     expect(md).toContain("Proactively consult");
-    expect(md).toContain("memoree rules list");
-    expect(md).toContain("memoree goal list --mine");
+    expect(md).toContain("~/.memoree/memory/identity.json");
+    expect(md).toContain("~/.memoree/memory/rules.md");
+    expect(md).toContain("~/.memoree/memory/goals.md");
   });
 
   it("preserves a user's pre-existing AGENTS.md content; appends the block once", async () => {

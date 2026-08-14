@@ -7,6 +7,18 @@ export function safeStdoutReplacement(body: string): string {
   return `printf '%s\\n' ${singleQuoteLiteral(body)}`;
 }
 
+/** Reproduce a child process result without embedding its argv in host shell code. */
+export function safeProcessReplacement(stdout: string, stderr: string, status: number | null): string {
+  const exitStatus = status !== null && Number.isInteger(status) && status >= 0 && status <= 255
+    ? status
+    : 1;
+  const commands: string[] = [];
+  if (stdout) commands.push(`printf '%s' ${singleQuoteLiteral(stdout)}`);
+  if (stderr) commands.push(`printf '%s' ${singleQuoteLiteral(stderr)} >&2`);
+  commands.push(`exit ${exitStatus}`);
+  return commands.join("; ");
+}
+
 /**
  * Build a harmless host command that reproduces a sandbox failure without
  * exposing any part of the original command to the host shell.
@@ -16,12 +28,6 @@ export function safeFailureReplacement(
   status: number | null,
   stdout = "",
 ): string {
-  const exitStatus = status !== null && Number.isInteger(status) && status > 0 && status <= 125
-    ? status
-    : 1;
-  const commands: string[] = [];
-  if (stdout) commands.push(`printf '%s' ${singleQuoteLiteral(stdout)}`);
-  if (stderr) commands.push(`printf '%s' ${singleQuoteLiteral(stderr)} >&2`);
-  commands.push(`exit ${exitStatus}`);
-  return commands.join("; ");
+  const exitStatus = status !== null && Number.isInteger(status) && status > 0 && status <= 255 ? status : 1;
+  return safeProcessReplacement(stdout, stderr, exitStatus);
 }

@@ -6,9 +6,10 @@
  * later) stays a non-breaking change for callers.
  */
 
-export { insertRule, editRule, markRuleDone, _MAX_TEXT_LENGTH } from "./write.js";
+export { insertRule, insertRuleAtId, editRule, markRuleDone, _MAX_TEXT_LENGTH } from "./write.js";
 export type {
   InsertRuleInput,
+  InsertRuleAtIdInput,
   EditRuleInput,
   WriteResult,
   RuleStatus,

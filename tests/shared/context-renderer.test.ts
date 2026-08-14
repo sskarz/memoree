@@ -156,7 +156,7 @@ describe("renderContextBlock — rules rendering", () => {
     ]);
     const out = await renderContextBlock(query, INPUT);
     expect(out).toContain("=== MEMOREE RULES (10 active) ===");
-    expect(out).toContain("(2 more — run 'memoree rules list' to see all)");
+    expect(out).toContain("(2 more — read 'memory/rules.md' to see all)");
     expect(out).not.toContain("rule body 10");
     expect(out).not.toContain("rule body 11");
   });
@@ -232,7 +232,7 @@ describe("renderContextBlock — goals rendering", () => {
       () => goals,
     ]);
     const out = await renderContextBlock(query, INPUT);
-    expect(out).toContain("(2 more — run 'memoree goal list --mine' to see all)");
+    expect(out).toContain("(2 more — read 'memory/goals.md' to see all)");
     expect(out).not.toContain("body 10");
     expect(out).not.toContain("body 11");
   });

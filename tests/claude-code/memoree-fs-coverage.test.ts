@@ -359,8 +359,8 @@ describe("rm goal soft-close", () => {
       goals: [{ goal_id: "g2", owner: "bob", status: "closed", content: "done" }],
     });
     await fs.rm("/goal/bob/closed/g2.md");
-    // Cache entry removed, but no DELETE issued against the goals table.
-    expect(await fs.exists("/goal/bob/closed/g2.md")).toBe(false);
+    // The closed file remains visible and no DELETE is issued.
+    expect(await fs.exists("/goal/bob/closed/g2.md")).toBe(true);
     const deletes = (client.query.mock.calls as [string][]).filter(c => c[0].startsWith("DELETE"));
     expect(deletes.length).toBe(0);
   });
@@ -378,14 +378,14 @@ describe("mv goal status transition", () => {
     expect(client._goals.find(g => g.goal_id === "g1")!.status).toBe("in_progress");
   });
 
-  it("rejects renaming the goal_id or owner via mv", async () => {
+  it("rejects renaming the goal_id but allows owner reassignment via mv", async () => {
     const { fs } = await makeGoalFs({
       goals: [{ goal_id: "g1", owner: "alice", status: "opened", content: "body" }],
     });
     await expect(fs.mv("/goal/alice/opened/g1.md", "/goal/alice/opened/g2.md"))
       .rejects.toMatchObject({ code: "EPERM" });
     await expect(fs.mv("/goal/alice/opened/g1.md", "/goal/bob/opened/g1.md"))
-      .rejects.toMatchObject({ code: "EPERM" });
+      .resolves.toBeUndefined();
   });
 
   it("throws ENOENT when the source goal is missing", async () => {
