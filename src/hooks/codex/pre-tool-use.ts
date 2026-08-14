@@ -218,7 +218,7 @@ export async function processCodexPreToolUse(
   // Graph VFS dispatch — a cat/head/tail/ls on the `/graph/*` subtree is
   // answered from the local snapshot, no SQL, no config needed. Runs before
   // the isSafe/grep/shell handling. Shared parser: src/graph/graph-command.ts.
-  const graphBody = tryGraphReadFn(rewritten, input.cwd ?? process.cwd());
+  const graphBody = await tryGraphReadFn(rewritten, input.cwd ?? process.cwd());
   if (graphBody !== null) {
     logFn(`graph vfs intercept: ${rewritten}`);
     return buildHandledSuccess(graphBody, rewritten, "graph");

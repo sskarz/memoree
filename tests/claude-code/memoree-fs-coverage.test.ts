@@ -8,6 +8,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 let graphResult: { kind: string; body?: string; message?: string } = { kind: "ok", body: "GRAPH BODY" };
 vi.mock("../../src/graph/vfs-handler.js", () => ({
   handleGraphVfs: () => graphResult,
+  handleGraphVfsAsync: async () => graphResult,
 }));
 
 import { MemoreeFs } from "../../src/shell/memoree-fs.js";

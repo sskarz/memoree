@@ -81,45 +81,45 @@ describe("tryGraphRead — routing", () => {
   beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), "graphcmd-")); });
   afterEach(() => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
 
-  it("returns null when the command does not target /graph/", () => {
-    expect(tryGraphRead("cat /summaries/foo.md", tmp)).toBeNull();
-    expect(tryGraphRead("cat /index.md", tmp)).toBeNull();
-    expect(tryGraphRead("grep x /graph/foo", tmp)).toBeNull();
-    expect(tryGraphRead("echo hello", tmp)).toBeNull();
+  it("returns null when the command does not target /graph/", async () => {
+    expect(await tryGraphRead("cat /summaries/foo.md", tmp)).toBeNull();
+    expect(await tryGraphRead("cat /index.md", tmp)).toBeNull();
+    expect(await tryGraphRead("grep x /graph/foo", tmp)).toBeNull();
+    expect(await tryGraphRead("echo hello", tmp)).toBeNull();
   });
 
-  it("lists the graph root for `ls /graph` and bare reads of /graph", () => {
+  it("lists the graph root for `ls /graph` and bare reads of /graph", async () => {
     const listing = "index.md\nfind/\nquery/\nshow/\nimpact/\nneighborhood/\nlayers\ntour\npath/\n";
-    expect(tryGraphRead("ls /graph", tmp)).toBe(listing);
-    expect(tryGraphRead("ls -la /graph/", tmp)).toBe(listing);
-    expect(tryGraphRead("cat /graph", tmp)).toBe(listing);
-    expect(tryGraphRead("cat /graph/", tmp)).toBe(listing);
+    expect(await tryGraphRead("ls /graph", tmp)).toBe(listing);
+    expect(await tryGraphRead("ls -la /graph/", tmp)).toBe(listing);
+    expect(await tryGraphRead("cat /graph", tmp)).toBe(listing);
+    expect(await tryGraphRead("cat /graph/", tmp)).toBe(listing);
   });
 
-  it("dispatches a /graph/* read to the VFS (no-graph in a fresh dir, never null, never throws)", () => {
+  it("dispatches a /graph/* read to the VFS (no-graph in a fresh dir, never null, never throws)", async () => {
     // A tmp dir has no snapshot → handleGraphVfs returns a no-graph result,
     // which tryGraphRead renders inline. The point: a /graph/ read is ALWAYS
     // handled (non-null) so the agent never falls through to a real `cat` of a
     // path that doesn't exist on disk.
-    const body = tryGraphRead("cat /graph/index.md", tmp);
+    const body = await tryGraphRead("cat /graph/index.md", tmp);
     expect(body).not.toBeNull();
     expect(typeof body).toBe("string");
     expect(body).toMatch(/no-graph|Code Graph/);
   });
 
-  it("does not treat a grep of a /graph/ path as a graph read", () => {
+  it("does not treat a grep of a /graph/ path as a graph read", async () => {
     // grep isn't a read command we synthesize; leave it to the grep fast-path.
-    expect(tryGraphRead("grep foo /graph/find/bar", tmp)).toBeNull();
+    expect(await tryGraphRead("grep foo /graph/find/bar", tmp)).toBeNull();
   });
 
   // Codex review P2: a path that escapes the subtree via `..` must not be
   // dispatched to the graph VFS just because it starts with /graph/.
-  it("refuses path traversal out of the graph subtree", () => {
-    expect(tryGraphRead("cat /graph/../secret", tmp)).toBeNull();
-    expect(tryGraphRead("cat /graph/find/../../etc/passwd", tmp)).toBeNull();
+  it("refuses path traversal out of the graph subtree", async () => {
+    expect(await tryGraphRead("cat /graph/../secret", tmp)).toBeNull();
+    expect(await tryGraphRead("cat /graph/find/../../etc/passwd", tmp)).toBeNull();
   });
 
-  it("does not intercept a cat piped through grep (P1)", () => {
-    expect(tryGraphRead("cat /graph/index.md | grep foo", tmp)).toBeNull();
+  it("does not intercept a cat piped through grep (P1)", async () => {
+    expect(await tryGraphRead("cat /graph/index.md | grep foo", tmp)).toBeNull();
   });
 });

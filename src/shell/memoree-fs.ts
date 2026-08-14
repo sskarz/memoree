@@ -25,7 +25,7 @@ import {
   type PathKind,
 } from "./goal-paths.js";
 import { editRule, getRuleLatest, insertRuleAtId, listRules } from "../rules/index.js";
-import { handleGraphVfs } from "../graph/vfs-handler.js";
+import { handleGraphVfs, handleGraphVfsAsync } from "../graph/vfs-handler.js";
 import { handleDocsVfs } from "../docs/vfs-handler.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
 
@@ -190,9 +190,9 @@ function graphSubpathOf(p: string): string {
  * file body, NOT as ENOENT — the file conceptually exists; it just reports
  * its own emptiness. Same semantics as /index.md when no rows exist yet.
  */
-function readGraphFile(p: string, cwd: string): string {
+async function readGraphFile(p: string, cwd: string): Promise<string> {
   const sub = graphSubpathOf(p);
-  const r = handleGraphVfs(sub, cwd);
+  const r = await handleGraphVfsAsync(sub, cwd);
   if (r.kind === "ok") return r.body;
   if (r.kind === "no-graph") return `(no-graph) ${r.message}`;
   // not-found: surface as ENOENT so the shell shows the expected error
@@ -962,7 +962,7 @@ export class MemoreeFs implements IFileSystem {
     // hypothetical real "graph" dir entry.
     if (isGraphPath(p)) {
       if (isGraphDir(p)) throw fsErr("EISDIR", "illegal operation on a directory", p);
-      return readGraphFile(p, process.cwd());
+      return await readGraphFile(p, process.cwd());
     }
     // Docs VFS bridge — same as graph, but async (SQL-backed) and delegating to
     // handleDocsVfs. Makes browse + docs/find work in the shell path (codex /

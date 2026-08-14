@@ -12,6 +12,7 @@ import {
   pidPathFor,
   socketPathFor,
   type DaemonResponse,
+  type EmbedBatchRequest,
   type EmbedKind,
   type EmbedRequest,
   type HelloRequest,
@@ -111,6 +112,32 @@ export class EmbedClient {
   }
 
   /**
+   * Embed many texts in one daemon round-trip (one transformer forward
+   * pass). Empty input short-circuits. Old daemons that don't implement
+   * `embed_batch` fall back to sequential `embed()` so graph sidecar
+   * writes still complete against a pre-protocol-upgrade daemon.
+   */
+  async embedBatch(texts: string[], kind: EmbedKind = "document"): Promise<Array<number[] | null>> {
+    if (texts.length === 0) return [];
+    const v = await this.embedBatchAttempt(texts, kind);
+    if (v === "unsupported") return this.embedBatchSequential(texts, kind);
+    if (v !== "recycled") return v;
+    if (!this.autoSpawn) return texts.map(() => null);
+    this.trySpawnDaemon();
+    await this.waitForDaemonReady();
+    const retry = await this.embedBatchAttempt(texts, kind);
+    if (retry === "recycled") return texts.map(() => null);
+    if (retry === "unsupported") return this.embedBatchSequential(texts, kind);
+    return retry;
+  }
+
+  private async embedBatchSequential(texts: string[], kind: EmbedKind): Promise<Array<number[] | null>> {
+    const out: Array<number[] | null> = [];
+    for (const text of texts) out.push(await this.embed(text, kind));
+    return out;
+  }
+
+  /**
    * One round-trip: connect → verify → embed. Returns:
    *  - number[]  : embedding vector (happy path)
    *  - null      : timeout / daemon error / transformers-missing
@@ -149,6 +176,53 @@ export class EmbedClient {
       const err = e instanceof Error ? e.message : String(e);
       log(`embed failed: ${err}`);
       return null;
+    } finally {
+      try { sock.end(); } catch { /* best-effort */ }
+    }
+  }
+
+  /**
+   * One round-trip for embed_batch. Returns:
+   *  - number[][] aligned with `texts` (null slots when a row is missing)
+   *  - "unsupported": daemon does not know embed_batch (fall back)
+   *  - "recycled": hello killed the daemon; caller should retry
+   *  - all-nulls: timeout / daemon error
+   */
+  private async embedBatchAttempt(
+    texts: string[],
+    kind: EmbedKind,
+  ): Promise<Array<number[] | null> | "recycled" | "unsupported"> {
+    let sock: Socket;
+    try {
+      sock = await this.connectOnce();
+    } catch {
+      if (this.autoSpawn) this.trySpawnDaemon();
+      return texts.map(() => null);
+    }
+    try {
+      const recycled = await this.verifyDaemonOnce(sock);
+      if (recycled) return "recycled";
+      const id = String(++this.nextId);
+      const req: EmbedBatchRequest = { op: "embed_batch", id, kind, texts };
+      const resp = await this.sendAndWait(sock, req);
+      if (resp.error === "unknown op") return "unsupported";
+      if (resp.error || !("embeddings" in resp) || !Array.isArray(resp.embeddings)) {
+        const err = resp.error ?? "no embeddings";
+        log(`embed_batch err: ${err}`);
+        if (isTransformersMissingError(err)) {
+          this.handleTransformersMissing(err);
+        }
+        return texts.map(() => null);
+      }
+      const rows = resp.embeddings;
+      return texts.map((_, i) => {
+        const vec = rows[i];
+        return Array.isArray(vec) && vec.length > 0 ? vec : null;
+      });
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e.message : String(e);
+      log(`embed_batch failed: ${err}`);
+      return texts.map(() => null);
     } finally {
       try { sock.end(); } catch { /* best-effort */ }
     }
@@ -420,7 +494,7 @@ export class EmbedClient {
     throw new Error("daemon did not become ready within spawnWaitMs");
   }
 
-  private sendAndWait(sock: Socket, req: EmbedRequest | HelloRequest): Promise<DaemonResponse> {
+  private sendAndWait(sock: Socket, req: EmbedRequest | EmbedBatchRequest | HelloRequest): Promise<DaemonResponse> {
     return new Promise((resolve, reject) => {
       let buf = "";
       const to = setTimeout(() => {

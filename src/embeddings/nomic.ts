@@ -156,6 +156,12 @@ export class NomicEmbedder {
     return this.truncate(full);
   }
 
+  /**
+   * One forward pass for many texts. transformers.js FeatureExtractionPipeline
+   * takes `string | string[]` and tokenizes with padding+truncation. Empty
+   * arrays throw in the tokenizer, so we short-circuit. Prefixes are required
+   * by the nomic-embed-text-v1.5 card (`search_document:` / `search_query:`).
+   */
   async embedBatch(texts: string[], kind: EmbedKind = "document"): Promise<number[][]> {
     if (texts.length === 0) return [];
     await this.load();

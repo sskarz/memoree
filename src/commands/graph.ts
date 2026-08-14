@@ -22,6 +22,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { getVersion } from "../cli/version.js";
 import { fileContentHash, readCache, writeCache } from "../graph/cache.js";
+import { writeNodeEmbeddings } from "../graph/node-embeddings.js";
 import { pushSnapshot } from "../graph/snapshot-push.js";
 import { pullSnapshot } from "../graph/snapshot-pull.js";
 import {
@@ -532,6 +533,18 @@ export async function runBuildCommand(args: string[]): Promise<void> {
   // singletons. Snapshots/cache/history stay shared at the repo level.
   const worktreeId = workTreeIdFor(cwd);
   const result = writeSnapshot(snapshot, baseDir, opts.trigger, worktreeId);
+
+  // Node embedding sidecar lives next to the AST cache, not in the snapshot
+  // JSON (snapshot_sha256 must stay NetworkX-shaped). Best-effort: daemon
+  // failure leaves no sidecar and query/ stays lexical.
+  try {
+    const sidecar = await writeNodeEmbeddings(snapshot, baseDir, result.snapshotSha256);
+    if (sidecar.written) {
+      console.log(`Node embeddings: ${sidecar.embedded} new, ${sidecar.cached} cached`);
+    }
+  } catch {
+    // never fail a graph build on embedding I/O
+  }
 
   console.log("");
   console.log(`Snapshot:      ${result.snapshotPath}`);

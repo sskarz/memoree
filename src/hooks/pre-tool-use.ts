@@ -16,7 +16,7 @@ import { sqlLike } from "../utils/sql.js";
 import { log as _log } from "../utils/debug.js";
 import { isDirectRun } from "../utils/direct-run.js";
 import { type GrepParams, parseBashGrep, handleGrepDirect } from "./grep-direct.js";
-import { handleGraphVfs } from "../graph/vfs-handler.js";
+import { handleGraphVfsAsync } from "../graph/vfs-handler.js";
 import { handleDocsVfs } from "../docs/vfs-handler.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
 import { defaultGit } from "../docs/candidates.js";
@@ -254,7 +254,7 @@ interface ClaudePreToolDeps {
   createApi?: (table: string, config: NonNullable<ReturnType<typeof loadConfig>>) => StorageBackend;
   executeCompiledBashCommandFn?: typeof executeCompiledBashCommand;
   handleGrepDirectFn?: typeof handleGrepDirect;
-  handleGraphVfsFn?: typeof handleGraphVfs;
+  handleGraphVfsFn?: typeof handleGraphVfsAsync;
   handleDocsVfsFn?: typeof handleDocsVfs;
   readVirtualPathContentsFn?: typeof readVirtualPathContents;
   readVirtualPathContentFn?: typeof readVirtualPathContent;
@@ -273,7 +273,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     createApi = (table, activeConfig) => createStorageBackend(activeConfig, table),
     executeCompiledBashCommandFn = executeCompiledBashCommand,
     handleGrepDirectFn = handleGrepDirect,
-    handleGraphVfsFn = handleGraphVfs,
+    handleGraphVfsFn = handleGraphVfsAsync,
     handleDocsVfsFn = handleDocsVfs,
     readVirtualPathContentsFn = readVirtualPathContents,
     readVirtualPathContentFn = readVirtualPathContent,
@@ -462,7 +462,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     if (virtualPath && virtualPath.startsWith("/graph/") && !virtualPath.endsWith("/")) {
       const subpath = virtualPath.slice("/graph/".length);
       logFn(`graph vfs: ${subpath}`);
-      const result = handleGraphVfsFn(subpath, process.cwd());
+      const result = await handleGraphVfsFn(subpath, process.cwd());
       const body = result.kind === "ok"
         ? result.body
         : `(${result.kind}) ${result.message}`;
