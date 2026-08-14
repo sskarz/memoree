@@ -17,6 +17,7 @@ import { log as _log } from "../utils/debug.js";
 import { isDirectRun } from "../utils/direct-run.js";
 import { type GrepParams, parseBashGrep, handleGrepDirect } from "./grep-direct.js";
 import { handleGraphVfsAsync } from "../graph/vfs-handler.js";
+import { tryGraphRead } from "../graph/graph-command.js";
 import { handleDocsVfs } from "../docs/vfs-handler.js";
 import { makeQueryEmbedder } from "../docs/embed.js";
 import { defaultGit } from "../docs/candidates.js";
@@ -259,6 +260,7 @@ interface ClaudePreToolDeps {
   createApi?: (table: string, config: NonNullable<ReturnType<typeof loadConfig>>) => StorageBackend;
   executeCompiledBashCommandFn?: typeof executeCompiledBashCommand;
   handleGrepDirectFn?: typeof handleGrepDirect;
+  tryGraphReadFn?: typeof tryGraphRead;
   handleGraphVfsFn?: typeof handleGraphVfsAsync;
   handleDocsVfsFn?: typeof handleDocsVfs;
   readVirtualPathContentsFn?: typeof readVirtualPathContents;
@@ -278,6 +280,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     createApi = (table, activeConfig) => createStorageBackend(activeConfig, table),
     executeCompiledBashCommandFn = executeCompiledBashCommand,
     handleGrepDirectFn = handleGrepDirect,
+    tryGraphReadFn = tryGraphRead,
     handleGraphVfsFn = handleGraphVfsAsync,
     handleDocsVfsFn = handleDocsVfs,
     readVirtualPathContentsFn = readVirtualPathContents,
@@ -328,6 +331,33 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   }
 
   if (!shellCmd) return null;
+
+  // Graph reads are local-snapshot, not SQL. Intercept BEFORE compiled bash:
+  // `ls /graph` is a valid ls plan, and the compiler answers empty SQL dirs
+  // with `ls: cannot access '/graph'`, which used to win over the listing.
+  const graphBody = await tryGraphReadFn(shellCmd, input.cwd ?? process.cwd());
+  if (graphBody !== null) {
+    logFn(`graph vfs intercept: ${shellCmd}`);
+    const isListing = /^ls\b/.test(shellCmd.trim());
+    if (input.tool_name === "Read") {
+      const requested = rewritePaths(getReadTargetPath(input.tool_input) ?? "") || "/graph";
+      const cachePath = isListing || requested.replace(/\/+$/, "") === "/graph"
+        ? "/graph/_listing.txt"
+        : requested;
+      const file_path = writeReadCacheFileFn(input.session_id, cachePath, graphBody);
+      return buildReadDecision(
+        file_path,
+        isListing || cachePath === "/graph/_listing.txt"
+          ? "[memoree graph] ls /graph"
+          : `[memoree graph] ${requested}`,
+      );
+    }
+    return buildAllowDecision(
+      safeEchoCommand(graphBody),
+      isListing ? "[memoree graph] ls /graph" : `[memoree graph] ${shellCmd}`,
+    );
+  }
+
   // A memory command we could rewrite, but with no config the VFS backend is
   // unreachable. Do NOT return null here — that hands the original command to
   // the host shell. Return the retry guidance instead so the command never

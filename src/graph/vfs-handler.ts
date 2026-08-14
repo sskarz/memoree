@@ -146,7 +146,10 @@ export function handleGraphVfs(subpath: string, cwd: string): GraphVfsResult {
     }
     return loadSnapshotOrError(cwd, (snap, baseDir) => ({
       kind: "ok",
-      body: renderQuery(snap, pattern, baseDir, workTreeIdFor(cwd)),
+      body: renderQuery(snap, pattern, baseDir, workTreeIdFor(cwd), findMatches(snap, pattern), {
+        kind: "lexical",
+        reason: "sync",
+      }),
     }));
   }
 
@@ -223,21 +226,33 @@ export async function handleGraphVfsAsync(
   if (loaded.kind !== "loaded") return loaded;
 
   const enabled = deps.embeddingsEnabled ?? !embeddingsDisabled();
+  const semanticFriendly = patternIsSemanticFriendly(pattern);
   let queryEmbedding: number[] | null = null;
   let sidecar: Record<string, number[]> | null | undefined = deps.sidecar;
   let index = sidecar === undefined
-    ? (enabled && patternIsSemanticFriendly(pattern)
+    ? (enabled && semanticFriendly
       ? loadNodeEmbeddingIndex(loaded.baseDir, loaded.snapshotSha256)
       : null)
     : null;
-  if (enabled && patternIsSemanticFriendly(pattern)) {
+  let lexicalReason: "disabled" | "no-sidecar" | "embed-timeout" | undefined;
+  if (!enabled) lexicalReason = "disabled";
+  else if (semanticFriendly) {
     const hasVectors = sidecar !== undefined ? Boolean(sidecar) : Boolean(index);
-    if (hasVectors) {
+    if (!hasVectors) lexicalReason = "no-sidecar";
+    else {
       const embed = deps.embedQuery ?? defaultQueryEmbedder();
       queryEmbedding = await embedQueryWithTimeout(pattern, embed);
+      if (!queryEmbedding) lexicalReason = "embed-timeout";
     }
   }
   try {
+    const lexical = findMatches(loaded.snap, pattern);
+    const matches = hybridFindNodes(loaded.snap, pattern, {
+      queryEmbedding,
+      sidecar: sidecar === undefined ? null : sidecar,
+      index,
+    });
+    const hybrid = Boolean(queryEmbedding && (index || sidecar));
     return {
       kind: "ok",
       body: renderQuery(
@@ -245,11 +260,10 @@ export async function handleGraphVfsAsync(
         pattern,
         loaded.baseDir,
         workTreeIdFor(cwd),
-        hybridFindNodes(loaded.snap, pattern, {
-          queryEmbedding,
-          sidecar: sidecar === undefined ? null : sidecar,
-          index,
-        }),
+        matches,
+        hybrid
+          ? { kind: "hybrid", semanticAdded: Math.max(0, matches.length - lexical.length) }
+          : { kind: "lexical", reason: lexicalReason },
       ),
     };
   } catch (e) {
@@ -456,15 +470,30 @@ const QUERY_NEIGHBOR_CAP = 8;
  * follow-up show/<N> works exactly like after find/. Optional `matches`
  * lets the async hybrid path pass a lexical∪semantic list.
  */
+type QuerySearchMode =
+  | { kind: "lexical"; reason?: "sync" | "disabled" | "no-sidecar" | "embed-timeout" }
+  | { kind: "hybrid"; semanticAdded: number };
+
+function queryModeSuffix(mode?: QuerySearchMode): string {
+  if (!mode || mode.kind === "lexical") {
+    if (mode?.reason === "no-sidecar") return " · lexical only (no sidecar)";
+    if (mode?.reason === "embed-timeout") return " · lexical only (embed timeout)";
+    if (mode?.reason === "disabled") return " · lexical only (embeddings off)";
+    return " · lexical only";
+  }
+  return ` · lexical+semantic (+${mode.semanticAdded} semantic)`;
+}
+
 function renderQuery(
   snap: GraphSnapshot,
   pattern: string,
   baseDir: string,
   worktreeId: string,
   matches: GraphNode[] = findMatches(snap, pattern),
+  mode?: QuerySearchMode,
 ): string {
   if (matches.length === 0) {
-    return `No matches for "${pattern}" in ${snap.nodes.length} nodes.\nTry a shorter or different substring, or cat memory/graph/find/<pattern>.`;
+    return `No matches for "${pattern}" in ${snap.nodes.length} nodes.${queryModeSuffix(mode)}\nTry a shorter or different substring, or cat memory/graph/find/<pattern>.`;
   }
   const top = matches.slice(0, QUERY_TOP_N);
   saveHandles(baseDir, worktreeId, top.map((n) => n.id), pattern);
@@ -479,7 +508,7 @@ function renderQuery(
   }
 
   const lines: string[] = [];
-  lines.push(`Query "${pattern}" — ${matches.length} match${matches.length === 1 ? "" : "es"}, expanded top ${top.length} (1 hop)`);
+  lines.push(`Query "${pattern}" — ${matches.length} match${matches.length === 1 ? "" : "es"}, expanded top ${top.length} (1 hop)${queryModeSuffix(mode)}`);
   lines.push("");
 
   for (let i = 0; i < top.length; i++) {

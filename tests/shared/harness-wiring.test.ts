@@ -139,7 +139,10 @@ describe("harness wiring: graph query/", () => {
       {
         config: dummyConfig,
         createApi: vi.fn(() => ({ query: vi.fn() })) as any,
-        executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        executeCompiledBashCommandFn: vi.fn(async () => {
+          throw new Error("compiled bash must not handle graph query/");
+        }) as any,
+        tryGraphReadFn: (cmd, graphCwd) => tryGraphRead(cmd, graphCwd, vfsDeps),
         handleGraphVfsFn: (subpath, graphCwd) => handleGraphVfsAsync(subpath, graphCwd, vfsDeps),
         logFn: vi.fn(),
       },
@@ -160,6 +163,7 @@ describe("harness wiring: graph query/", () => {
       {
         config: dummyConfig,
         createApi: vi.fn(() => ({ query: vi.fn() })) as any,
+        tryGraphReadFn: (cmd, graphCwd) => tryGraphRead(cmd, graphCwd, vfsDeps),
         handleGraphVfsFn: (subpath, graphCwd) => handleGraphVfsAsync(subpath, graphCwd, vfsDeps),
         logFn: vi.fn(),
       },
@@ -168,7 +172,8 @@ describe("harness wiring: graph query/", () => {
     expect(readFileSync(decision!.file_path!, "utf8")).toContain("persistGraph");
   });
 
-  it("Claude ls of the graph mount lists query/", async () => {
+  it("Claude ls of the graph mount lists query/ before compiled bash", async () => {
+    const compiled = vi.fn(async () => "ls: cannot access '/graph': No such file or directory");
     const decision = await processPreToolUse(
       {
         cwd,
@@ -180,11 +185,14 @@ describe("harness wiring: graph query/", () => {
       {
         config: dummyConfig,
         createApi: vi.fn(() => ({ query: vi.fn() })) as any,
-        executeCompiledBashCommandFn: vi.fn(async () => null) as any,
+        executeCompiledBashCommandFn: compiled as any,
         logFn: vi.fn(),
       },
     );
+    expect(compiled).not.toHaveBeenCalled();
     expect(decision?.command).toContain("query/");
+    expect(decision?.command).not.toContain("cannot access");
+    expect(decision?.description).toBe("[memoree graph] ls /graph");
   });
 });
 

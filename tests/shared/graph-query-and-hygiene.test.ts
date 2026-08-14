@@ -120,6 +120,7 @@ describe("graph query/ and hygiene (VFS)", () => {
     if (query.kind === "ok") {
       expect(query.body).toContain(PERSIST);
       expect(query.body).not.toMatch(/No matches for "store"/);
+      expect(query.body).toContain("lexical+semantic");
     }
   });
 
@@ -141,7 +142,10 @@ describe("graph query/ and hygiene (VFS)", () => {
       embedQuery: async () => [1, 0],
     });
     expect(r.kind).toBe("ok");
-    if (r.kind === "ok") expect(r.body).toMatch(/No matches for "store"/);
+    if (r.kind === "ok") {
+      expect(r.body).toMatch(/No matches for "store"/);
+      expect(r.body).toContain("lexical only (embeddings off)");
+    }
   });
 
   it("impact/ and show/ stay exact walks", async () => {

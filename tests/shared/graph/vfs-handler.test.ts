@@ -511,10 +511,18 @@ describe("handleGraphVfs", () => {
     seed();
     const sync = handleGraphVfs("query/foo", cwd);
     const asyncR = await handleGraphVfsAsync("query/foo", cwd, {
-      embeddingsEnabled: false,
+      embeddingsEnabled: true,
       sidecar: null,
     });
-    expect(asyncR).toEqual(sync);
+    expect(sync.kind).toBe("ok");
+    expect(asyncR.kind).toBe("ok");
+    if (sync.kind === "ok" && asyncR.kind === "ok") {
+      expect(sync.body).toContain("lexical only");
+      expect(asyncR.body).toContain("lexical only (no sidecar)");
+      expect(asyncR.body.replace(/ · lexical only[^\n]*/, "")).toBe(
+        sync.body.replace(/ · lexical only[^\n]*/, ""),
+      );
+    }
   });
 
   it("impact/ and show/ ignore a sidecar", async () => {
