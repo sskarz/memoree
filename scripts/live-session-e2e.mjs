@@ -24,6 +24,7 @@ import {
   classifyAgentCommandError,
   copyCodexAuthentication,
   createValidationWorkspace,
+  lexicalValidationPrompt,
   linkSharedEmbeddingRuntime,
   waitForCapture,
 } from "./runtime-validate.mjs";
@@ -133,14 +134,11 @@ function claudeRecallPrompt() {
   ].join("\n");
 }
 
-function codexLivePrompt(lanternId) {
+function codexLivePrompt() {
   return [
-    "You are in a Memoree live-harness session. Complete EVERY step with the shell.",
-    `1. Repeat this private fact in your final answer: the observatory lantern is ${lanternId}.`,
-    "2. Run: cat ~/.memoree/memory/identity.json",
-    "3. Run: grep -ri \"harbor kite\" ~/.memoree/memory/summaries/ || grep -ri \"harbor kite\" ~/.memoree/memory/",
-    "4. Run: cat ~/.memoree/memory/graph/query/store",
-    "Reply with the harbor kite UUID you found AND the observatory lantern UUID from step 1.",
+    "Search Memoree memory for the harbor kite code from earlier work.",
+    "Use the shell: grep -ri \"harbor kite\" ~/.memoree/memory/summaries/",
+    "Answer with only the matching UUID. Do not invent an identifier. Do not say none was provided.",
   ].join("\n");
 }
 
@@ -162,6 +160,7 @@ export async function runLiveSessionE2E() {
   const lanternId = crypto.randomUUID();
   const ruleId = crypto.randomUUID();
   const kpiId = crypto.randomUUID();
+  let passed = false;
 
   const env = {
     ...process.env,
@@ -281,16 +280,25 @@ export async function runLiveSessionE2E() {
     ], { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(recallOut, harborId, "live Claude Code recall");
 
-    status("running a live Codex session (hooks enabled)");
-    const codexOut = runCodex([
+    status("running a live Codex capture session (hooks enabled)");
+    const codexCapture = runCodex([
       "exec",
       "--skip-git-repo-check",
       "--ephemeral",
-      "-s", "workspace-write",
-      codexLivePrompt(lanternId),
+      "-s", "read-only",
+      lexicalValidationPrompt(lanternId),
     ], { cwd: repository, env, timeout: 300_000 });
-    assertAgentResponseContainsIdentifier(codexOut, harborId, "live Codex harbor-kite recall");
-    assertAgentResponseContainsIdentifier(codexOut, lanternId, "live Codex lantern capture");
+    assertAgentResponseContainsIdentifier(codexCapture, lanternId, "live Codex capture");
+
+    status("running a live Codex recall of the Claude harbor-kite fact");
+    const codexRecall = runCodex([
+      "exec",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "-s", "read-only",
+      codexLivePrompt(),
+    ], { cwd: repository, env, timeout: 300_000 });
+    assertAgentResponseContainsIdentifier(codexRecall, harborId, "live Codex harbor-kite recall");
 
     status("waiting for Codex capture/summary");
     await waitForCapture(databasePath, lanternId, { requireSummary: true, timeoutMs: 180_000 });
@@ -299,15 +307,20 @@ export async function runLiveSessionE2E() {
     process.stdout.write(
       `Live session e2e passed: ${counts.events} events, ${counts.summaries} summaries, unaided Claude/Codex hooks, wiki reflection, 768-d embeddings, VFS, graph, docs, skillify CLI.\n`,
     );
+    passed = true;
   } finally {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      try {
-        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-        break;
-      } catch (error) {
-        const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
-        if (code !== "ENOTEMPTY" && code !== "EBUSY") throw error;
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+    if (!passed) {
+      process.stderr.write(`live session e2e workspace kept for inspection: ${root}\n`);
+    } else {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+          break;
+        } catch (error) {
+          const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+          if (code !== "ENOTEMPTY" && code !== "EBUSY") throw error;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+        }
       }
     }
   }
