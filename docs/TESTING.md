@@ -65,8 +65,16 @@ npm run runtime:validate
 ```
 
 `runtime:validate` talks to the real `claude` and `codex` CLIs, but still uses
-a disposable database and home. It currently proves capture, summaries,
-embeddings, and recall — not the graph `query/` walkthrough from the files above.
+a disposable database and home. It proves capture, summaries, embeddings,
+recall, structured VFS, and the graph `query/` vs `find/` walkthrough through
+the installed hook bundles.
+
+To run everything except live `codex exec` (for example when Codex API credits
+are unavailable):
+
+```sh
+npm run runtime:validate -- --skip-live-codex
+```
 
 If validate fails, fix it in the development checkout, commit, promote the new
 SHA, and validate again. Do not run promote or validate from an agent session

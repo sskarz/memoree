@@ -20,7 +20,7 @@ export function pkgRoot(): string {
   for (let i = 0; i < 8; i++) {
     try {
       const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-      if (pkg.name === "memoree" || pkg.name === "memoree") return dir;
+      if (pkg.name === "memoree") return dir;
     } catch { /* not here, keep walking */ }
     const parent = dirname(dir);
     if (parent === dir) break;

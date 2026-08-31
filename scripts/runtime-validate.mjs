@@ -6,7 +6,9 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -126,6 +128,55 @@ export function runStructuredFilesystemViaHooks(preToolPath, commands, options) 
   });
 }
 
+export function skipLiveCodexRequested(argv = process.argv, env = process.env) {
+  return argv.includes("--skip-live-codex") || env.MEMOREE_VALIDATION_SKIP_LIVE_CODEX === "1";
+}
+
+export function hookUpdatedInput(stdout) {
+  try {
+    return JSON.parse(stdout)?.hookSpecificOutput?.updatedInput ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export function linkSharedEmbeddingRuntime(realHome, isolatedHome) {
+  const isolatedMemoree = join(isolatedHome, ".memoree");
+  mkdirSync(isolatedMemoree, { recursive: true, mode: 0o700 });
+  for (const name of ["embed-deps", "models"]) {
+    const source = join(realHome, ".memoree", name);
+    const dest = join(isolatedMemoree, name);
+    if (existsSync(source) && !existsSync(dest)) symlinkSync(source, dest);
+  }
+}
+
+export function hookBodyContains(stdout, needle) {
+  const updated = hookUpdatedInput(stdout);
+  const command = typeof updated.command === "string" ? updated.command : "";
+  const filePath = typeof updated.file_path === "string" ? updated.file_path : "";
+  const fileBody = filePath && existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
+  return `${command}\n${fileBody}`.includes(needle);
+}
+
+function assertHookContains(result, needle, phase) {
+  assert(result.status === 0, `${phase} hook exited ${result.status}: ${result.stderr}`);
+  assert(
+    hookBodyContains(result.stdout, needle),
+    `${phase} did not include ${needle}; stdout=${JSON.stringify(result.stdout).slice(0, 1200)} stderr=${JSON.stringify(result.stderr).slice(0, 400)}`,
+  );
+}
+
+function retryHookUntilContains(run, needle, phase, attempts = 5) {
+  let last = { status: 1, stdout: "", stderr: "" };
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    last = run();
+    if (last.status === 0 && hookBodyContains(last.stdout, needle)) return last;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+  }
+  assertHookContains(last, needle, phase);
+  return last;
+}
+
 export function assertAgentResponseContainsIdentifier(response, identifier, phase) {
   if (response.includes(identifier)) return;
   const trimmed = response.trim();
@@ -239,12 +290,14 @@ function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexical
     const eventText = events.map(row => row.message).join("\n");
     const summaryText = summaries.map(row => row.summary).join("\n");
     assert(eventText.includes(semanticFact), "Semantic validation fact is missing from isolated SQLite events");
-    assert(eventText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated SQLite events");
     assert(
       summaryText.includes(semanticIdentifier),
       "Semantic validation identifier is missing from isolated summaries",
     );
-    assert(summaryText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated summaries");
+    if (lexicalIdentifier) {
+      assert(eventText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated SQLite events");
+      assert(summaryText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated summaries");
+    }
     assert(
       [...events.map(row => row.message_embedding), ...summaries.map(row => row.summary_embedding)]
         .some(value => vectorLength(value) === 768),
@@ -276,7 +329,8 @@ function inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2)
   }
 }
 
-export async function validateRuntime() {
+export async function validateRuntime(options = {}) {
+  const skipLiveCodex = options.skipLiveCodex === true;
   assertNoActiveAgentSessions();
   const { runtimeDir } = runtimePaths();
   const cli = join(runtimeDir, "bundle", "cli.js");
@@ -286,6 +340,7 @@ export async function validateRuntime() {
     cli,
     join(claudeBundle, "capture.js"),
     join(claudeBundle, "session-end.js"),
+    join(claudeBundle, "pre-tool-use.js"),
     join(codexBundle, "capture.js"),
     join(codexBundle, "stop.js"),
     join(codexBundle, "pre-tool-use.js"),
@@ -318,6 +373,7 @@ export async function validateRuntime() {
     MEMOREE_CONFIG_PATH: join(state, "config.json"),
     MEMOREE_MEMORY_PATH: join(state, "memory"),
     MEMOREE_STATE_DIR: join(state, "agent-state"),
+    MEMOREE_GRAPHS_HOME: join(state, "graphs"),
     MEMOREE_REPOSITORY_KEY: "runtime-validation",
     MEMOREE_USER_NAME: "runtime-validation",
     MEMOREE_CAPTURE: "true",
@@ -348,7 +404,9 @@ export async function validateRuntime() {
     mkdirSync(state, { recursive: true });
     mkdirSync(isolatedHome, { recursive: true });
     mkdirSync(isolatedTmp, { recursive: true, mode: 0o700 });
-    copyCodexAuthentication(realHome, isolatedCodexHome);
+    linkSharedEmbeddingRuntime(realHome, isolatedHome);
+    if (skipLiveCodex) mkdirSync(isolatedCodexHome, { recursive: true, mode: 0o700 });
+    else copyCodexAuthentication(realHome, isolatedCodexHome);
     writeFileSync(claudeSettings, `${JSON.stringify({
       autoMemoryDirectory: join(state, "claude-auto-memory"),
     }, null, 2)}\n`, { mode: 0o600 });
@@ -424,6 +482,69 @@ export async function validateRuntime() {
     const brokerReplacement = brokerWire?.hookSpecificOutput?.updatedInput?.command ?? "";
     assert(!brokerReplacement.includes("memoree rules list"), "Compatibility replacement exposed executable user input");
 
+    mkdirSync(join(repository, "src"), { recursive: true });
+    writeFileSync(join(repository, "src", "snapshot.ts"), [
+      "export function writeSnapshot(): string {",
+      "  return 'snapshot-bytes';",
+      "}",
+      "",
+      "/** flush the snapshot bytes to disk */",
+      "export function persistGraph(): string {",
+      "  return writeSnapshot();",
+      "}",
+      "",
+    ].join("\n"));
+    run("git", ["add", "src/snapshot.ts"], { cwd: repository, env });
+    run("git", ["commit", "-m", "runtime validation graph fixture"], { cwd: repository, env });
+    status("building the isolated codebase graph");
+    run(process.execPath, [cli, "graph", "build", "--cwd", repository], { cwd: repository, env });
+
+    status("checking graph query/ through Codex and Claude hooks");
+    const claudePreTool = join(claudeBundle, "pre-tool-use.js");
+    const queryStoreCodex = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/graph/query/store" },
+    }, vfsHookOptions);
+    assertHookContains(queryStoreCodex, "persistGraph", "Codex graph query/store");
+    const queryPersistCodex = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/graph/query/persist" },
+    }, vfsHookOptions);
+    assertHookContains(queryPersistCodex, "persistGraph", "Codex graph query/persist");
+    const lexicalFindStore = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/graph/find/store" },
+    }, vfsHookOptions);
+    assert(lexicalFindStore.status === 0, `Codex graph find/store hook failed: ${lexicalFindStore.stderr}`);
+    assert(
+      !hookBodyContains(lexicalFindStore.stdout, "persistGraph"),
+      "Codex graph find/store unexpectedly returned persistGraph",
+    );
+    retryHookUntilContains(
+      () => runHookResult(claudePreTool, {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_use_id: "runtime-validation-graph",
+        tool_input: { file_path: "~/.memoree/memory/graph/query/store" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Claude Read graph query/store",
+    );
+    retryHookUntilContains(
+      () => runHookResult(claudePreTool, {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "PreToolUse",
+        tool_name: "Bash",
+        tool_use_id: "runtime-validation-graph-bash",
+        tool_input: { command: "cat ~/.memoree/memory/graph/query/store" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Claude Bash graph query/store",
+    );
+
     const claudeSession = crypto.randomUUID();
     const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
     status("running an authenticated Claude Code capture turn");
@@ -467,84 +588,91 @@ export async function validateRuntime() {
     // generated summary retained the captured fact.
     await waitForCapture(databasePath, semanticIdentifier, { requireSummary: true });
 
-    status("checking filesystem-native Memoree through authenticated Codex");
-    const structuredPrompt = [
-      "Use the shell to run: cat ~/.memoree/memory/identity.json",
-      `After that command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
-    ].join("\n");
-    const structuredResponse = runCodex([
-      "exec",
-      "--skip-git-repo-check",
-      "--ephemeral",
-      "--ignore-user-config",
-      "-s", "read-only",
-      structuredPrompt,
-    ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
-    assertAgentResponseContainsIdentifier(
-      structuredResponse,
-      structuredMarker,
-      "Codex structured filesystem workflow",
-    );
-
     const recallEnv = { ...env, MEMOREE_CAPTURE: "false" };
-    status("checking semantic recall through Codex");
-    const semanticRecall = runCodex([
-      "exec",
-      "--skip-git-repo-check",
-      "--ephemeral",
-      "-s", "read-only",
-      "Recall the unusual observatory object and its exact identifier from Memoree. Answer with only that fact.",
-    ], { cwd: repository, env: recallEnv });
-    assertAgentResponseContainsIdentifier(
-      semanticRecall,
-      semanticIdentifier,
-      "Codex semantic recall",
-    );
-
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
-    const codexSession = crypto.randomUUID();
-    // Avoid secret-like labels such as `token:` and high-entropy prefixes.
-    // Capture redaction intentionally masks those before persistence. A bare
-    // UUID labeled as an identifier is unique while remaining non-secret.
-    const codexPrompt = lexicalValidationPrompt(lexicalIdentifier);
-    status("running an authenticated Codex capture turn with embeddings disabled");
-    const codexResponse = runCodex([
-      "exec",
-      "--skip-git-repo-check",
-      "--ephemeral",
-      "--ignore-user-config",
-      "-s", "read-only",
-      codexPrompt,
-    ], { cwd: repository, env: lexicalEnv });
-    assertAgentResponseContainsIdentifier(
-      codexResponse,
-      lexicalIdentifier,
-      "Codex capture turn",
-    );
-    const codexHookOptions = { cwd: repository, env: lexicalEnv };
-    runHook(join(codexBundle, "capture.js"), {
-      session_id: codexSession,
-      transcript_path: null,
-      cwd: repository,
-      hook_event_name: "UserPromptSubmit",
-      model: "runtime-validation",
-      prompt: codexPrompt,
-    }, codexHookOptions);
-    runHook(join(codexBundle, "stop.js"), {
-      session_id: codexSession,
-      transcript_path: null,
-      cwd: repository,
-      hook_event_name: "Stop",
-      model: "runtime-validation",
-    }, codexHookOptions);
+    if (!skipLiveCodex) {
+      status("checking filesystem-native Memoree through authenticated Codex");
+      const structuredPrompt = [
+        "Use the shell to run: cat ~/.memoree/memory/identity.json",
+        `After that command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
+      ].join("\n");
+      const structuredResponse = runCodex([
+        "exec",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--ignore-user-config",
+        "-s", "read-only",
+        structuredPrompt,
+      ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
+      assertAgentResponseContainsIdentifier(
+        structuredResponse,
+        structuredMarker,
+        "Codex structured filesystem workflow",
+      );
 
-    status("waiting for the Codex lexical summary");
-    await waitForCapture(databasePath, lexicalIdentifier, { requireSummary: true });
+      status("checking semantic recall through Codex");
+      const semanticRecall = runCodex([
+        "exec",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "-s", "read-only",
+        "Recall the unusual observatory object and its exact identifier from Memoree. Answer with only that fact.",
+      ], { cwd: repository, env: recallEnv });
+      assertAgentResponseContainsIdentifier(
+        semanticRecall,
+        semanticIdentifier,
+        "Codex semantic recall",
+      );
 
+      const codexSession = crypto.randomUUID();
+      // Avoid secret-like labels such as `token:` and high-entropy prefixes.
+      // Capture redaction intentionally masks those before persistence. A bare
+      // UUID labeled as an identifier is unique while remaining non-secret.
+      const codexPrompt = lexicalValidationPrompt(lexicalIdentifier);
+      status("running an authenticated Codex capture turn with embeddings disabled");
+      const codexResponse = runCodex([
+        "exec",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--ignore-user-config",
+        "-s", "read-only",
+        codexPrompt,
+      ], { cwd: repository, env: lexicalEnv });
+      assertAgentResponseContainsIdentifier(
+        codexResponse,
+        lexicalIdentifier,
+        "Codex capture turn",
+      );
+      const codexHookOptions = { cwd: repository, env: lexicalEnv };
+      runHook(join(codexBundle, "capture.js"), {
+        session_id: codexSession,
+        transcript_path: null,
+        cwd: repository,
+        hook_event_name: "UserPromptSubmit",
+        model: "runtime-validation",
+        prompt: codexPrompt,
+      }, codexHookOptions);
+      runHook(join(codexBundle, "stop.js"), {
+        session_id: codexSession,
+        transcript_path: null,
+        cwd: repository,
+        hook_event_name: "Stop",
+        model: "runtime-validation",
+      }, codexHookOptions);
+
+      status("waiting for the Codex lexical summary");
+      await waitForCapture(databasePath, lexicalIdentifier, { requireSummary: true });
+    } else {
+      status("skipping live Codex exec (--skip-live-codex)");
+    }
+
+    const lexicalMarker = skipLiveCodex ? semanticIdentifier : lexicalIdentifier;
     status("checking lexical fallback recall through Claude Code");
     const lexicalRecall = run("claude", [
       "-p",
-      `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
+      skipLiveCodex
+        ? `Search Memoree lexically for marker ${semanticIdentifier} and answer with only the matching identifier.`
+        : `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
       "--tools", "",
       "--settings", claudeSettings,
       "--output-format", "text",
@@ -559,13 +687,20 @@ export async function validateRuntime() {
     });
     assertAgentResponseContainsIdentifier(
       lexicalRecall,
-      lexicalIdentifier,
+      lexicalMarker,
       "Claude Code lexical fallback recall",
     );
 
-    const counts = inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier);
+    const counts = inspectDatabase(
+      databasePath,
+      semanticFact,
+      semanticIdentifier,
+      skipLiveCodex ? null : lexicalIdentifier,
+    );
     process.stdout.write(
-      `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
+      skipLiveCodex
+        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/, Claude capture/summary/lexical recall.\n`
+        : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -573,7 +708,7 @@ export async function validateRuntime() {
 }
 
 async function main() {
-  await validateRuntime();
+  await validateRuntime({ skipLiveCodex: skipLiveCodexRequested() });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

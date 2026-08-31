@@ -9,8 +9,12 @@ import {
   classifyAgentCommandError,
   copyCodexAuthentication,
   createValidationWorkspace,
+  hookBodyContains,
+  hookUpdatedInput,
+  linkSharedEmbeddingRuntime,
   isolatedCounts,
   lexicalValidationPrompt,
+  skipLiveCodexRequested,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
 import { redactSecrets } from "../../src/hooks/shared/redact.js";
@@ -193,7 +197,42 @@ describe("runtime validation agent responses", () => {
     expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(6);
     expect(source).toContain("createValidationWorkspace");
     expect(source).toContain("runStructuredFilesystemViaHooks");
+    expect(source).toContain("skipLiveCodex");
+    expect(source).toContain("graph/query/store");
     expect(source).not.toMatch(/mkdtempSync\(join\(tmpdir\(\)/);
+  });
+});
+
+describe("runtime validation skip-live-codex", () => {
+  it("honors the CLI flag and the environment override", () => {
+    expect(skipLiveCodexRequested(["node", "runtime-validate.mjs"], {})).toBe(false);
+    expect(skipLiveCodexRequested(["node", "runtime-validate.mjs", "--skip-live-codex"], {})).toBe(true);
+    expect(skipLiveCodexRequested(["node", "runtime-validate.mjs"], { MEMOREE_VALIDATION_SKIP_LIVE_CODEX: "1" })).toBe(true);
+  });
+});
+
+describe("runtime validation hook output", () => {
+  it("reads persistGraph from a Codex replacement command or a Claude Read cache file", () => {
+    const command = JSON.stringify({
+      hookSpecificOutput: { updatedInput: { command: "printf '%s' 'src/snapshot.ts:persistGraph:function'" } },
+    });
+    expect(hookUpdatedInput(command)).toEqual({ command: "printf '%s' 'src/snapshot.ts:persistGraph:function'" });
+    expect(hookBodyContains(command, "persistGraph")).toBe(true);
+    expect(hookBodyContains(command, "missing")).toBe(false);
+  });
+});
+
+describe("runtime validation embedding runtime sharing", () => {
+  it("symlinks the real embed-deps and model cache into the isolated home", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-embed-"));
+    const realHome = join(root, "real");
+    const isolated = join(root, "isolated");
+    mkdirSync(join(realHome, ".memoree", "embed-deps"), { recursive: true });
+    mkdirSync(join(realHome, ".memoree", "models"), { recursive: true });
+    writeFileSync(join(realHome, ".memoree", "embed-deps", "embed-daemon.js"), "daemon\n");
+    linkSharedEmbeddingRuntime(realHome, isolated);
+    expect(readFileSync(join(isolated, ".memoree", "embed-deps", "embed-daemon.js"), "utf8")).toBe("daemon\n");
+    expect(existsSync(join(isolated, ".memoree", "models"))).toBe(true);
   });
 });
 
