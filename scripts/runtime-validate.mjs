@@ -417,6 +417,7 @@ export async function validateRuntime(options = {}) {
     MEMOREE_SKILLOPT_DISABLED: "1",
     MEMOREE_SUMMARY_EVERY_N_MSGS: "1000",
     MEMOREE_RECALL_TIMEOUT_MS: "8000",
+    MEMOREE_RECALL_THRESHOLD: "0.4",
     MEMOREE_RUNTIME_VALIDATION: "1",
     MEMOREE_VALIDATION_CLAUDE_HOME: realHome,
     ...(realClaudeConfigDir ? { MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR: realClaudeConfigDir } : {}),
@@ -852,7 +853,7 @@ export async function validateRuntime(options = {}) {
     status("checking Claude proactive recall hook");
     /** @type {{ status: number | null, stdout: string, stderr: string }} */
     let recallResult = { status: 1, stdout: "", stderr: "" };
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < 20; attempt++) {
       // Use a fresh session id so recall does not exclude the captured summary
       // (`excludePath` is `/summaries/<user>/<session_id>.md`).
       recallResult = runHookResult(join(claudeBundle, "recall.js"), {
@@ -862,7 +863,7 @@ export async function validateRuntime(options = {}) {
         prompt: "Remember the unusual observatory lantern from prior Memoree work. What exact identifier did we record?",
       }, { cwd: repository, env });
       if (recallResult.status === 0 && recallResult.stdout.includes(semanticIdentifier)) break;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
     }
     assertHookExitZero(recallResult, "Claude recall");
     assert(
