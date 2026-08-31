@@ -14,6 +14,8 @@ import {
   linkSharedEmbeddingRuntime,
   isolatedCounts,
   lexicalValidationPrompt,
+  claudeLexicalRecallPrompt,
+  CLAUDE_LEXICAL_RECALL_ATTEMPTS,
   codexSemanticRecallPrompt,
   skipLiveCodexRequested,
   waitForCapture,
@@ -171,6 +173,23 @@ describe("runtime validation Codex semantic recall prompt", () => {
     expect(prompt).toContain("~/.memoree/memory/summaries/");
     expect(prompt).toContain("observatory lantern");
     expect(prompt).not.toMatch(/do not (read files|use tools)/i);
+  });
+});
+
+describe("runtime validation Claude lexical fallback recall prompt", () => {
+  it("tells Claude to grep the exact UUID and not echo another identifier", () => {
+    const identifier = "06f71ade-bba5-4fda-8f73-a9cebb7d8ff9";
+    const prompt = claudeLexicalRecallPrompt(identifier);
+    expect(prompt).toContain("grep");
+    expect(prompt).toContain(identifier);
+    expect(prompt).toMatch(/do not return any other UUID/i);
+  });
+
+  it("retries the live Claude lexical turn", () => {
+    expect(CLAUDE_LEXICAL_RECALL_ATTEMPTS).toBe(3);
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    expect(source).toContain("claudeLexicalRecallPrompt(");
+    expect(source).toContain("CLAUDE_LEXICAL_RECALL_ATTEMPTS");
   });
 });
 

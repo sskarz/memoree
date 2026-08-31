@@ -82,6 +82,16 @@ export function lexicalValidationPrompt(identifier) {
   return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
 }
 
+export const CLAUDE_LEXICAL_RECALL_ATTEMPTS = 3;
+
+export function claudeLexicalRecallPrompt(identifier) {
+  return [
+    `Search Memoree lexically for the exact validation identifier ${identifier}.`,
+    `Use grep against ~/.memoree/memory/ for that exact UUID.`,
+    "Reply with only that UUID. Do not invent a UUID. Do not return any other UUID from this session.",
+  ].join(" ");
+}
+
 export function codexSemanticRecallPrompt() {
   return [
     "Search Memoree memory for the unusual observatory lantern and its exact identifier.",
@@ -1148,27 +1158,39 @@ export async function validateRuntime(options = {}) {
       );
     } else {
       status("checking lexical fallback recall through Claude Code");
-      const lexicalRecall = run("claude", [
-        "-p",
-        `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
-        "--append-system-prompt",
-        "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
-        "--settings", claudeSettings,
-        "--output-format", "text",
-        "--no-session-persistence",
-      ], {
-        cwd: repository,
-        env: authenticatedClaudeEnvironment(
-          { ...lexicalEnv, MEMOREE_CAPTURE: "false" },
-          realHome,
-          realClaudeConfigDir,
-        ),
-      });
-      assertAgentResponseContainsIdentifier(
-        lexicalRecall,
-        lexicalIdentifier,
-        "Claude Code lexical fallback recall",
-      );
+      let lexicalRecall = "";
+      /** @type {unknown} */
+      let lexicalRecallError = null;
+      for (let attempt = 0; attempt < CLAUDE_LEXICAL_RECALL_ATTEMPTS; attempt++) {
+        lexicalRecall = run("claude", [
+          "-p",
+          claudeLexicalRecallPrompt(lexicalIdentifier),
+          "--append-system-prompt",
+          "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
+          "--settings", claudeSettings,
+          "--output-format", "text",
+          "--no-session-persistence",
+        ], {
+          cwd: repository,
+          env: authenticatedClaudeEnvironment(
+            { ...lexicalEnv, MEMOREE_CAPTURE: "false" },
+            realHome,
+            realClaudeConfigDir,
+          ),
+        });
+        try {
+          assertAgentResponseContainsIdentifier(
+            lexicalRecall,
+            lexicalIdentifier,
+            "Claude Code lexical fallback recall",
+          );
+          lexicalRecallError = null;
+          break;
+        } catch (error) {
+          lexicalRecallError = error;
+        }
+      }
+      if (lexicalRecallError) throw lexicalRecallError;
     }
 
     const counts = inspectDatabase(
