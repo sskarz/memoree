@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -71,14 +71,24 @@ exit 0
       "plugin enable memoree@memoree --scope user",
     ]);
 
-    const doctorOutput = execFileSync(process.execPath, ["--import", tsxLoader, cli, "doctor"], {
+    const doctor = spawnSync(process.execPath, ["--import", tsxLoader, cli, "doctor"], {
       cwd: repoRoot,
       env,
       encoding: "utf-8",
     });
+    const doctorOutput = `${doctor.stdout ?? ""}${doctor.stderr ?? ""}`;
     expect(doctorOutput).toContain("ok  database:");
     expect(doctorOutput).toContain("ok  schema:");
     expect(doctorOutput).toContain("ok  plugin:");
-    expect(doctorOutput).toContain("ok  hook bundles:");
+    const hookBundle = join(repoRoot, "harnesses", "claude-code", "bundle");
+    const hooksBuilt = ["session-start.js", "capture.js", "recall.js", "session-end.js"]
+      .every(file => existsSync(join(hookBundle, file)));
+    if (hooksBuilt) {
+      expect(doctorOutput).toContain("ok  hook bundles:");
+      expect(doctor.status).toBe(0);
+    } else {
+      expect(doctorOutput).toContain("FAIL  hook bundles:");
+      expect(doctor.status).toBe(1);
+    }
   }, 30_000);
 });
