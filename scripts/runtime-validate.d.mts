@@ -31,6 +31,9 @@ export function runStructuredFilesystemViaHooks(
   options: { cwd: string; env?: NodeJS.ProcessEnv; sessionId?: string },
 ): Array<{ command: string; status: number | null; stdout: string; stderr: string }>;
 export function skipLiveCodexRequested(argv?: string[], env?: NodeJS.ProcessEnv): boolean;
+export function skipLiveAntigravityRequested(argv?: string[], env?: NodeJS.ProcessEnv): boolean;
+export function antigravityCliAvailable(): boolean;
+export function writeIsolatedAntigravityGeminiSettings(isolatedHome: string): void;
 export function hookUpdatedInput(stdout: string): Record<string, unknown>;
 export function linkSharedEmbeddingRuntime(realHome: string, isolatedHome: string): void;
 export function hookBodyContains(stdout: string, needle: string): boolean;
@@ -68,4 +71,4 @@ export function runCodex(
   options?: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean; timeout?: number },
 ): string;
 export function removeValidationWorkspace(root: string): void;
-export function validateRuntime(options?: { skipLiveCodex?: boolean }): Promise<void>;
+export function validateRuntime(options?: { skipLiveCodex?: boolean; skipLiveAntigravity?: boolean }): Promise<void>;

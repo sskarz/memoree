@@ -18,7 +18,6 @@ import { maybeAutoMineLocal } from "../../skillify/spawn-mine-local-worker.js";
 import { maybeAutoBackfillMemory } from "../../skillify/spawn-backfill-memory-worker.js";
 import { spawnGraphPullWorker } from "../../graph/spawn-pull-worker.js";
 import { embeddingsDisabled } from "../../embeddings/disable.js";
-import { EmbedClient } from "../../embeddings/client.js";
 import { createStorageBackend } from "../../storage/factory.js";
 import { embedSummaryWithWarmup } from "../../embeddings/embed-summary.js";
 import {
@@ -32,6 +31,7 @@ import { recallTopHit } from "../shared/recall-query.js";
 import { formatRecallContext } from "../shared/recall-format.js";
 import { withDeadline } from "../shared/with-deadline.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
+import { projectNameFromCwd } from "../../utils/project-name.js";
 import { sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
 import { claimFirstInvocation, lastTurn, readTranscriptTurns, takeNewUserPrompt } from "./transcript.js";
 import { captureAntigravityEvent } from "./capture.js";
@@ -59,20 +59,17 @@ async function recallSnippet(prompt: string, cwd: string): Promise<string> {
   try {
     const hit = await withDeadline((async () => {
       const api = createStorageBackend(config, config.tableName);
-      const embedder = embeddingsDisabled()
-        ? undefined
-        : {
-          embed: async (text: string) => {
-            const client = new EmbedClient({
-              daemonEntry: join(__bundleDir, "embeddings", "embed-daemon.js"),
-            });
-            return embedSummaryWithWarmup(client, text);
-          },
-        };
-      return recallTopHit({ api, table: config.tableName, prompt, embedder, cwd });
-    })(), RECALL_BUDGET_MS);
+      const q = (sql: string) => api.query(sql);
+      if (embeddingsDisabled()) return null;
+      const vec = await embedSummaryWithWarmup(prompt, "query", {
+        daemonEntry: join(__bundleDir, "embeddings", "embed-daemon.js"),
+        log,
+      });
+      if (!vec) return null;
+      return recallTopHit(q, config.tableName, vec, { project: projectNameFromCwd(cwd) });
+    })(), RECALL_BUDGET_MS, null);
     if (!hit || !passesThreshold(hit.score, RECALL_THRESHOLD)) return "";
-    return formatRecallContext({ hit, currentUser: config.userName, memoryRoot: config.memoryPath, now: Date.now() }) ?? "";
+    return formatRecallContext({ hit, currentUser: config.userName, memoryRoot: config.memoryPath, now: Date.now() });
   } catch (error: any) {
     log(`recall skipped: ${error.message}`);
     return "";
