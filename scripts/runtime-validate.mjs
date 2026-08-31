@@ -906,31 +906,46 @@ export async function validateRuntime(options = {}) {
       status("skipping live Codex exec (--skip-live-codex)");
     }
 
-    const lexicalMarker = skipLiveCodex ? semanticIdentifier : lexicalIdentifier;
-    status("checking lexical fallback recall through Claude Code");
-    const lexicalRecall = run("claude", [
-      "-p",
-      skipLiveCodex
-        ? `Search Memoree lexically for marker ${semanticIdentifier} and answer with only the matching identifier.`
-        : `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
-      ...(skipLiveCodex ? ["--bare"] : []),
-      "--tools", "",
-      "--settings", claudeSettings,
-      "--output-format", "text",
-      "--no-session-persistence",
-    ], {
-      cwd: repository,
-      env: authenticatedClaudeEnvironment(
-        { ...lexicalEnv, MEMOREE_CAPTURE: "false" },
-        realHome,
-        realClaudeConfigDir,
-      ),
-    });
-    assertAgentResponseContainsIdentifier(
-      lexicalRecall,
-      lexicalMarker,
-      "Claude Code lexical fallback recall",
-    );
+    if (skipLiveCodex) {
+      // `--bare` skips hooks, so a live `claude -p` cannot search Memoree.
+      // Prove the lexical path the product actually uses: Grep with embeddings off.
+      status("checking lexical memory search through Claude Grep (embeddings off)");
+      retryHookUntilContains(
+        () => runHookResult(claudePreTool, {
+          session_id: crypto.randomUUID(),
+          cwd: repository,
+          hook_event_name: "PreToolUse",
+          tool_name: "Grep",
+          tool_use_id: "runtime-validation-lexical-grep",
+          tool_input: { path: "~/.memoree/memory", pattern: semanticIdentifier },
+        }, { cwd: repository, env: { ...lexicalEnv, MEMOREE_CAPTURE: "false" } }),
+        semanticIdentifier,
+        "Claude lexical Grep",
+      );
+    } else {
+      status("checking lexical fallback recall through Claude Code");
+      const lexicalRecall = run("claude", [
+        "-p",
+        `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
+        "--append-system-prompt",
+        "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
+        "--settings", claudeSettings,
+        "--output-format", "text",
+        "--no-session-persistence",
+      ], {
+        cwd: repository,
+        env: authenticatedClaudeEnvironment(
+          { ...lexicalEnv, MEMOREE_CAPTURE: "false" },
+          realHome,
+          realClaudeConfigDir,
+        ),
+      });
+      assertAgentResponseContainsIdentifier(
+        lexicalRecall,
+        lexicalIdentifier,
+        "Claude Code lexical fallback recall",
+      );
+    }
 
     const counts = inspectDatabase(
       databasePath,
@@ -940,7 +955,7 @@ export async function validateRuntime(options = {}) {
     );
     process.stdout.write(
       skipLiveCodex
-        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, Claude capture/summary/recall/Grep/Glob/lexical recall.\n`
+        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, Claude capture/summary/recall/Grep/Glob, lexical Grep.\n`
         : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
   } finally {
