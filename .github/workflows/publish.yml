@@ -9,6 +9,10 @@ name: Publish npm
 #   workflow filename: publish.yml
 #   environment: memoree github actions
 # Do not set NODE_AUTH_TOKEN / NPM_TOKEN — that overrides OIDC.
+# Do not pass registry-url to setup-node: it writes
+#   //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+# and npm then skips the OIDC exchange (E404 / ENEEDAUTH).
+# Node 24 ships npm 11+, which is what Trusted Publishing needs.
 
 on:
   push:
@@ -31,8 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
+          node-version: "24"
 
       - run: npm ci
 

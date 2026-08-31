@@ -279,6 +279,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `backend check` / embeddings status | S | V | L | |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
 | `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
+| npm publish from `main` (OIDC trusted publisher) | S | — | — | `publish.yml` uses Node 24, environment `memoree github actions`, no `registry-url` / `NODE_AUTH_TOKEN`. `release-from-main.mjs` strips classic tokens. Users upgrade with `npx -y @sskarz/memoree install` |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
 
 ## Known gaps, overlap, and follow-ups

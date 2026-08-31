@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   chooseReleaseBump,
+  envForTrustedPublish,
   isReleaseCommitSubject,
   nextVersion,
+  stripNpmrcAuthToken,
   writeLockfileVersion,
   writePackageVersion,
 } from "../../scripts/release-from-main.mjs";
@@ -42,6 +44,54 @@ describe("isReleaseCommitSubject", () => {
   it("matches the CI release subject", () => {
     expect(isReleaseCommitSubject("chore(release): 0.7.146")).toBe(true);
     expect(isReleaseCommitSubject("feat(codex): parity")).toBe(false);
+  });
+});
+
+describe("envForTrustedPublish / stripNpmrcAuthToken", () => {
+  it("drops classic npm tokens so OIDC can run", () => {
+    const env = envForTrustedPublish({
+      PATH: "/usr/bin",
+      NODE_AUTH_TOKEN: "secret",
+      NPM_TOKEN: "also-secret",
+      NPM_CONFIG_USERCONFIG: "/tmp/.npmrc",
+    });
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.NODE_AUTH_TOKEN).toBeUndefined();
+    expect(env.NPM_TOKEN).toBeUndefined();
+    expect(env.NPM_CONFIG_USERCONFIG).toBe("/tmp/.npmrc");
+  });
+
+  it("removes setup-node _authToken lines from npmrc", () => {
+    const dir = mkdtempSync(join(tmpdir(), "memoree-npmrc-"));
+    try {
+      const npmrc = join(dir, ".npmrc");
+      writeFileSync(
+        npmrc,
+        [
+          "registry=https://registry.npmjs.org/",
+          "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}",
+          "",
+        ].join("\n"),
+      );
+      expect(stripNpmrcAuthToken(npmrc)).toBe(true);
+      expect(readFileSync(npmrc, "utf8")).toBe("registry=https://registry.npmjs.org/\n");
+      expect(stripNpmrcAuthToken(npmrc)).toBe(false);
+      expect(stripNpmrcAuthToken(undefined)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("publish.yml OIDC wiring", () => {
+  it("uses Node 24 and does not inject NODE_AUTH_TOKEN via registry-url", () => {
+    const yml = readFileSync(join(process.cwd(), ".github/workflows/publish.yml"), "utf8");
+    expect(yml).toMatch(/node-version:\s*"24"/);
+    expect(yml).toMatch(/environment:\s*memoree github actions/);
+    expect(yml).toMatch(/id-token:\s*write/);
+    expect(yml).not.toMatch(/^\s+registry-url:/m);
+    expect(yml).not.toMatch(/NODE_AUTH_TOKEN:/);
+    expect(yml).not.toMatch(/NPM_TOKEN:/);
   });
 });
 

@@ -253,7 +253,8 @@ declaring the runtime change complete. If authenticated validation must happen
 after merge because sessions must be closed, mark that gate pending and do
 not treat the rollout as complete until it passes. Documentation-only and
 other non-runtime PRs do not require promotion. Do not bump the package version in PRs. Merges to `main` with `feat` / `fix` /
-`perf` commits are published by `.github/workflows/publish.yml`. Docs-only
+`perf` commits are published by `.github/workflows/publish.yml` (Node 24,
+OIDC trusted publisher, no `NODE_AUTH_TOKEN` / `registry-url`). Docs-only
 merges do not publish. `runtime:promote` is a developer-machine tool and is
 never a substitute for npm; end users upgrade with
 `npx -y @sskarz/memoree install`.

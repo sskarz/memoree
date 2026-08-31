@@ -94,6 +94,35 @@ export function writePackageVersion(root, version) {
   writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
+/**
+ * Trusted Publishing only runs when npm sees no classic token. setup-node
+ * with registry-url injects NODE_AUTH_TOKEN (often empty) and that yields
+ * E404 on PUT instead of an OIDC exchange.
+ */
+export function envForTrustedPublish(env = process.env) {
+  const next = { ...env };
+  delete next.NODE_AUTH_TOKEN;
+  delete next.NPM_TOKEN;
+  return next;
+}
+
+/** Drop `_authToken=` lines so an empty placeholder cannot mask OIDC. */
+export function stripNpmrcAuthToken(npmrcPath) {
+  if (!npmrcPath) return false;
+  try {
+    const text = readFileSync(npmrcPath, "utf8");
+    const next = text
+      .split(/\r?\n/)
+      .filter((line) => !/_authToken/i.test(line))
+      .join("\n");
+    if (next === text) return false;
+    writeFileSync(npmrcPath, next);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function writeLockfileVersion(root, version) {
   const path = resolve(root, "package-lock.json");
   let text = readFileSync(path, "utf8");
@@ -142,9 +171,11 @@ export function publishRelease(options = {}) {
   ], { cwd: root });
   run("git", ["commit", "-m", `chore(release): ${version}`], { cwd: root });
   run("git", ["tag", `v${version}`], { cwd: root });
+  const publishEnv = envForTrustedPublish(options.env ?? process.env);
+  stripNpmrcAuthToken(publishEnv.NPM_CONFIG_USERCONFIG);
   run("npm", ["publish", "--access", "public", "--provenance"], {
     cwd: root,
-    env: options.env ?? process.env,
+    env: publishEnv,
   });
   run("git", ["push", "origin", "HEAD", "--follow-tags"], { cwd: root });
   return { skipped: false, version, bump };
