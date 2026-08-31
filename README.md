@@ -141,7 +141,7 @@ npm ci
 npm run build
 ```
 
-Memoree uses three deliberately separate locations:
+Memoree uses these separate locations:
 
 | Location | Purpose |
 |---|---|
