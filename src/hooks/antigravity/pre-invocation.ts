@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { readStdin } from "../../utils/stdin.js";
 import { isDirectRun } from "../../utils/direct-run.js";
 import { loadConfig } from "../../config.js";
+import { resolveDirConfig } from "../../dir-config.js";
 import { log as _log } from "../../utils/debug.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { autoPullSkills } from "../../skillify/auto-pull.js";
@@ -54,8 +55,9 @@ export function isFirstModelCall(invocationNum: number | undefined): boolean {
 
 async function recallSnippet(prompt: string, cwd: string): Promise<string> {
   if (proactiveRecallDisabled() || !shouldRecall(prompt)) return "";
-  const config = loadConfig();
-  if (!config) return "";
+  const base = loadConfig();
+  if (!base) return "";
+  const config = resolveDirConfig(base, cwd).config;
   try {
     const hit = await withDeadline((async () => {
       const api = createStorageBackend(config, config.tableName);

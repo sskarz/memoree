@@ -1163,9 +1163,10 @@ export async function validateRuntime(options = {}) {
       status("skipping live Codex exec (--skip-live-codex)");
     }
 
+    const geminiKey = typeof process.env.GEMINI_API_KEY === "string" ? process.env.GEMINI_API_KEY.trim() : "";
     const runLiveAntigravity = !skipLiveAntigravity
       && antigravityCliAvailable()
-      && Boolean(env.GEMINI_API_KEY?.trim());
+      && geminiKey.length > 0;
     if (runLiveAntigravity) {
       status("running an authenticated Antigravity capture turn (isolated HOME + GEMINI_API_KEY)");
       writeIsolatedAntigravityGeminiSettings(isolatedHome);

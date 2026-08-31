@@ -142,7 +142,7 @@ exit 0
     expect(existsSync(join(root, ".claude"))).toBe(false);
   }, 30_000);
 
-  it("fails closed when neither Claude Code nor Codex is detected", () => {
+  it("fails closed when no supported harness is detected", () => {
     const root = mkdtempSync(join(tmpdir(), "memoree-onboarding-none-"));
     roots.push(root);
     const env: NodeJS.ProcessEnv = {
@@ -162,6 +162,6 @@ exit 0
       encoding: "utf-8",
     });
     expect(result.status).toBe(1);
-    expect(`${result.stdout ?? ""}${result.stderr ?? ""}`).toMatch(/No Claude Code or Codex installation found/);
+    expect(`${result.stdout ?? ""}${result.stderr ?? ""}`).toMatch(/No Claude Code, Codex, or Antigravity installation found/);
   }, 30_000);
 });

@@ -27,7 +27,8 @@ export function eventNameFromArgv(argv: string[] = process.argv): string {
 
 export function workspaceCwd(input: AntigravityHookInput): string {
   const first = input.workspacePaths?.[0];
-  return first && first.trim() ? first : process.cwd();
+  const trimmed = first?.trim();
+  return trimmed ? trimmed : process.cwd();
 }
 
 export function sessionIdOf(input: AntigravityHookInput): string {
