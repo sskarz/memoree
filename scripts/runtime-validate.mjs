@@ -443,6 +443,11 @@ export async function validateRuntime(options = {}) {
 
     status("checking the isolated SQLite backend");
     run(process.execPath, [cli, "backend", "check"], { cwd: repository, env });
+    const embeddingsStatus = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assert(
+      /embeddings\.enabled|Shared deps/i.test(embeddingsStatus),
+      `memoree embeddings status did not report config; stdout=${JSON.stringify(embeddingsStatus).slice(0, 800)}`,
+    );
 
     status("installing the promoted Codex runtime into a clean profile");
     run(process.execPath, [cli, "codex", "install"], { cwd: repository, env });
@@ -477,6 +482,8 @@ export async function validateRuntime(options = {}) {
     const kpiCat = vfsResults[vfsResults.length - 1];
     assert(kpiCat, "KPI cat result missing");
     assertHookContains(kpiCat, kpiV2, "Codex KPI cat");
+    status("checking memoree context diagnostic");
+    run(process.execPath, [cli, "context"], { cwd: repository, env });
 
     const hookBase = {
       session_id: crypto.randomUUID(), tool_name: "shell", tool_use_id: "runtime-validation",
@@ -523,6 +530,11 @@ export async function validateRuntime(options = {}) {
     run("git", ["commit", "-m", "runtime validation graph fixture"], { cwd: repository, env });
     status("building the isolated codebase graph");
     run(process.execPath, [cli, "graph", "build", "--cwd", repository], { cwd: repository, env });
+    const graphHistory = run(process.execPath, [cli, "graph", "history", "--cwd", repository], { cwd: repository, env });
+    assert(
+      /history\.jsonl|snapshot/i.test(graphHistory),
+      `memoree graph history did not record the fixture build; stdout=${JSON.stringify(graphHistory).slice(0, 800)}`,
+    );
 
     status("checking graph query/ through Codex and Claude hooks");
     const claudePreTool = join(claudeBundle, "pre-tool-use.js");
@@ -580,6 +592,19 @@ export async function validateRuntime(options = {}) {
       }, vfsHookOptions),
       "runtime-validation",
       "Claude Read identity.json",
+    );
+    const writeDeny = runHookResult(claudePreTool, {
+      session_id: crypto.randomUUID(),
+      cwd: repository,
+      hook_event_name: "PreToolUse",
+      tool_name: "Write",
+      tool_use_id: "runtime-validation-write-deny",
+      tool_input: { file_path: "~/.memoree/memory/identity.json", content: "{}" },
+    }, vfsHookOptions);
+    assertHookExitZero(writeDeny, "Claude Write deny");
+    assert(
+      writeDeny.stdout.includes("permissionDecision") && writeDeny.stdout.includes("deny"),
+      `Claude Write on identity.json was not denied; stdout=${JSON.stringify(writeDeny.stdout).slice(0, 800)}`,
     );
 
     const graphIndex = runHookResult(codexPreTool, {
@@ -781,6 +806,32 @@ export async function validateRuntime(options = {}) {
       }
     }
 
+    status("checking memory index.md and summary VFS");
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/index.md" },
+      }, vfsHookOptions),
+      "Session Index",
+      "memory index.md",
+    );
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: `cat ~/.memoree/memory/summaries/runtime-validation/${claudeSession}.md` },
+      }, vfsHookOptions),
+      semanticIdentifier,
+      "memory summary leaf",
+    );
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "ls ~/.memoree/memory/sessions" },
+      }, vfsHookOptions),
+      "runtime-validation",
+      "memory sessions listing",
+    );
+
     status("checking Claude proactive recall hook");
     /** @type {{ status: number | null, stdout: string, stderr: string }} */
     let recallResult = { status: 1, stdout: "", stderr: "" };
@@ -830,6 +881,48 @@ export async function validateRuntime(options = {}) {
 
     const recallEnv = { ...env, MEMOREE_CAPTURE: "false" };
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
+
+    status("checking Codex capture, PostToolUse, and Stop hooks");
+    const hookCodexSession = crypto.randomUUID();
+    const hookCodexPrompt = lexicalValidationPrompt(lexicalIdentifier);
+    const codexHookOptions = { cwd: repository, env };
+    runHook(join(codexBundle, "capture.js"), {
+      session_id: hookCodexSession,
+      transcript_path: null,
+      cwd: repository,
+      hook_event_name: "UserPromptSubmit",
+      model: "runtime-validation",
+      prompt: hookCodexPrompt,
+    }, codexHookOptions);
+    runHook(join(codexBundle, "capture.js"), {
+      session_id: hookCodexSession,
+      transcript_path: null,
+      cwd: repository,
+      hook_event_name: "PostToolUse",
+      model: "runtime-validation",
+      tool_name: "Bash",
+      tool_use_id: "runtime-validation-codex-post",
+      tool_input: { command: `echo ${lexicalIdentifier}` },
+      tool_response: { stdout: lexicalIdentifier },
+    }, codexHookOptions);
+    assertHookExitZero(runHookResult(join(codexBundle, "stop.js"), {
+      session_id: hookCodexSession,
+      transcript_path: null,
+      cwd: repository,
+      hook_event_name: "Stop",
+      model: "runtime-validation",
+    }, codexHookOptions), "Codex Stop");
+    {
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const captured = db.prepare("SELECT message FROM sessions").all()
+          .map(row => String(row.message ?? "")).join("\n");
+        assert(captured.includes(lexicalIdentifier), "Codex capture/PostToolUse did not persist");
+      } finally {
+        db.close();
+      }
+    }
+
     if (!skipLiveCodex) {
       status("checking filesystem-native Memoree through authenticated Codex");
       const structuredPrompt = [
@@ -955,7 +1048,7 @@ export async function validateRuntime(options = {}) {
     );
     process.stdout.write(
       skipLiveCodex
-        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, Claude capture/summary/recall/Grep/Glob, lexical Grep.\n`
+        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, memory index/summaries/sessions, Claude capture/summary/recall/Grep/Glob/Write-deny, Codex capture/Stop, lexical Grep.\n`
         : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
   } finally {

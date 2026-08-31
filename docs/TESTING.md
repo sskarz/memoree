@@ -66,9 +66,10 @@ npm run runtime:validate
 
 `runtime:validate` talks to the real `claude` and `codex` CLIs, but still uses
 a disposable database and home. It proves capture, summaries, embeddings,
-recall, structured VFS (rules/goals/KPIs), Claude Grep/Glob intercepts, and
-the graph `query/` vs `find/` plus `show/`/`impact/`/`neighborhood/`/`layers`/
-`tour`/`path/` walkthrough through the installed hook bundles.
+recall, structured VFS (rules/goals/KPIs), Claude Grep/Glob intercepts, memory
+`index.md` / summaries / sessions, Codex capture/Stop hooks, and the graph
+`query/` vs `find/` plus `show/`/`impact/`/`neighborhood/`/`layers`/`tour`/`path/`
+walkthrough through the installed hook bundles.
 
 To run everything except live `codex exec` (for example when Codex API credits
 are unavailable):
