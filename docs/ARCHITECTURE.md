@@ -57,7 +57,7 @@ filesystem operation.
 | Agent | Installation | Main lifecycle |
 |---|---|---|
 | Claude Code | Local marketplace plugin | Session start, capture, recall, stop, session end |
-| Codex | Explicit `memoree codex install` | Session start, capture, recall, stop |
+| Codex | Explicit `memoree codex install` | Session start, capture, recall, stop, subagent stop, session end |
 
 Default onboarding installs Claude Code only. Codex installation, graph setup,
 documentation ingestion, history backfill, and skill mining remain explicit.

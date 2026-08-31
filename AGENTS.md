@@ -120,7 +120,7 @@ Live is green only when all of these hold:
 - session events &gt; 0 and summaries under `/summaries/%` &gt; 0
 - at least one **768-element** embedding
 - the Claude identifier appears in sessions **and** is recoverable later
-  (Claude recall + Codex `grep` of `~/.memoree/memory/summaries/`)
+  (Claude recall + Codex recall / `grep` of `~/.memoree/memory/summaries/`)
 - `runtime:validate` structured VFS: rule/goal/KPI edits persist; unsafe
   `rm -rf` on the mount is denied
 - `live:e2e` final line reports event and summary counts; on failure the
@@ -175,10 +175,13 @@ auto-mine and memory backfill when due.
 
 ### Codex hooks
 
-SessionStart (+ setup, matcher `startup|resume`), UserPromptSubmit capture,
-PreToolUse Bash only, PostToolUse capture, Stop (capture + wiki + graph).
-No SessionEnd and no `recall.js`; Codex gets memory instructions from a
-managed block in `~/.codex/AGENTS.md`.
+SessionStart (+ setup, matcher `startup|resume|clear|compact`), UserPromptSubmit
+capture + recall, PreToolUse Bash only (Codex documents shell as `Bash`; there
+is no Read/Grep/Glob tool), PostToolUse / Stop / SubagentStop capture,
+SessionEnd (wiki worker). Graph auto-build stays on Stop because Codex
+SessionEnd is advisory and capped at 3s. plugin-cache-gc is Claude-plugin-cache
+specific. Standing memory instructions also live in a managed block in
+`~/.codex/AGENTS.md`.
 
 ### CLI (supported)
 

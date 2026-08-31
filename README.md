@@ -99,10 +99,12 @@ when due), UserPromptSubmit (capture + recall), PreToolUse (Bash, Read,
 Grep, Glob), PostToolUse / Stop / SubagentStop capture, SessionEnd (wiki
 worker, plugin cache GC, graph auto-build).
 
-**Codex:** SessionStart (matcher `startup|resume`), UserPromptSubmit capture,
-PreToolUse Bash only, PostToolUse capture, Stop (capture + wiki + graph).
-Codex has no SessionEnd and no `recall.js`; instructions live in a managed
-block in `~/.codex/AGENTS.md`.
+**Codex:** SessionStart (matcher `startup|resume|clear|compact`, setup spawned
+from the fast path), UserPromptSubmit (capture + recall), PreToolUse Bash
+only, PostToolUse / Stop / SubagentStop capture, SessionEnd (wiki worker).
+Graph auto-build stays on Stop (SessionEnd is capped at 3s). Standing
+instructions also live in a managed block in `~/.codex/AGENTS.md`.
+plugin-cache-gc is Claude-plugin-cache specific.
 
 Claude Code and Codex are the only supported harnesses.
 

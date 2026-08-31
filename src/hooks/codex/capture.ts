@@ -3,13 +3,14 @@
 /**
  * Codex Capture hook — writes each session event as a row in the sessions table.
  *
- * Used by: UserPromptSubmit, PostToolUse
+ * Used by: UserPromptSubmit, PostToolUse, SubagentStop
  *
  * Codex input fields:
  *   All events: session_id, transcript_path, cwd, hook_event_name, model
  *   UserPromptSubmit: prompt (user text)
  *   PostToolUse: tool_name, tool_use_id, tool_input, tool_response
- *   Stop: (no extra fields — Codex has no last_assistant_message equivalent)
+ *   SubagentStop: last_assistant_message, agent_transcript_path, agent_id, agent_type
+ *   Stop: handled by stop.ts (capture + wiki spawn)
  */
 
 import { readStdin } from "../../utils/stdin.js";
@@ -40,6 +41,7 @@ import { bundleDirFromImportMeta, spawnCodexWikiWorker, wikiLog } from "./spawn-
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 import { reactSkillOpt } from "../shared/skillopt-hook.js";
+import { resolveCodexAssistantMessage } from "./transcript.js";
 const log = (msg: string) => _log("codex-capture", msg);
 
 function resolveEmbedDaemonPath(): string {
@@ -66,11 +68,16 @@ interface CodexHookInput {
   turn_id?: string;
   // UserPromptSubmit
   prompt?: string;
-  // PostToolUse (Bash only in Codex)
+  // PostToolUse (Bash and other local tools in Codex)
   tool_name?: string;
   tool_use_id?: string;
   tool_input?: { command?: string };
   tool_response?: Record<string, unknown>;
+  // SubagentStop
+  last_assistant_message?: string | null;
+  agent_transcript_path?: string | null;
+  agent_id?: string;
+  agent_type?: string;
 }
 
 const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
@@ -125,6 +132,17 @@ async function main(): Promise<void> {
       tool_use_id: input.tool_use_id,
       tool_input: JSON.stringify(input.tool_input),
       tool_response: JSON.stringify(input.tool_response),
+    };
+  } else if (input.hook_event_name === "SubagentStop") {
+    const lastAssistantMessage = resolveCodexAssistantMessage(input);
+    log(`subagent session=${input.session_id} agent_type=${input.agent_type ?? ""}`);
+    entry = {
+      id: crypto.randomUUID(),
+      ...meta,
+      type: lastAssistantMessage ? "assistant_message" : "assistant_stop",
+      content: lastAssistantMessage,
+      agent_id: input.agent_id,
+      agent_type: input.agent_type,
     };
   } else {
     log(`unknown event: ${input.hook_event_name}, skipping`);

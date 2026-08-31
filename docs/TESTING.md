@@ -255,10 +255,11 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Claude PreToolUse VFS (Bash/Read/Grep/Glob) | S | V | L | Live exercises `cat`/`printf` on the mount |
 | Claude PostToolUse / Stop / SubagentStop capture | S | V | L | SubagentStop is source-tested; live is main session |
 | Claude SessionEnd wiki + plugin-cache-gc + graph-on-stop | S | V | L | Wiki worker uses `MEMOREE_VALIDATION_CLAUDE_HOME` |
-| Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume`; `codex exec` may not fire it |
-| Codex capture (UserPromptSubmit / PostToolUse / Stop) | S | V | L | Stop needs a real session file; no `--ephemeral` |
+| Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume\|clear\|compact`; `codex exec` may still skip it |
+| Codex capture (UserPromptSubmit / PostToolUse / Stop / SubagentStop) | S | V | L | Stop needs a real session file; no `--ephemeral`; SubagentStop is source + validate |
+| Codex UserPromptSubmit recall.js | S | V | L | Same recall.js bundle as Claude; Codex documents additionalContext as developer context |
 | Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
-| Codex SessionEnd | — | — | — | Codex has no SessionEnd; wiki is on Stop |
+| Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |
@@ -289,7 +290,7 @@ Not missing from the product on purpose, but not fully live-proven:
 - Graph git-hook init, snapshot diff, backend pull, uninstall
 - `memoree memory flush`
 - Interactive TUIs
-- Codex SessionStart during `codex exec` (matcher may not match)
+- Codex SessionStart during `codex exec` (matcher now includes `clear`/`compact`; exec may still skip SessionStart)
 - `recall-events.jsonl` ignoring `MEMOREE_STATE_DIR`
 
 Redundant or stale on purpose until cleaned up:
@@ -303,7 +304,6 @@ Redundant or stale on purpose until cleaned up:
 Follow-ups that would make the PR loop tighter (do not block docs):
 
 - Honor `MEMOREE_STATE_DIR` in `src/hooks/shared/recall-events.ts`
-- Expand Codex SessionStart matchers if `codex exec` should inject context
 - Optional `MEMOREE_RUNTIME_DIR` mode that installs Codex hooks from the PR
   checkout into the **isolated** `CODEX_HOME` only, without `npm link`
 

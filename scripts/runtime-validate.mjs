@@ -401,6 +401,8 @@ export async function validateRuntime(options = {}) {
     join(codexBundle, "session-start.js"),
     join(codexBundle, "session-start-setup.js"),
     join(codexBundle, "stop.js"),
+    join(codexBundle, "session-end.js"),
+    join(codexBundle, "recall.js"),
     join(codexBundle, "graph-on-stop.js"),
     join(codexBundle, "pre-tool-use.js"),
     join(codexBundle, "command", "memoree.js"),
@@ -934,6 +936,25 @@ export async function validateRuntime(options = {}) {
       `Claude recall did not inject the captured identifier; stdout=${JSON.stringify(recallResult.stdout).slice(0, 1200)}`,
     );
 
+    status("checking Codex proactive recall hook");
+    /** @type {{ status: number | null, stdout: string, stderr: string }} */
+    let codexRecallResult = { status: 1, stdout: "", stderr: "" };
+    for (let attempt = 0; attempt < 20; attempt++) {
+      codexRecallResult = runHookResult(join(codexBundle, "recall.js"), {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Remember the unusual observatory lantern from prior Memoree work. What exact identifier did we record?",
+      }, { cwd: repository, env });
+      if (codexRecallResult.status === 0 && codexRecallResult.stdout.includes(semanticIdentifier)) break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
+    }
+    assertHookExitZero(codexRecallResult, "Codex recall");
+    assert(
+      codexRecallResult.stdout.includes(semanticIdentifier),
+      `Codex recall did not inject the captured identifier; stdout=${JSON.stringify(codexRecallResult.stdout).slice(0, 1200)}`,
+    );
+
     status("checking Claude Grep and Glob intercepts");
     retryHookUntilContains(
       () => runHookResult(claudePreTool, {
@@ -963,7 +984,7 @@ export async function validateRuntime(options = {}) {
     const recallEnv = { ...env, MEMOREE_CAPTURE: "false" };
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
 
-    status("checking Codex capture, PostToolUse, and Stop hooks");
+    status("checking Codex capture, PostToolUse, SubagentStop, Stop, and SessionEnd hooks");
     const hookCodexSession = crypto.randomUUID();
     const hookCodexPrompt = lexicalValidationPrompt(lexicalIdentifier);
     const codexHookOptions = { cwd: repository, env };
@@ -986,6 +1007,15 @@ export async function validateRuntime(options = {}) {
       tool_input: { command: `echo ${lexicalIdentifier}` },
       tool_response: { stdout: lexicalIdentifier },
     }, codexHookOptions);
+    const codexSubagentMarker = crypto.randomUUID();
+    runHook(join(codexBundle, "capture.js"), {
+      session_id: hookCodexSession,
+      transcript_path: null,
+      cwd: repository,
+      hook_event_name: "SubagentStop",
+      model: "runtime-validation",
+      last_assistant_message: `subagent recorded ${codexSubagentMarker}`,
+    }, codexHookOptions);
     assertHookExitZero(runHookResult(join(codexBundle, "stop.js"), {
       session_id: hookCodexSession,
       transcript_path: null,
@@ -993,12 +1023,20 @@ export async function validateRuntime(options = {}) {
       hook_event_name: "Stop",
       model: "runtime-validation",
     }, codexHookOptions), "Codex Stop");
+    assertHookExitZero(runHookResult(join(codexBundle, "session-end.js"), {
+      session_id: hookCodexSession,
+      transcript_path: null,
+      cwd: repository,
+      hook_event_name: "SessionEnd",
+      reason: "other",
+    }, codexHookOptions), "Codex SessionEnd");
     {
       const db = new DatabaseSync(databasePath, { readOnly: true });
       try {
         const captured = db.prepare("SELECT message FROM sessions").all()
           .map(row => String(row.message ?? "")).join("\n");
         assert(captured.includes(lexicalIdentifier), "Codex capture/PostToolUse did not persist");
+        assert(captured.includes(codexSubagentMarker), "Codex SubagentStop capture did not persist");
       } finally {
         db.close();
       }

@@ -4,7 +4,7 @@
  *
  * Unlike runtime-validate's `--bare` capture turn, this runs `claude -p` and
  * `codex exec` WITH plugin/hooks enabled so SessionStart, capture, recall,
- * PreToolUse VFS, and Stop fire on their own (Claude also runs SessionEnd).
+ * PreToolUse VFS, Stop, SubagentStop, and SessionEnd fire on their own.
  * Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
  */
 

@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * Codex Stop hook — handles both capture and session-end (wiki summary spawn).
+ * Codex Stop hook — captures the turn and may spawn a session summary.
  *
- * Codex has no SessionEnd event, so this hook does double duty:
- * 1. Captures the stop event to the sessions table (like capture.ts)
+ * Codex SessionEnd now exists but is advisory and capped at 3s, so Stop keeps
+ * the historical wiki spawn. SessionEnd also spawns under the same per-session
+ * lock, so a turn that already summarized will not double-write.
+ *
+ * 1. Captures the stop event to the sessions table (like Claude capture.ts)
  * 2. Spawns the wiki worker to generate the session summary (like session-end.ts)
  *
- * Codex input:  { session_id, transcript_path, cwd, hook_event_name, model }
+ * Codex input:  { session_id, transcript_path, cwd, hook_event_name, model,
+ *                 last_assistant_message? }
  * Codex output: JSON with optional { decision: "block", reason: "..." } to continue
  */
 
-import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { readStdin } from "../../utils/stdin.js";
@@ -29,6 +32,7 @@ import { embeddingSqlLiteral } from "../../embeddings/sql.js";
 import { embeddingsDisabled } from "../../embeddings/disable.js";
 import { buildDirectSessionInsertSql } from "../shared/session-insert-sql.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
+import { resolveCodexAssistantMessage } from "./transcript.js";
 
 const log = (msg: string) => _log("codex-stop", msg);
 
@@ -45,6 +49,7 @@ interface CodexStopInput {
   cwd: string;
   hook_event_name: string;
   model: string;
+  last_assistant_message?: string | null;
 }
 
 const CAPTURE = process.env.MEMOREE_CAPTURE !== "false";
@@ -69,41 +74,10 @@ async function main(): Promise<void> {
       const api = createStorageBackend(config, sessionsTable);
       const ts = new Date().toISOString();
 
-      // Codex Stop doesn't include last_assistant_message, but it provides
-      // transcript_path. Try to extract the last assistant message from it.
-      let lastAssistantMessage = "";
-      if (input.transcript_path) {
-        try {
-          const transcriptPath = input.transcript_path;
-          if (existsSync(transcriptPath)) {
-            const transcript = readFileSync(transcriptPath, "utf-8");
-            // Codex transcript is JSONL with format:
-            // {"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"..."}]}}
-            const lines = transcript.trim().split("\n").reverse();
-            for (const line of lines) {
-              try {
-                const entry = JSON.parse(line);
-                // Codex nests the message inside payload
-                const msg = entry.payload ?? entry;
-                if (msg.role === "assistant" && msg.content) {
-                  const content = typeof msg.content === "string"
-                    ? msg.content
-                    : Array.isArray(msg.content)
-                      ? msg.content.filter((b: any) => b.type === "output_text" || b.type === "text").map((b: any) => b.text).join("\n")
-                      : "";
-                  if (content) {
-                    lastAssistantMessage = content.slice(0, 4000);
-                    break;
-                  }
-                }
-              } catch { /* skip malformed line */ }
-            }
-            if (lastAssistantMessage) log(`extracted assistant message from transcript (${lastAssistantMessage.length} chars)`);
-          }
-        } catch (e: any) {
-          log(`transcript read failed: ${e.message}`);
-        }
-      }
+      // Prefer last_assistant_message from the payload (Codex >= current
+      // hooks schema). Fall back to parsing transcript_path JSONL.
+      const lastAssistantMessage = resolveCodexAssistantMessage(input);
+      if (lastAssistantMessage) log(`assistant message (${lastAssistantMessage.length} chars)`);
 
       const entry = {
         id: crypto.randomUUID(),

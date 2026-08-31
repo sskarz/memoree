@@ -46,9 +46,11 @@ describe("triggers are wired in each agent's hook bundles", () => {
     expect(se).toContain("forceSessionEndTrigger");
   });
 
-  it("codex: stop.js fires forceSessionEndTrigger (Codex Stop is end-of-session)", () => {
+  it("codex: stop.js AND session-end.js fire forceSessionEndTrigger", () => {
     const stop = readFileSync(bundlePath("codex", "stop.js"), "utf-8");
     expect(stop).toContain("forceSessionEndTrigger");
+    const se = readFileSync(bundlePath("codex", "session-end.js"), "utf-8");
+    expect(se).toContain("forceSessionEndTrigger");
   });
 });
 
@@ -59,7 +61,9 @@ describe("each agent records the correct agent name", () => {
     expect(cap + se).toContain(`"claude_code"`);
   });
   it("codex passes agent: 'codex' to triggers", () => {
-    expect(readFileSync(bundlePath("codex", "stop.js"), "utf-8")).toContain(`"codex"`);
+    const stop = readFileSync(bundlePath("codex", "stop.js"), "utf-8");
+    const se = readFileSync(bundlePath("codex", "session-end.js"), "utf-8");
+    expect(stop + se).toContain(`"codex"`);
   });
 });
 

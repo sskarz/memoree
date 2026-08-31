@@ -222,6 +222,8 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("graph-on-stop.js");
     expect(source).toContain("PostToolUse");
     expect(source).toContain("SubagentStop");
+    expect(source).toContain("Codex SessionEnd");
+    expect(source).toContain("checking Codex proactive recall hook");
     expect(source).toContain("Claude lexical Grep");
     expect(source).toContain("docs/src/snapshot.ts.md");
     expect(source).toContain("docs/find/persistGraph");
