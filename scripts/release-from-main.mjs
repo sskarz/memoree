@@ -170,23 +170,26 @@ export function publishRelease(options = {}) {
     "harnesses/codex/.codex-plugin/plugin.json",
   ], { cwd: root });
   run("git", ["commit", "-m", `chore(release): ${version}`], { cwd: root });
-  run("git", ["tag", `v${version}`], { cwd: root });
+  run("git", ["tag", "-a", `v${version}`, "-m", `chore(release): ${version}`], { cwd: root });
   const publishEnv = envForTrustedPublish(options.env ?? process.env);
   stripNpmrcAuthToken(publishEnv.NPM_CONFIG_USERCONFIG);
   run("npm", ["publish", "--access", "public", "--provenance"], {
     cwd: root,
     env: publishEnv,
   });
-  run("git", ["push", "origin", "HEAD", "--follow-tags"], { cwd: root });
+  run("git", ["push", "origin", "HEAD", `v${version}`], { cwd: root });
   return { skipped: false, version, bump };
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  publishRelease({
-    fromRef: process.env.RELEASE_FROM_REF,
-  }).catch((error) => {
-    process.stderr.write(`release-from-main: ${error.message}\n`);
+  try {
+    publishRelease({
+      fromRef: process.env.RELEASE_FROM_REF,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`release-from-main: ${message}\n`);
     process.exitCode = 1;
-  });
+  }
 }

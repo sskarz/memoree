@@ -95,6 +95,15 @@ describe("publish.yml OIDC wiring", () => {
   });
 });
 
+describe("publishRelease CLI entry", () => {
+  it("treats publishRelease as sync and pushes an annotated tag", () => {
+    const src = readFileSync(join(process.cwd(), "scripts/release-from-main.mjs"), "utf8");
+    expect(src).not.toMatch(/publishRelease\([\s\S]*?\)\s*\.catch/);
+    expect(src).toMatch(/"tag", "-a"/);
+    expect(src).toMatch(/"push", "origin", "HEAD"/);
+  });
+});
+
 describe("writePackageVersion / writeLockfileVersion", () => {
   it("updates package.json and both lockfile name/version pairs", () => {
     const dir = mkdtempSync(join(tmpdir(), "memoree-release-"));
