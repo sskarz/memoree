@@ -13,6 +13,7 @@ import { pathToFileURL } from "node:url";
 // dist/src/embeddings/protocol.js
 import { homedir } from "node:os";
 import { join } from "node:path";
+var MAX_EMBED_BATCH = 128;
 var PROTOCOL_VERSION = 1;
 var DEFAULT_SOCKET_DIR = join(homedir(), ".memoree", "run");
 var DEFAULT_MODEL_REPO = "nomic-ai/nomic-embed-text-v1.5";
@@ -103,6 +104,12 @@ var NomicEmbedder = class {
     const full = Array.from(out.data);
     return this.truncate(full);
   }
+  /**
+   * One forward pass for many texts. transformers.js FeatureExtractionPipeline
+   * takes `string | string[]` and tokenizes with padding+truncation. Empty
+   * arrays throw in the tokenizer, so we short-circuit. Prefixes are required
+   * by the nomic-embed-text-v1.5 card (`search_document:` / `search_query:`).
+   */
   async embedBatch(texts, kind = "document") {
     if (texts.length === 0)
       return [];
@@ -285,6 +292,17 @@ var EmbedDaemon = class {
       const e = req;
       const vec = await this.embedder.embed(e.text, e.kind);
       return { id: e.id, embedding: vec };
+    }
+    if (req.op === "embed_batch") {
+      const e = req;
+      if (!Array.isArray(e.texts)) {
+        return { id: e.id, error: "embed_batch requires texts[]" };
+      }
+      if (e.texts.length > MAX_EMBED_BATCH) {
+        return { id: e.id, error: `embed_batch exceeds ${MAX_EMBED_BATCH} texts` };
+      }
+      const embeddings = await this.embedder.embedBatch(e.texts, e.kind);
+      return { id: e.id, embeddings };
     }
     return { id: req.id, error: "unknown op" };
   }
