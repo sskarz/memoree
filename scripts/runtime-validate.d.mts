@@ -22,6 +22,13 @@ export function assertAgentResponseContainsIdentifier(
 ): void;
 export function lexicalValidationPrompt(identifier: string): string;
 export function copyCodexAuthentication(realHome: string, isolatedCodexHome: string): void;
+export function createValidationWorkspace(home?: string): string;
+export function classifyAgentCommandError(error: unknown): string | null;
+export function runStructuredFilesystemViaHooks(
+  preToolPath: string,
+  commands: string[],
+  options: { cwd: string; env?: NodeJS.ProcessEnv; sessionId?: string },
+): Array<{ command: string; status: number | null; stdout: string; stderr: string }>;
 export function isolatedCounts(databasePath: string, text: string): IsolatedCounts;
 export function waitForCapture(
   databasePath: string,

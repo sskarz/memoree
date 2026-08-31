@@ -9,7 +9,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -83,6 +83,47 @@ export function copyCodexAuthentication(realHome, isolatedCodexHome) {
   assert(existsSync(source), `Codex authentication material is missing: ${source}`);
   mkdirSync(isolatedCodexHome, { recursive: true, mode: 0o700 });
   copyFileSync(source, join(isolatedCodexHome, "auth.json"));
+}
+
+export function createValidationWorkspace(home = homedir()) {
+  const cacheDir = join(home, ".cache");
+  mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
+  return mkdtempSync(join(cacheDir, "memoree-runtime-validate-"));
+}
+
+export function classifyAgentCommandError(error) {
+  const text = [
+    error instanceof Error ? error.message : String(error ?? ""),
+    typeof error === "object" && error && "cause" in error && error.cause instanceof Error ? error.cause.message : "",
+  ].join("\n");
+  if (/no credits remaining/i.test(text) || /insufficient.?quota/i.test(text)) {
+    return "External dependency (Codex API credits): add credits at https://platform.openai.com/settings/organization/billing/ and retry runtime:validate.";
+  }
+  return null;
+}
+
+function runCodex(args, options) {
+  try {
+    return run("codex", args, options);
+  } catch (error) {
+    const classified = classifyAgentCommandError(error);
+    throw classified ? new Error(classified, { cause: error }) : error;
+  }
+}
+
+export function runStructuredFilesystemViaHooks(preToolPath, commands, options) {
+  return commands.map(command => {
+    const result = runHookResult(preToolPath, {
+      session_id: options.sessionId ?? crypto.randomUUID(),
+      tool_name: "shell",
+      tool_use_id: "runtime-validation",
+      cwd: options.cwd,
+      hook_event_name: "pre_tool_use",
+      model: "runtime-validation",
+      tool_input: { command },
+    }, options);
+    return { command, status: result.status, stdout: result.stdout, stderr: result.stderr };
+  });
 }
 
 export function assertAgentResponseContainsIdentifier(response, identifier, phase) {
@@ -254,10 +295,11 @@ export async function validateRuntime() {
     assert(existsSync(bundle), `Installed runtime bundle is missing: ${bundle}`);
   }
 
-  const root = mkdtempSync(join(tmpdir(), "memoree-runtime-validate-"));
+  const root = createValidationWorkspace();
   const repository = join(root, "repo");
   const state = join(root, "state");
   const isolatedHome = join(root, "home");
+  const isolatedTmp = join(root, "tmp");
   const isolatedCodexHome = join(isolatedHome, ".codex");
   const databasePath = join(state, "memoree.sqlite3");
   const claudeSettings = join(state, "claude-settings.json");
@@ -289,6 +331,9 @@ export async function validateRuntime() {
     MEMOREE_VALIDATION_CLAUDE_HOME: realHome,
     ...(realClaudeConfigDir ? { MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR: realClaudeConfigDir } : {}),
     CLAUDE_CODE_ENTRYPOINT: "cli",
+    TMPDIR: isolatedTmp,
+    TMP: isolatedTmp,
+    TEMP: isolatedTmp,
   };
   const claudeEnv = authenticatedClaudeEnvironment(env, realHome, realClaudeConfigDir);
   const ruleId = crypto.randomUUID();
@@ -302,6 +347,7 @@ export async function validateRuntime() {
   try {
     mkdirSync(state, { recursive: true });
     mkdirSync(isolatedHome, { recursive: true });
+    mkdirSync(isolatedTmp, { recursive: true, mode: 0o700 });
     copyCodexAuthentication(realHome, isolatedCodexHome);
     writeFileSync(claudeSettings, `${JSON.stringify({
       autoMemoryDirectory: join(state, "claude-auto-memory"),
@@ -324,17 +370,13 @@ export async function validateRuntime() {
     status("installing the promoted Codex runtime into a clean profile");
     run(process.execPath, [cli, "codex", "install"], { cwd: repository, env });
 
-    status("checking filesystem-native Memoree through authenticated Codex");
-    const structuredPrompt = [
-      "Use the shell and run every command below as its own tool call, in order.",
-      "Do not combine commands with pipes, semicolons, &&, substitutions, or scripts.",
-      "Expected failures are intentional; continue after them.",
+    const codexPreTool = join(codexBundle, "pre-tool-use.js");
+    const vfsHookOptions = { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } };
+    status("checking structured Memoree VFS through Codex hooks");
+    const vfsCommands = [
       "cat ~/.memoree/memory/identity.json",
       "cat ~/.memoree/memory/rules.md",
       "cat ~/.memoree/memory/goals.md",
-      "memoree rules list",
-      "cat ~/.memoree/memory/rules/active/missing-runtime-validation.md",
-      "rm -rf ~/.memoree/memory/rules",
       `printf '%s' '${ruleV1}' > ~/.memoree/memory/rules/active/${ruleId}.md`,
       `printf '%s' '${ruleV2}' > ~/.memoree/memory/rules/active/${ruleId}.md`,
       `mv ~/.memoree/memory/rules/active/${ruleId}.md ~/.memoree/memory/rules/done/${ruleId}.md`,
@@ -344,29 +386,15 @@ export async function validateRuntime() {
       `printf '%s' '${goalV2}' > ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md`,
       `mv ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md ~/.memoree/memory/goal/runtime-validation-bob/in_progress/${goalId}.md`,
       `rm ~/.memoree/memory/goal/runtime-validation-bob/in_progress/${goalId}.md`,
-      `cat ~/.memoree/memory/rules/done/${ruleId}.md`,
-      `cat ~/.memoree/memory/goal/runtime-validation-bob/closed/${goalId}.md`,
-      "cat ~/.memoree/memory/identity.json",
-      "cat ~/.memoree/memory/rules.md",
-      "cat ~/.memoree/memory/goals.md",
-      `After attempting every command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
-    ].join("\n");
-    const structuredResponse = run("codex", [
-      "exec",
-      "--skip-git-repo-check",
-      "--ephemeral",
-      "--ignore-user-config",
-      "-s", "read-only",
-      structuredPrompt,
-    ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
-    assertAgentResponseContainsIdentifier(
-      structuredResponse,
-      structuredMarker,
-      "Codex structured filesystem workflow",
+    ];
+    const vfsResults = runStructuredFilesystemViaHooks(codexPreTool, vfsCommands, vfsHookOptions);
+    const failedVfs = vfsResults.find(result => result.status !== 0);
+    assert(
+      !failedVfs,
+      `Structured VFS command failed (${failedVfs?.status}): ${failedVfs?.command}\n${failedVfs?.stderr || failedVfs?.stdout || ""}`,
     );
     inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2);
 
-    const codexPreTool = join(codexBundle, "pre-tool-use.js");
     const hookBase = {
       session_id: crypto.randomUUID(), tool_name: "shell", tool_use_id: "runtime-validation",
       cwd: repository, hook_event_name: "pre_tool_use", model: "runtime-validation",
@@ -439,9 +467,28 @@ export async function validateRuntime() {
     // generated summary retained the captured fact.
     await waitForCapture(databasePath, semanticIdentifier, { requireSummary: true });
 
+    status("checking filesystem-native Memoree through authenticated Codex");
+    const structuredPrompt = [
+      "Use the shell to run: cat ~/.memoree/memory/identity.json",
+      `After that command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
+    ].join("\n");
+    const structuredResponse = runCodex([
+      "exec",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "--ignore-user-config",
+      "-s", "read-only",
+      structuredPrompt,
+    ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
+    assertAgentResponseContainsIdentifier(
+      structuredResponse,
+      structuredMarker,
+      "Codex structured filesystem workflow",
+    );
+
     const recallEnv = { ...env, MEMOREE_CAPTURE: "false" };
     status("checking semantic recall through Codex");
-    const semanticRecall = run("codex", [
+    const semanticRecall = runCodex([
       "exec",
       "--skip-git-repo-check",
       "--ephemeral",
@@ -461,7 +508,7 @@ export async function validateRuntime() {
     // UUID labeled as an identifier is unique while remaining non-secret.
     const codexPrompt = lexicalValidationPrompt(lexicalIdentifier);
     status("running an authenticated Codex capture turn with embeddings disabled");
-    const codexResponse = run("codex", [
+    const codexResponse = runCodex([
       "exec",
       "--skip-git-repo-check",
       "--ephemeral",

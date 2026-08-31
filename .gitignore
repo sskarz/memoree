@@ -26,8 +26,5 @@ deploy-to-cache.sh
 bundle/
 harnesses/claude-code/bundle/
 harnesses/codex/bundle/
-harnesses/cursor/bundle/
-harnesses/hermes/bundle/
 mcp/bundle/
-harnesses/pi/bundle/
 evals/

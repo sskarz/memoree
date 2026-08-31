@@ -84,6 +84,15 @@ export async function runDoctor(overrides: Partial<DoctorDependencies> = {}): Pr
   const hooksOk = ["session-start.js", "capture.js", "recall.js", "session-end.js"].every(file => deps.existsSync(join(bundle, file)));
   results.push(["hook bundles", hooksOk, bundle]);
 
+  const codexBundle = join(deps.homedir(), ".codex", "memoree", "bundle");
+  if (deps.existsSync(codexBundle)) {
+    try { deps.execFileSync("codex", ["--version"], { stdio: "ignore" }); results.push(["Codex", true, "available"]); }
+    catch { results.push(["Codex", false, "codex executable not found"]); }
+    const codexHooksOk = ["session-start.js", "capture.js", "pre-tool-use.js", "stop.js"]
+      .every(file => deps.existsSync(join(codexBundle, file)));
+    results.push(["Codex hook bundles", codexHooksOk, codexBundle]);
+  }
+
   for (const [name, ok, detail] of results) deps.log(`${ok ? "ok" : "FAIL"}  ${name}: ${detail}`);
   return results.every(([, ok]) => ok) ? 0 : 1;
 }

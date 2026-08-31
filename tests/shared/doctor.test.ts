@@ -65,6 +65,8 @@ describe("memoree doctor", () => {
     expect(fixture.storage.query).toHaveBeenCalledWith("PRAGMA integrity_check");
     expect(fixture.lines).toContain("ok  schema: 8 required tables");
     expect(fixture.lines.some(line => line.startsWith("ok  plugin:"))).toBe(true);
+    expect(fixture.lines.some(line => line.startsWith("ok  Codex:"))).toBe(true);
+    expect(fixture.lines.some(line => line.startsWith("ok  Codex hook bundles:"))).toBe(true);
   });
 
   it("passes PostgreSQL and enabled local embeddings without printing its URL", async () => {
@@ -106,5 +108,34 @@ describe("memoree doctor", () => {
     expect(brokenChecks.lines.join("\n")).toContain("failed integrity_check");
     expect(brokenChecks.lines.join("\n")).toContain("missing sessions");
     expect(brokenChecks.lines.join("\n")).toContain("FAIL  plugin:");
+  });
+
+  it("reports Codex binary and hook bundle failures when Codex is installed", async () => {
+    const fixture = baseDeps(sqlite);
+    const code = await runDoctor({
+      ...fixture.deps,
+      existsSync: path => {
+        const value = String(path);
+        if (value.includes("/.codex/memoree/bundle")) return !value.endsWith(".js");
+        return true;
+      },
+      execFileSync: ((file: string, args: readonly string[]) => {
+        if (file === "codex") throw new Error("missing");
+        if (args[0] === "plugin") return "memoree@memoree enabled";
+        return "claude 1";
+      }) as never,
+    });
+    expect(code).toBe(1);
+    expect(fixture.lines.join("\n")).toContain("codex executable not found");
+    expect(fixture.lines.join("\n")).toContain("FAIL  Codex hook bundles:");
+  });
+
+  it("skips Codex checks when the Codex plugin is not installed", async () => {
+    const fixture = baseDeps(sqlite);
+    expect(await runDoctor({
+      ...fixture.deps,
+      existsSync: path => !String(path).includes(".codex"),
+    })).toBe(0);
+    expect(fixture.lines.join("\n")).not.toContain("Codex");
   });
 });

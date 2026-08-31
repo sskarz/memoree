@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
+  classifyAgentCommandError,
   copyCodexAuthentication,
+  createValidationWorkspace,
   isolatedCounts,
   lexicalValidationPrompt,
   waitForCapture,
@@ -119,6 +121,15 @@ describe("runtime validation Claude configuration", () => {
   });
 });
 
+describe("runtime validation workspace isolation", () => {
+  it("creates the disposable workspace under the real home cache, not /tmp", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-home-"));
+    const workspace = createValidationWorkspace(root);
+    expect(workspace.startsWith(join(root, ".cache", "memoree-runtime-validate-"))).toBe(true);
+    expect(workspace.includes("/tmp/memoree-runtime-validate-")).toBe(false);
+  });
+});
+
 describe("runtime validation Codex isolation", () => {
   it("copies only auth material into a clean Codex profile", () => {
     root = mkdtempSync(join(tmpdir(), "runtime-validate-auth-"));
@@ -180,5 +191,19 @@ describe("runtime validation agent responses", () => {
     expect(source).not.toContain("lexicalToken");
     expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
     expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(6);
+    expect(source).toContain("createValidationWorkspace");
+    expect(source).toContain("runStructuredFilesystemViaHooks");
+    expect(source).not.toMatch(/mkdtempSync\(join\(tmpdir\(\)/);
+  });
+});
+
+describe("runtime validation external agent failures", () => {
+  it("classifies Codex credit exhaustion as an external dependency", () => {
+    expect(classifyAgentCommandError(new Error("stream disconnected: You have no credits remaining.")))
+      .toMatch(/External dependency \(Codex API credits\)/);
+  });
+
+  it("leaves unrelated Codex failures unclassified", () => {
+    expect(classifyAgentCommandError(new Error("Command failed: sandbox"))).toBeNull();
   });
 });
