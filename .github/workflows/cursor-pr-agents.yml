@@ -1,0 +1,123 @@
+# Launch Cursor cloud agents to test and review every PR.
+# Requires repo secret CURSOR_API_KEY (Cursor Dashboard → API Keys).
+# See .cursor/automations/README.md.
+
+name: Cursor PR agents
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+concurrency:
+  group: cursor-pr-agents-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  launch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: test
+            prompt: .cursor/automations/pr-test.md
+            name_prefix: Memoree PR test
+          - id: review
+            prompt: .cursor/automations/pr-review.md
+            name_prefix: Memoree PR review
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Launch Cursor cloud agent
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          AGENT_ID: ${{ matrix.id }}
+          NAME_PREFIX: ${{ matrix.name_prefix }}
+          PROMPT_FILE: ${{ matrix.prompt }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CURSOR_API_KEY:-}" ]; then
+            echo "::error::Repository secret CURSOR_API_KEY is not set."
+            echo "Create a key at https://cursor.com/dashboard (API Keys) and add it under"
+            echo "Settings → Secrets and variables → Actions. See .cursor/automations/README.md."
+            exit 1
+          fi
+
+          if [ ! -f "$PROMPT_FILE" ]; then
+            echo "::error::Prompt file $PROMPT_FILE is missing on this PR head."
+            exit 1
+          fi
+
+          payload="$(jq -n \
+            --rawfile body "$PROMPT_FILE" \
+            --arg pr "$PR_URL" \
+            --arg sha "$HEAD_SHA" \
+            --arg head "$HEAD_REF" \
+            --arg base "$BASE_REF" \
+            --arg repo "$REPO_URL" \
+            --arg name "$NAME_PREFIX #$PR_NUMBER" \
+            '{
+              prompt: {
+                text: ($body + "\n\n## This pull request\n" +
+                  "- URL: " + $pr + "\n" +
+                  "- Head SHA: " + $sha + "\n" +
+                  "- Head branch: `" + $head + "`\n" +
+                  "- Base branch: `" + $base + "`\n" +
+                  "- Repo: " + $repo + "\n\n" +
+                  "Use repos[].prUrl so you work on this PR head, not main.")
+              },
+              name: $name,
+              repos: [{ url: $repo, prUrl: $pr }],
+              workOnCurrentBranch: false,
+              autoCreatePR: false
+            }')"
+
+          tmp="$(mktemp)"
+          http_code="$(curl -sS -o "$tmp" -w "%{http_code}" \
+            -X POST "https://api.cursor.com/v1/agents" \
+            -H "Authorization: Bearer ${CURSOR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            --data "$payload")"
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "::error::Cursor Cloud Agents API returned HTTP $http_code"
+            cat "$tmp"
+            exit 1
+          fi
+
+          agent_url="$(jq -r '.agent.url // empty' "$tmp")"
+          agent_id="$(jq -r '.agent.id // empty' "$tmp")"
+          if [ -z "$agent_url" ]; then
+            echo "::error::API response missing agent.url"
+            cat "$tmp"
+            exit 1
+          fi
+
+          echo "Launched $agent_id → $agent_url"
+
+          comment="$(printf '%s\n' \
+            "Launched **${NAME_PREFIX}** cloud agent for \`${HEAD_SHA:0:7}\`." \
+            "" \
+            "- Agent: ${agent_url}" \
+            "- Prompt: \`${PROMPT_FILE}\`" \
+            "" \
+            "This is a Cursor cloud agent (disposable VM), not GitHub-hosted test runners.")"
+
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$comment"
