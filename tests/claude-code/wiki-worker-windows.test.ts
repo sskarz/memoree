@@ -30,6 +30,7 @@ vi.mock("node:os", async () => {
 
 import { resolveCliBin, binNeedsShell, shellFile } from "../../src/utils/resolve-cli-bin.js";
 import {
+  buildAgyInvocation,
   buildClaudeInvocation,
   buildClaudeStdinInvocation,
   buildClaudeWorkerEnvironment,
@@ -176,6 +177,27 @@ describe("buildClaudeInvocation", () => {
       MEMOREE_RUNTIME_VALIDATION: "1",
     }).args).toContain("--safe-mode");
     expect(buildClaudeInvocation("/usr/local/bin/claude", "P", {}).args).not.toContain("--safe-mode");
+  });
+});
+
+describe("buildAgyInvocation", () => {
+  it("Unix: prompt is a positional arg with dangerously-skip-permissions, no GEMINI_API_KEY rewrite", () => {
+    setPlatform("linux");
+    const inv = buildAgyInvocation("/usr/local/bin/agy", "PROMPT-TEXT");
+    expect(inv.file).toBe("/usr/local/bin/agy");
+    expect(inv.args).toEqual(["-p", "PROMPT-TEXT", "--dangerously-skip-permissions"]);
+    expect(inv.options.shell).toBeFalsy();
+    expect(inv.options.windowsHide).toBe(true);
+  });
+
+  it("Windows .cmd: prompt travels over stdin, never argv", () => {
+    setPlatform("win32");
+    const inv = buildAgyInvocation("C:\\npm\\agy.cmd", "PROMPT-TEXT");
+    expect(inv.options.shell).toBe(true);
+    expect(inv.options.input).toBe("PROMPT-TEXT");
+    expect(inv.args).toEqual(["-p", "--dangerously-skip-permissions"]);
+    expect(inv.args).not.toContain("PROMPT-TEXT");
+    expect(inv.options.windowsHide).toBe(true);
   });
 });
 

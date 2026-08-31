@@ -45,7 +45,7 @@ function runHook(bundlePath, input, options) {
 }
 
 function runHookResult(bundlePath, input, options) {
-  const result = spawnSync(process.execPath, [bundlePath], {
+  const result = spawnSync(process.execPath, [bundlePath, ...(options.hookArgs ?? [])], {
     cwd: options.cwd,
     env: options.env,
     encoding: "utf8",
@@ -128,6 +128,9 @@ export function classifyAgentCommandError(error) {
   if (/no credits remaining/i.test(text) || /insufficient.?quota/i.test(text)) {
     return "External dependency (Codex API credits): add credits at https://platform.openai.com/settings/organization/billing/ and retry runtime:validate.";
   }
+  if (/RESOURCE_EXHAUSTED|quota exceeded|gemini.+quota/i.test(text)) {
+    return "External dependency (Gemini API quota): retry later or skip with --skip-live-antigravity.";
+  }
   return null;
 }
 
@@ -157,6 +160,26 @@ export function runStructuredFilesystemViaHooks(preToolPath, commands, options) 
 
 export function skipLiveCodexRequested(argv = process.argv, env = process.env) {
   return argv.includes("--skip-live-codex") || env.MEMOREE_VALIDATION_SKIP_LIVE_CODEX === "1";
+}
+
+export function skipLiveAntigravityRequested(argv = process.argv, env = process.env) {
+  return argv.includes("--skip-live-antigravity") || env.MEMOREE_VALIDATION_SKIP_LIVE_ANTIGRAVITY === "1";
+}
+
+export function antigravityCliAvailable() {
+  try {
+    execFileSync("agy", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Isolated-HOME only. Never writes the operator ~/.gemini settings. */
+export function writeIsolatedAntigravityGeminiSettings(isolatedHome) {
+  const dir = join(isolatedHome, ".gemini", "antigravity-cli");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeFileSync(join(dir, "settings.json"), `${JSON.stringify({ modelProvider: "gemini" }, null, 2)}\n`);
 }
 
 export function hookUpdatedInput(stdout) {
@@ -382,11 +405,13 @@ function inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2,
 
 export async function validateRuntime(options = {}) {
   const skipLiveCodex = options.skipLiveCodex === true;
+  const skipLiveAntigravity = options.skipLiveAntigravity === true;
   assertNoActiveAgentSessions();
   const { runtimeDir } = runtimePaths();
   const cli = join(runtimeDir, "bundle", "cli.js");
   const claudeBundle = join(runtimeDir, "harnesses", "claude-code", "bundle");
   const codexBundle = join(runtimeDir, "harnesses", "codex", "bundle");
+  const antigravityBundle = join(runtimeDir, "harnesses", "antigravity", "bundle");
   const requiredBundles = [
     cli,
     join(claudeBundle, "capture.js"),
@@ -404,6 +429,13 @@ export async function validateRuntime(options = {}) {
     join(codexBundle, "graph-on-stop.js"),
     join(codexBundle, "pre-tool-use.js"),
     join(codexBundle, "command", "memoree.js"),
+    join(antigravityBundle, "pre-invocation.js"),
+    join(antigravityBundle, "pre-tool-use.js"),
+    join(antigravityBundle, "capture.js"),
+    join(antigravityBundle, "stop.js"),
+    join(antigravityBundle, "mcp-server.js"),
+    join(antigravityBundle, "graph-on-stop.js"),
+    join(antigravityBundle, "session-start-setup.js"),
   ];
   for (const bundle of requiredBundles) {
     assert(existsSync(bundle), `Installed runtime bundle is missing: ${bundle}`);
@@ -758,6 +790,45 @@ export async function validateRuntime(options = {}) {
       source: "startup",
       model: "runtime-validation",
     }, { cwd: repository, env }), "Codex SessionStart setup");
+    status("checking Antigravity PreToolUse steer, Stop, and PreInvocation");
+    const agySteer = runHookResult(join(antigravityBundle, "pre-tool-use.js"), {
+      toolCall: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
+    }, { cwd: repository, env, hookArgs: ["PreToolUse"] });
+    assertHookExitZero(agySteer, "Antigravity PreToolUse steer");
+    const agySteerBody = JSON.parse(agySteer.stdout.trim() || "{}");
+    assert(agySteerBody.decision === "deny" && typeof agySteerBody.reason === "string",
+      `Antigravity PreToolUse must deny the mount; stdout=${agySteer.stdout.slice(0, 400)}`);
+    assert(agySteerBody.decision !== "allow", "Antigravity PreToolUse must never return allow");
+    const agyPass = runHookResult(join(antigravityBundle, "pre-tool-use.js"), {
+      toolCall: { name: "run_command", args: { CommandLine: "ls /tmp" } },
+    }, { cwd: repository, env, hookArgs: ["PreToolUse"] });
+    assertHookExitZero(agyPass, "Antigravity PreToolUse unrelated");
+    assert(JSON.parse(agyPass.stdout.trim() || "{}").decision === undefined,
+      `Antigravity PreToolUse must leave unrelated tools alone; stdout=${agyPass.stdout.slice(0, 400)}`);
+    const agyStop = runHookResult(join(antigravityBundle, "stop.js"), {}, {
+      cwd: repository, env, hookArgs: ["Stop"],
+    });
+    assertHookExitZero(agyStop, "Antigravity Stop");
+    assert(JSON.parse(agyStop.stdout.trim() || "{}").decision === "stop",
+      `Antigravity Stop must not continue; stdout=${agyStop.stdout.slice(0, 400)}`);
+    const agyPre = runHookResult(join(antigravityBundle, "pre-invocation.js"), {
+      conversationId: crypto.randomUUID(),
+      invocationNum: 0,
+      workspacePaths: [repository],
+    }, { cwd: repository, env: { ...env, MEMOREE_WIKI_WORKER: "1" }, hookArgs: ["PreInvocation"] });
+    assertHookExitZero(agyPre, "Antigravity PreInvocation wiki-worker short-circuit");
+    const mcpInit = spawnSync(process.execPath, [join(antigravityBundle, "mcp-server.js")], {
+      cwd: repository,
+      env,
+      encoding: "utf8",
+      input: (() => {
+        const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+        return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+      })(),
+      timeout: 10_000,
+    });
+    assert(mcpInit.status === 0 || (mcpInit.stdout ?? "").includes("memoree"),
+      `Antigravity MCP initialize failed: status=${mcpInit.status} stdout=${(mcpInit.stdout ?? "").slice(0, 400)} stderr=${(mcpInit.stderr ?? "").slice(0, 400)}`);
     const docsIndex = runHookResult(codexPreTool, {
       ...hookBase,
       tool_input: { command: "cat ~/.memoree/memory/docs/index.md" },
@@ -1092,6 +1163,27 @@ export async function validateRuntime(options = {}) {
       status("skipping live Codex exec (--skip-live-codex)");
     }
 
+    const runLiveAntigravity = !skipLiveAntigravity
+      && antigravityCliAvailable()
+      && Boolean(env.GEMINI_API_KEY?.trim());
+    if (runLiveAntigravity) {
+      status("running an authenticated Antigravity capture turn (isolated HOME + GEMINI_API_KEY)");
+      writeIsolatedAntigravityGeminiSettings(isolatedHome);
+      const agyIdentifier = crypto.randomUUID();
+      const agyResponse = run("agy", [
+        "-p",
+        lexicalValidationPrompt(agyIdentifier),
+        "--dangerously-skip-permissions",
+      ], { cwd: repository, env, timeout: 180_000 });
+      assertAgentResponseContainsIdentifier(
+        agyResponse,
+        agyIdentifier,
+        "Antigravity capture turn",
+      );
+    } else {
+      status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
+    }
+
     if (skipLiveCodex) {
       // `--bare` skips hooks, so a live `claude -p` cannot search Memoree.
       // Prove the lexical path the product actually uses: Grep with embeddings off.
@@ -1150,7 +1242,10 @@ export async function validateRuntime(options = {}) {
 }
 
 async function main() {
-  await validateRuntime({ skipLiveCodex: skipLiveCodexRequested() });
+  await validateRuntime({
+    skipLiveCodex: skipLiveCodexRequested(),
+    skipLiveAntigravity: skipLiveAntigravityRequested(),
+  });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

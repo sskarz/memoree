@@ -199,6 +199,17 @@ describe("nativeJsonlToRows", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].content).toBe("the only real one");
   });
+
+  it("antigravity role/text JSONL is converted to user and assistant rows", () => {
+    const path = writeJsonl(tmpDir, "agy-role.jsonl", [
+      { role: "user", text: "agy prompt" },
+      { role: "assistant", text: "agy reply" },
+    ]);
+    const rows = nativeJsonlToRows(path, "sid", "antigravity");
+    expect(rows.map(r => r.type)).toEqual(["user_message", "assistant_message"]);
+    expect(rows.map(r => r.content)).toEqual(["agy prompt", "agy reply"]);
+    expect(rows.every(r => r.agent === "antigravity")).toBe(true);
+  });
 });
 
 describe("listLocalSessions", () => {
@@ -334,6 +345,12 @@ describe("detectInstalledAgents + detectHostAgent + encodeCwdClaudeCode", () => 
     expect(installs.map(i => i.agent).sort()).toEqual(["claude_code", "codex"]);
   });
 
+  it("detectInstalledAgents: antigravity brain dirs", async () => {
+    mkdirSync(join(tmpHome, ".gemini", "antigravity", "brain"), { recursive: true });
+    const mod = await importWithMockedHome(tmpHome);
+    expect(mod.detectInstalledAgents().map(i => i.agent)).toEqual(["antigravity"]);
+  });
+
   it("detectHostAgent: returns claude_code via CLAUDECODE=1", async () => {
     delete process.env.CODEX_HOME;
     delete process.env.CODEX_SESSION_ID;
@@ -370,11 +387,23 @@ describe("detectInstalledAgents + detectHostAgent + encodeCwdClaudeCode", () => 
     expect(mod.detectHostAgent()).toBe("codex");
   });
 
+  it("detectHostAgent: returns antigravity via ANTIGRAVITY", async () => {
+    delete process.env.CLAUDECODE;
+    delete process.env.CLAUDE_CODE_ENTRYPOINT;
+    delete process.env.CODEX_HOME;
+    delete process.env.CODEX_SESSION_ID;
+    process.env.ANTIGRAVITY = "1";
+    const mod = await importWithMockedHome(tmpHome);
+    expect(mod.detectHostAgent()).toBe("antigravity");
+  });
+
   it("detectHostAgent: returns null when no agent env vars are set", async () => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_ENTRYPOINT;
     delete process.env.CODEX_HOME;
     delete process.env.CODEX_SESSION_ID;
+    delete process.env.ANTIGRAVITY;
+    delete process.env.AGY_SESSION_ID;
     const mod = await importWithMockedHome(tmpHome);
     expect(mod.detectHostAgent()).toBeNull();
   });

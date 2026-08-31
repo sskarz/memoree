@@ -1,5 +1,5 @@
 /**
- * Claude Code and Codex hook wiring for graph query/.
+ * Claude Code, Codex, and Antigravity MCP hook wiring for graph query/.
  * Asserts routing only: the VFS was reached. Product ranking lives in
  * graph-query-and-hygiene.test.ts.
  */
@@ -181,5 +181,19 @@ describe("harness wiring: graph query/", () => {
       },
     );
     expect(decision?.command).toContain("query/");
+  });
+
+  it("Antigravity MCP memoree_read of graph/query/store is answered by the VFS", async () => {
+    const { runMemoreeTool } = await import("../../src/mcp/vfs-tools.js");
+    const result = await runMemoreeTool("memoree_read", { path: "graph/query/store" }, cwd, async (input) => {
+      return processCodexPreToolUse(input, {
+        config: dummyConfig,
+        createApi: vi.fn(() => ({ query: vi.fn() })) as any,
+        tryGraphReadFn: (cmd, graphCwd) => tryGraphRead(cmd, graphCwd, vfsDeps),
+        logFn: vi.fn(),
+      });
+    });
+    expect(result.ok).toBe(true);
+    expect(result.text).toContain(PERSIST);
   });
 });

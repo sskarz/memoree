@@ -19,6 +19,7 @@ export const STAGED_ENTRIES = [
   ".claude-plugin",
   "harnesses/claude-code",
   "harnesses/codex",
+  "harnesses/antigravity",
   "embeddings",
   "scripts/ensure-tree-sitter.mjs",
 ] as const;

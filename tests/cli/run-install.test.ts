@@ -11,8 +11,10 @@ function runtime(overrides: Partial<InstallRuntime> = {}): Partial<InstallRuntim
     detectPlatforms: () => [{ id: "claude", markerDir: "/home/.claude" }],
     claudeCliAvailable: () => true,
     codexBundleExists: () => true,
+    antigravityBundleExists: () => true,
     installClaude: vi.fn(),
     installCodex: vi.fn(),
+    installAntigravity: vi.fn(),
     initializeStorage: async () => "/home/.memoree/memoree.sqlite3",
     installEmbeddings: vi.fn(),
     preloadEmbeddingModel: async () => undefined,
@@ -79,7 +81,7 @@ describe("runInstall", () => {
   it("throws when no harness marker is present", async () => {
     await expect(runInstall(["--no-embeddings"], runtime({
       detectPlatforms: () => [],
-    }))).rejects.toThrow(/No Claude Code or Codex installation found/);
+    }))).rejects.toThrow(/No Claude Code, Codex, or Antigravity installation found/);
   });
 
   it("throws when every detected harness is skipped", async () => {
@@ -157,6 +159,40 @@ describe("runInstall", () => {
     expect(logs).toContain("Then run `npx @sskarz/memoree doctor`.");
     expect(markDocsHintShown).toHaveBeenCalledOnce();
   });
+
+  it("installs Antigravity when it is the only detected harness", async () => {
+    const installAntigravity = vi.fn();
+    const result = await runInstall(["--no-embeddings"], runtime({
+      detectPlatforms: () => [{ id: "antigravity", markerDir: "/home/.gemini" }],
+      installAntigravity,
+    }));
+    expect(result.wired).toEqual(["antigravity"]);
+    expect(installAntigravity).toHaveBeenCalledWith({ packageRoot: "/durable/pkg" });
+  });
+
+  it("skips Antigravity when the staged bundle is missing", async () => {
+    const installAntigravity = vi.fn();
+    const result = await runInstall(["--no-embeddings"], runtime({
+      detectPlatforms: () => [
+        { id: "claude", markerDir: "/home/.claude" },
+        { id: "antigravity", markerDir: "/home/.gemini" },
+      ],
+      antigravityBundleExists: () => false,
+      installAntigravity,
+    }));
+    expect(result.wired).toEqual(["claude"]);
+    expect(installAntigravity).not.toHaveBeenCalled();
+  });
+
+  it("prints Antigravity restart next-steps", async () => {
+    const logs: string[] = [];
+    await runInstall(["--no-embeddings"], runtime({
+      detectPlatforms: () => [{ id: "antigravity", markerDir: "/home/.gemini" }],
+      docsHintShown: () => true,
+      log: line => { logs.push(line); },
+    }));
+    expect(logs).toContain("Restart Antigravity (IDE and/or `agy`) so Memoree MCP tools and hooks load.");
+  });
 });
 
 describe("installPlatform", () => {
@@ -172,6 +208,12 @@ describe("installPlatform", () => {
     const installCodex = vi.fn();
     installPlatform("codex", runtime({ installCodex }));
     expect(installCodex).toHaveBeenCalledWith({ packageRoot: "/durable/pkg" });
+  });
+
+  it("stages then installs Antigravity from the durable copy", () => {
+    const installAntigravity = vi.fn();
+    installPlatform("antigravity", runtime({ installAntigravity }));
+    expect(installAntigravity).toHaveBeenCalledWith({ packageRoot: "/durable/pkg" });
   });
 });
 

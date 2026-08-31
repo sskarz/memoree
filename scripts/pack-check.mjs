@@ -18,6 +18,7 @@ export const REQUIRED_FILES_FIELD = [
   "bundle/",
   "harnesses/claude-code/",
   "harnesses/codex/",
+  "harnesses/antigravity/",
   "embeddings/",
   ".claude-plugin/",
   "scripts/ensure-tree-sitter.mjs",
@@ -32,6 +33,9 @@ export const REQUIRED_TRACKED_FILES = [
   "harnesses/claude-code/hooks/hooks.json",
   "harnesses/codex/.codex-plugin/plugin.json",
   "harnesses/codex/hooks/hooks.json",
+  "harnesses/antigravity/.antigravity-plugin/plugin.json",
+  "harnesses/antigravity/plugin.json",
+  "harnesses/antigravity/hooks/hooks.json",
   "scripts/ensure-tree-sitter.mjs",
   "README.md",
   "LICENSE",
@@ -49,6 +53,8 @@ export const REQUIRED_ARTIFACT_FILES = [
   "harnesses/claude-code/bundle/session-end.js",
   "harnesses/codex/bundle/session-start.js",
   "harnesses/codex/bundle/capture.js",
+  "harnesses/antigravity/bundle/pre-invocation.js",
+  "harnesses/antigravity/bundle/mcp-server.js",
   "embeddings/embed-daemon.js",
 ];
 
@@ -127,9 +133,11 @@ export function checkTarballListing(names) {
     ".claude-plugin/marketplace.json",
     "harnesses/claude-code/.claude-plugin/plugin.json",
     "harnesses/codex/.codex-plugin/plugin.json",
+    "harnesses/antigravity/.antigravity-plugin/plugin.json",
     "bundle/cli.js",
     "harnesses/claude-code/bundle/session-start.js",
     "harnesses/codex/bundle/session-start.js",
+    "harnesses/antigravity/bundle/pre-invocation.js",
     "scripts/ensure-tree-sitter.mjs",
   ]) {
     if (!has(rel)) errors.push(`tarball missing ${rel}`);

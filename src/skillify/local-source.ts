@@ -19,7 +19,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionRow } from "./extractors/index.js";
 
-export type LocalAgent = "claude_code" | "codex";
+export type LocalAgent = "claude_code" | "codex" | "antigravity";
 
 export interface AgentInstall {
   agent: LocalAgent;
@@ -64,6 +64,19 @@ export function detectInstalledAgents(): AgentInstall[] {
     });
   }
 
+  for (const root of [
+    join(HOME, ".gemini", "antigravity", "brain"),
+    join(HOME, ".gemini", "antigravity-cli", "brain"),
+  ]) {
+    if (existsSync(root)) {
+      installs.push({
+        agent: "antigravity",
+        sessionRoot: root,
+        encodeCwd: () => "__cwd_unknown__",
+      });
+    }
+  }
+
   return installs;
 }
 
@@ -76,6 +89,7 @@ export function detectInstalledAgents(): AgentInstall[] {
 export function detectHostAgent(): LocalAgent | null {
   if (process.env.CLAUDECODE === "1" || process.env.CLAUDE_CODE_ENTRYPOINT) return "claude_code";
   if (process.env.CODEX_HOME || process.env.CODEX_SESSION_ID) return "codex";
+  if (process.env.ANTIGRAVITY || process.env.AGY_SESSION_ID) return "antigravity";
   return null;
 }
 
@@ -277,6 +291,27 @@ export function nativeJsonlToRows(filePath: string, sessionId: string, agent: st
           pendingAsstText = text;
           pendingAsstTs = ts;
         }
+      }
+    } else {
+      // Antigravity (and other) JSONL: { role, text|content }
+      const role = String(obj?.role ?? "").toLowerCase();
+      const text = typeof obj?.text === "string"
+        ? obj.text
+        : typeof obj?.content === "string"
+          ? obj.content
+          : "";
+      if (role.includes("user") && text.trim()) {
+        flushAssistant();
+        rows.push({
+          type: "user_message",
+          content: text,
+          creation_date: ts,
+          session_id: sessionId,
+          agent,
+        });
+      } else if ((role.includes("assistant") || role.includes("model")) && text.trim()) {
+        pendingAsstText = text;
+        pendingAsstTs = ts;
       }
     }
   }

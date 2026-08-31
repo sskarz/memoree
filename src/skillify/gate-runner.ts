@@ -8,6 +8,7 @@
  * Per-agent invocation:
  *   claude_code → `claude -p <prompt> --no-session-persistence --model haiku --permission-mode bypassPermissions`
  *   codex       → `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`
+ *   antigravity → `agy -p <prompt> --dangerously-skip-permissions` (user Google login)
  *
  * The worker passes a verdict-write path inside the prompt; the runner
  * captures stdout regardless so the worker's stdout-fallback path still
@@ -19,7 +20,7 @@ import { execFileSync as runChildProcess } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export type Agent = "claude_code" | "codex";
+export type Agent = "claude_code" | "codex" | "antigravity";
 
 export interface GateRunOptions {
   agent: Agent;
@@ -79,6 +80,14 @@ export function findAgentBin(agent: Agent): string {
         join(home, ".local", "bin", "codex"),
         "/opt/homebrew/bin/codex",
       ]) ?? "/usr/local/bin/codex";
+    case "antigravity":
+      return firstExistingPath([
+        join(home, ".local", "bin", "agy"),
+        "/usr/local/bin/agy",
+        "/usr/bin/agy",
+        join(home, ".npm-global", "bin", "agy"),
+        "/opt/homebrew/bin/agy",
+      ]) ?? join(home, ".local", "bin", "agy");
   }
 }
 
@@ -96,6 +105,11 @@ export function buildArgs(agent: Agent, prompt: string, opts: GateRunOptions): s
         "exec",
         "--dangerously-bypass-approvals-and-sandbox",
         prompt,
+      ];
+    case "antigravity":
+      return [
+        "-p", prompt,
+        "--dangerously-skip-permissions",
       ];
   }
 }

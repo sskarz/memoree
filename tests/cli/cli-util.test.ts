@@ -209,7 +209,7 @@ describe("readVersionStamp / writeVersionStamp", () => {
 
 describe("detectPlatforms / allPlatformIds", () => {
   it("allPlatformIds returns the canonical platform set", () => {
-    expect(allPlatformIds()).toEqual(["claude", "codex"]);
+    expect(allPlatformIds()).toEqual(["claude", "codex", "antigravity"]);
   });
 
   it("detectPlatforms returns only platforms whose marker dir exists right now", () => {

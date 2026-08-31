@@ -67,9 +67,11 @@ describe("pack-check", () => {
       "package/.claude-plugin/marketplace.json",
       "package/harnesses/claude-code/.claude-plugin/plugin.json",
       "package/harnesses/codex/.codex-plugin/plugin.json",
+      "package/harnesses/antigravity/.antigravity-plugin/plugin.json",
       "package/bundle/cli.js",
       "package/harnesses/claude-code/bundle/session-start.js",
       "package/harnesses/codex/bundle/session-start.js",
+      "package/harnesses/antigravity/bundle/pre-invocation.js",
       "package/scripts/ensure-tree-sitter.mjs",
     ])).toEqual([]);
   });

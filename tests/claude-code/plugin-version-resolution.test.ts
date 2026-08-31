@@ -38,6 +38,7 @@ interface AgentLayout {
 const AGENTS: AgentLayout[] = [
   { agent: "claude-code", bundleDir: resolve(REPO_ROOT, "harnesses", "claude-code", "bundle"), manifestDir: ".claude-plugin" },
   { agent: "codex",       bundleDir: resolve(REPO_ROOT, "harnesses", "codex", "bundle"),       manifestDir: ".codex-plugin" },
+  { agent: "antigravity", bundleDir: resolve(REPO_ROOT, "harnesses", "antigravity", "bundle"), manifestDir: ".antigravity-plugin" },
 ];
 
 describe("plugin_version stamps a non-empty value for every shipped agent", () => {
@@ -62,6 +63,8 @@ describe("plugin_version is wired into every agent's capture INSERT", () => {
     ["claude-code capture", resolve(REPO_ROOT, "harnesses", "claude-code", "bundle", "capture.js")],
     ["codex capture",       resolve(REPO_ROOT, "harnesses", "codex", "bundle", "capture.js")],
     ["codex stop",          resolve(REPO_ROOT, "harnesses", "codex", "bundle", "stop.js")],
+    ["antigravity capture", resolve(REPO_ROOT, "harnesses", "antigravity", "bundle", "capture.js")],
+    ["antigravity stop",    resolve(REPO_ROOT, "harnesses", "antigravity", "bundle", "stop.js")],
   ];
 
   it.each(CAPTURE_BUNDLES)("%s INSERT lists plugin_version column", (_label, path) => {
@@ -82,6 +85,7 @@ describe("plugin_version is wired into every agent's session-start placeholder I
   const PLACEHOLDER_BUNDLES: Array<[string, string]> = [
     ["claude-code session-start", resolve(REPO_ROOT, "harnesses", "claude-code", "bundle", "session-start.js")],
     ["codex session-start-setup", resolve(REPO_ROOT, "harnesses", "codex", "bundle", "session-start-setup.js")],
+    ["antigravity session-start-setup", resolve(REPO_ROOT, "harnesses", "antigravity", "bundle", "session-start-setup.js")],
   ];
 
   it.each(PLACEHOLDER_BUNDLES)("%s placeholder INSERT lists plugin_version column", (_label, path) => {

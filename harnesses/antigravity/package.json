@@ -1,0 +1,6 @@
+{
+  "name": "memoree-antigravity",
+  "version": "0.7.145",
+  "description": "Local-first persistent memory for Google Antigravity powered by Memoree",
+  "type": "module"
+}

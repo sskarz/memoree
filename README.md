@@ -69,9 +69,10 @@ Node.js 22.13+. Never npm link.
 ## What Memoree does
 
 Memoree is a SQLite-backed virtual filesystem at `~/.memoree/memory/`, plus
-hooks on Claude Code and Codex, plus a CLI. Agents read team memory with
-ordinary `cat` / `ls` / `grep` on that mount; the PreToolUse hook rewrites
-those commands into queries. Supported sandboxed tools: `cat`, `ls`, `grep`,
+hooks on Claude Code, Codex, and Antigravity, plus a CLI. Claude Code and
+Codex read team memory with ordinary `cat` / `ls` / `grep` on that mount; the
+PreToolUse hook rewrites those commands into queries. Antigravity uses Memoree
+MCP tools instead — it cannot rewrite host commands. Supported sandboxed tools: `cat`, `ls`, `grep`,
 `head`, `tail`, `wc`, `find`, `jq`, `echo`, `printf`, `tee`, and lifecycle
 `mv`/`rm` for a single rule or goal file. Do not spawn subagents to read it.
 
@@ -104,13 +105,19 @@ PreToolUse Bash only, PostToolUse capture, Stop (capture + wiki + graph).
 Codex has no SessionEnd and no `recall.js`; instructions live in a managed
 block in `~/.codex/AGENTS.md`.
 
-Claude Code and Codex are the only supported harnesses.
+**Antigravity:** PreInvocation (first-call inject + recall + setup), PreToolUse
+(steer off the virtual mount; never auto-`allow`), PostToolUse capture, Stop
+(capture + wiki + graph). Memory is MCP (`memoree_read`, `memoree_ls`,
+`memoree_grep`, `memoree_write`, `memoree_mv`, `memoree_rm`). Wiki workers
+spawn `agy -p` and inherit the user's Google login.
+
+Claude Code, Codex, and Antigravity are the supported harnesses.
 
 ### CLI
 
 ```
 memoree install|doctor|status|uninstall
-memoree claude|codex install|uninstall
+memoree claude|codex|antigravity install|uninstall
 memoree backend status|check|use <sqlite|postgres>
 memoree embeddings install|enable|disable|status|uninstall
 memoree rules|goal|kpi|docs|context …

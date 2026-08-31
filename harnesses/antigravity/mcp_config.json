@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "memoree": {
+      "command": "node",
+      "args": ["$PLUGIN_ROOT/bundle/mcp-server.js"]
+    }
+  }
+}

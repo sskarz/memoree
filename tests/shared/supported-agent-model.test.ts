@@ -40,6 +40,15 @@ describe("supported agent model dispatch", () => {
     expect(fake.calls[0].args.at(-1)).toBe("S\n\nU");
   });
 
+  it("runs Antigravity in plan mode without requiring an API key", async () => {
+    const fake = fakeSpawn("ok");
+    await agentModel({ agent: "antigravity", role: "judge", bin: "/x/agy", spawnImpl: fake.spawnImpl })("S", "U");
+    expect(fake.calls[0].args).toContain("-p");
+    expect(fake.calls[0].args).toContain("--mode");
+    expect(fake.calls[0].args).toContain("plan");
+    expect(fake.calls[0].env.MEMOREE_CAPTURE).toBe("false");
+  });
+
   it("detects only supported scorer agents", () => {
     expect(detectScorerAgent({ MEMOREE_SKILLOPT_AGENT: "codex" } as never)).toBe("codex");
     expect(detectScorerAgent({ MEMOREE_SKILLOPT_AGENT: "unsupported", CLAUDECODE: "1" } as never)).toBe("claude_code");

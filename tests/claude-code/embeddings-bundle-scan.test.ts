@@ -16,7 +16,7 @@ import { join } from "node:path";
 const repoRoot = process.cwd();
 
 interface AgentBundle {
-  agent: "claude-code" | "codex";
+  agent: "claude-code" | "codex" | "antigravity";
   embedDaemon: string;
   captureHook: string;
 }
@@ -31,6 +31,11 @@ const AGENTS: AgentBundle[] = [
     agent: "codex",
     embedDaemon: join(repoRoot, "harnesses", "codex", "bundle", "embeddings", "embed-daemon.js"),
     captureHook: join(repoRoot, "harnesses", "codex", "bundle", "capture.js"),
+  },
+  {
+    agent: "antigravity",
+    embedDaemon: join(repoRoot, "harnesses", "antigravity", "bundle", "embeddings", "embed-daemon.js"),
+    captureHook: join(repoRoot, "harnesses", "antigravity", "bundle", "capture.js"),
   },
 ];
 

@@ -5,7 +5,7 @@ semantic recall can rank captured sessions and summaries. Embeddings are **on
 by default**. The daemon depends on `@huggingface/transformers`, which pulls
 onnxruntime-node and sharp (~600 MB total with native binaries). Those
 dependencies are installed once into `~/.memoree/embed-deps/` and shared by
-Claude Code and Codex.
+Claude Code, Codex, and Antigravity.
 
 ## Install
 

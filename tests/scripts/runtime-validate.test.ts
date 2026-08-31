@@ -16,6 +16,8 @@ import {
   lexicalValidationPrompt,
   codexSemanticRecallPrompt,
   skipLiveCodexRequested,
+  skipLiveAntigravityRequested,
+  writeIsolatedAntigravityGeminiSettings,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
 import { redactSecrets } from "../../src/hooks/shared/redact.js";
@@ -205,13 +207,16 @@ describe("runtime validation agent responses", () => {
     const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
     expect(source).not.toContain("lexicalToken");
     expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
-    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(6);
+    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(7);
     expect(source).toContain("createValidationWorkspace");
     expect(source).toContain("codexSemanticRecallPrompt");
     expect(source).not.toContain("Do not read files. Do not use tools.");
     expect(source).toContain("removeValidationWorkspace");
     expect(source).toContain("runStructuredFilesystemViaHooks");
     expect(source).toContain("skipLiveCodex");
+    expect(source).toContain("skipLiveAntigravity");
+    expect(source).toContain("pre-invocation.js");
+    expect(source).toContain("mcp-server.js");
     expect(source).toContain("graph/query/store");
     expect(source).toContain("graph/show/persistGraph");
     expect(source).toContain("graph/impact/writeSnapshot");
@@ -238,6 +243,21 @@ describe("runtime validation skip-live-codex", () => {
     expect(skipLiveCodexRequested(["node", "runtime-validate.mjs"], {})).toBe(false);
     expect(skipLiveCodexRequested(["node", "runtime-validate.mjs", "--skip-live-codex"], {})).toBe(true);
     expect(skipLiveCodexRequested(["node", "runtime-validate.mjs"], { MEMOREE_VALIDATION_SKIP_LIVE_CODEX: "1" })).toBe(true);
+  });
+});
+
+describe("runtime validation skip-live-antigravity", () => {
+  it("honors the CLI flag and the environment override", () => {
+    expect(skipLiveAntigravityRequested(["node", "runtime-validate.mjs"], {})).toBe(false);
+    expect(skipLiveAntigravityRequested(["node", "runtime-validate.mjs", "--skip-live-antigravity"], {})).toBe(true);
+    expect(skipLiveAntigravityRequested(["node", "runtime-validate.mjs"], { MEMOREE_VALIDATION_SKIP_LIVE_ANTIGRAVITY: "1" })).toBe(true);
+  });
+
+  it("writes modelProvider only under the isolated home", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-agy-"));
+    writeIsolatedAntigravityGeminiSettings(root);
+    const settings = JSON.parse(readFileSync(join(root, ".gemini", "antigravity-cli", "settings.json"), "utf8"));
+    expect(settings).toEqual({ modelProvider: "gemini" });
   });
 });
 
@@ -270,6 +290,11 @@ describe("runtime validation external agent failures", () => {
   it("classifies Codex credit exhaustion as an external dependency", () => {
     expect(classifyAgentCommandError(new Error("stream disconnected: You have no credits remaining.")))
       .toMatch(/External dependency \(Codex API credits\)/);
+  });
+
+  it("classifies Gemini quota exhaustion as an external dependency", () => {
+    expect(classifyAgentCommandError(new Error("RESOURCE_EXHAUSTED: gemini quota exceeded")))
+      .toMatch(/External dependency \(Gemini API quota\)/);
   });
 
   it("leaves unrelated Codex failures unclassified", () => {

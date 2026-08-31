@@ -1,5 +1,6 @@
 import { uninstallClaude } from "./install-claude.js";
 import { uninstallCodex } from "./install-codex.js";
+import { uninstallAntigravity } from "./install-antigravity.js";
 import { disableEmbeddings, enableEmbeddings, installEmbeddings, statusEmbeddings, uninstallEmbeddings } from "./embeddings.js";
 import { detectPlatforms, log, warn, type PlatformId } from "./util.js";
 import { getVersion } from "./version.js";
@@ -24,7 +25,7 @@ Usage:
   memoree doctor
   memoree status
   memoree uninstall [--all]
-  memoree <claude|codex> install|uninstall
+  memoree <claude|codex|antigravity> install|uninstall
   memoree backend status|check|use <sqlite|postgres>
   memoree embeddings install|enable|disable|status|uninstall [--prune]
   memoree rules|goal|kpi|docs|context ...
@@ -35,7 +36,7 @@ Usage:
   memoree --version
 
 Default installation initializes SQLite and embeddings, stages a durable
-plugin copy, then installs every detected Claude Code and Codex integration.
+plugin copy, then installs every detected Claude Code, Codex, and Antigravity integration.
 \`--all\` is an alias for that default. PostgreSQL is opt-in through
 MEMOREE_POSTGRES_URL.
 `.trim();
@@ -47,7 +48,8 @@ function requireNode(): void {
 
 function uninstallOne(id: PlatformId): void {
   if (id === "claude") uninstallClaude();
-  else uninstallCodex();
+  else if (id === "codex") uninstallCodex();
+  else uninstallAntigravity();
 }
 
 async function main(): Promise<void> {
@@ -103,7 +105,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const platforms: PlatformId[] = ["claude", "codex"];
+  const platforms: PlatformId[] = ["claude", "codex", "antigravity"];
   if (platforms.includes(command as PlatformId)) {
     if (args[1] === "install") { requireNode(); installPlatform(command as PlatformId); }
     else if (args[1] === "uninstall") uninstallOne(command as PlatformId);
@@ -112,7 +114,7 @@ async function main(): Promise<void> {
   }
   if (command === "uninstall") {
     const detected = detectPlatforms().map(p => p.id);
-    const targets: PlatformId[] = detected.length > 0 ? detected : ["claude", "codex"];
+    const targets: PlatformId[] = detected.length > 0 ? detected : ["claude", "codex", "antigravity"];
     for (const target of [...new Set(targets)]) uninstallOne(target);
     return;
   }

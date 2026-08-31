@@ -52,7 +52,7 @@ Calls the virtual filesystem and hygiene functions directly. Example:
 `query/store` should find `persistGraph` even though that word is not in the
 name; `find/store` should not. Hygiene dry-run must not delete files.
 
-**Wiring (Claude Code and Codex hooks)** — does the app actually reach that code?
+**Wiring (Claude Code, Codex, and Antigravity MCP hooks)** — does the app actually reach that code?
 
 ```sh
 npx vitest run tests/shared/harness-wiring.test.ts
@@ -69,7 +69,7 @@ That does **not** mean daily apps already load this code.
 | Gate | Command | What it proves | Needs API keys | Changes daily runtime |
 |---|---|---|---|---|
 | Source | `npm run verify` | TypeScript, runtime-validator JS check, source Vitest | no | no |
-| Built artifacts | `npm run build` then `npm test` | CLI + Claude/Codex/embed bundles and built-artifact tests | no | no |
+| Built artifacts | `npm run build` then `npm test` | CLI + Claude/Codex/Antigravity/embed bundles and built-artifact tests | no | no |
 | Whitespace | `git diff --check` | no leftover spaces | no | no |
 | Promoted-bundle live | `npm run runtime:validate` | Direct hook-bundle invocation + `claude --bare` / `codex exec` against isolated DB; VFS, capture, wiki, embeddings, cross-agent recall | yes | no (reads promoted checkout) |
 | Unaided-hook live | `npm run live:e2e` | `claude -p` **without** `--bare`, `codex exec` **without** `--ephemeral`; SessionStart/capture/Stop/SessionEnd fire on their own | yes | no (reads promoted checkout) |
@@ -144,6 +144,16 @@ npm run runtime:validate -- --skip-live-codex
 ```
 
 Report that skip explicitly. A skipped Codex phase is not a Codex pass.
+
+If `agy` is missing or not signed in:
+
+```sh
+npm run runtime:validate -- --skip-live-antigravity
+```
+
+Report **Antigravity live skipped**, not passed. Product wiki workers inherit
+the user's Google login; do not write `modelProvider: "gemini"` into the
+operator `~/.gemini` settings.
 
 If live e2e fails, the workspace is kept:
 
@@ -232,8 +242,9 @@ for isolated live gates.
 | Symptom | Report |
 |---|---|
 | `verify` / `test` non-zero | failed; do not run live to “make up for it” |
-| Claude/Codex missing or unauthenticated | `LIVE_SKIPPED` with the missing binary/auth, not a live pass |
+| Claude/Codex/Antigravity missing or unauthenticated | `LIVE_SKIPPED` with the missing binary/auth, not a live pass |
 | `--skip-live-codex` | Codex live skipped; Claude/VFS parts may still pass |
+| `--skip-live-antigravity` | Antigravity live `agy` skipped; Node hook-bundle checks still run |
 | identifier missing, 0 events, 0 summaries, non-768 vectors, integrity not ok | live failed |
 | credits / rate limit | failed phase name + stderr excerpt; do not claim success |
 | live e2e kept a workspace | failed; attach that path |
@@ -259,6 +270,11 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Codex capture (UserPromptSubmit / PostToolUse / Stop) | S | V | L | Stop needs a real session file; no `--ephemeral` |
 | Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
 | Codex SessionEnd | — | — | — | Codex has no SessionEnd; wiki is on Stop |
+| Antigravity install/uninstall + named hooks + MCP | S | V | — | Merges `memoree` into `~/.gemini/config/hooks.json` and `mcp_config.json` |
+| Antigravity PreInvocation inject + recall | S | V | — | First `invocationNum` 0/1 claims wake lock; `injectSteps` |
+| Antigravity PreToolUse steer (never `allow`) | S | V | — | `{ decision: "deny", reason }` on the mount; unrelated tools `{}` |
+| Antigravity capture + Stop wiki (`agy -p`) | S | V | — | Live `agy` skipped when missing or not signed in |
+| Antigravity MCP VFS tools | S | V | — | `memoree_read`/`ls`/`grep`/`write`/`mv`/`rm` wrap Codex VFS |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |
@@ -314,5 +330,7 @@ Do not start with Docker. Add a few cases to
 crowded), plus product coverage in
 `tests/shared/graph-query-and-hygiene.test.ts` when the feature is not
 harness-specific. Then add a row to the coverage map above. Promote only when
-you are ready for daily use. Claude Code and Codex remain the only supported
-harnesses.
+you are ready for daily use. Claude Code, Codex, and Antigravity are the
+supported harnesses. Antigravity live `agy` is skipped (`LIVE_SKIPPED`) when
+the CLI is missing or not signed in — do not treat that as a pass, and do not
+document env-key / `modelProvider: "gemini"` as product auth.

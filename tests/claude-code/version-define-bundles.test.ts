@@ -30,6 +30,7 @@ function listBundleFiles(dir: string): string[] {
 const BUNDLE_DIRS = [
   ["claude-code", resolve(ROOT, "harnesses", "claude-code", "bundle")],
   ["codex", resolve(ROOT, "harnesses", "codex", "bundle")],
+  ["antigravity", resolve(ROOT, "harnesses", "antigravity", "bundle")],
 ];
 
 for (const [label, dir] of BUNDLE_DIRS) {

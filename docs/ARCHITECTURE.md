@@ -27,7 +27,8 @@ own process. PostgreSQL URLs are never serialized into worker handoffs.
 
 Agent hooks append events directly to the selected SQL backend. Summary workers
 read those events and invoke the agent's installed CLI; Claude Code synthesis
-uses the local `claude` executable. The embedding daemon runs locally from
+uses the local `claude` executable; Antigravity synthesis uses `agy -p` with
+the user's Google login. The embedding daemon runs locally from
 `~/.memoree/embed-deps`, caches its model under `~/.memoree/models`, and writes
 vectors back through the same storage contract.
 
@@ -58,15 +59,18 @@ filesystem operation.
 |---|---|---|
 | Claude Code | Local marketplace plugin | Session start, capture, recall, stop, session end |
 | Codex | Explicit `memoree codex install` | Session start, capture, recall, stop |
+| Antigravity | Explicit `memoree antigravity install` | PreInvocation inject/recall, MCP memory, capture, stop |
 
-Default onboarding installs Claude Code only. Codex installation, graph setup,
+Claude Code and Codex intercept `~/.memoree/memory` through host-command rewrite.
+Antigravity cannot rewrite tool input, so memory is an MCP server wrapping the
+same VFS. Default onboarding installs every detected harness. Graph setup,
 documentation ingestion, history backfill, and skill mining remain explicit.
 
 ## Repository layout
 
 ```text
 src/                    TypeScript core, CLI, hooks, storage, retrieval
-harnesses/              Claude Code and Codex manifests, skills, and bundles
+harnesses/              Claude Code, Codex, and Antigravity manifests, skills, and bundles
 embeddings/             Standalone local embedding daemon entry
 docs/                   User, architecture, and testing documentation
 scripts/                Build, runtime-management, and verification utilities

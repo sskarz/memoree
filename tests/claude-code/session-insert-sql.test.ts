@@ -76,6 +76,8 @@ const BUNDLES: Array<[string, string]> = [
   ["claude-code capture", resolve(ROOT, "harnesses", "claude-code", "bundle", "capture.js")],
   ["codex capture", resolve(ROOT, "harnesses", "codex", "bundle", "capture.js")],
   ["codex stop", resolve(ROOT, "harnesses", "codex", "bundle", "stop.js")],
+  ["antigravity capture", resolve(ROOT, "harnesses", "antigravity", "bundle", "capture.js")],
+  ["antigravity stop", resolve(ROOT, "harnesses", "antigravity", "bundle", "stop.js")],
 ];
 
 for (const [label, path] of BUNDLES) {

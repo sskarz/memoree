@@ -4,7 +4,7 @@ Memoree doesn't just capture raw events — it also generates an **AI-written wi
 
 ## When summaries are written
 
-Claude Code and Codex fire a wiki worker on two triggers:
+Claude Code, Codex, and Antigravity fire a wiki worker on two triggers:
 
 | Trigger           | When it fires                                                                 |
 |-------------------|-------------------------------------------------------------------------------|
@@ -21,7 +21,7 @@ A per-session JSON sidecar at `~/.claude/hooks/summary-state/<sessionId>.json` t
 
 1. The wiki worker queries the `sessions` table for every event tied to that session.
 2. It builds a structured prompt asking the host agent's CLI to extract entities, decisions, files modified, open questions, etc.
-3. It shells out to that agent's CLI (`claude -p` or `codex exec`) with the prompt; the agent's existing credentials are used.
+3. It shells out to that agent's CLI (`claude -p`, `codex exec`, or `agy -p`) with the prompt; the agent's existing credentials are used. Antigravity inherits the user's Google login and does not require `GEMINI_API_KEY`.
 4. The generated markdown is uploaded to the `memory` table at `/summaries/<user>/<sessionId>.md`. The shared embedding daemon produces the 768-dim `summary_embedding` so the summary is recallable via semantic search.
 
 A lock file at `~/.claude/hooks/summary-state/<sessionId>.lock` prevents two workers from running concurrently for the same session.

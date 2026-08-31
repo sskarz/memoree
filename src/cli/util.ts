@@ -96,7 +96,7 @@ export function readVersionStamp(dir: string): string | null {
   try { return readFileSync(p, "utf-8").trim(); } catch { return null; }
 }
 
-export type PlatformId = "claude" | "codex";
+export type PlatformId = "claude" | "codex" | "antigravity";
 
 export interface DetectedPlatform {
   id: PlatformId;
@@ -106,6 +106,7 @@ export interface DetectedPlatform {
 const PLATFORM_MARKERS: DetectedPlatform[] = [
   { id: "claude", markerDir: join(HOME, ".claude") },
   { id: "codex", markerDir: join(HOME, ".codex") },
+  { id: "antigravity", markerDir: join(HOME, ".gemini") },
 ];
 
 export function detectPlatforms(): DetectedPlatform[] {

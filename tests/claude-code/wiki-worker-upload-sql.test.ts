@@ -17,6 +17,7 @@ const ROOT = process.cwd();
 const BUNDLES: Array<[string, string]> = [
   ["claude-code", resolve(ROOT, "harnesses", "claude-code", "bundle", "wiki-worker.js")],
   ["codex", resolve(ROOT, "harnesses", "codex", "bundle", "wiki-worker.js")],
+  ["antigravity", resolve(ROOT, "harnesses", "antigravity", "bundle", "wiki-worker.js")],
 ];
 
 for (const [label, path] of BUNDLES) {

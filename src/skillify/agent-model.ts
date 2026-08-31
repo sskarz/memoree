@@ -60,6 +60,17 @@ const DISPATCH: Record<Agent, AgentDispatch> = {
     parse: (out) => out,
     model: () => undefined, // codex uses its configured default model
   },
+  antigravity: {
+    // `--mode plan` blocks mutations; skip-permissions unblocks headless confirms.
+    // Inherits the user's Google login. Do not set GEMINI_API_KEY / modelProvider.
+    buildArgs: (_model, _p, system, user) => [
+      "-p", fold(system, user),
+      "--mode", "plan",
+      "--dangerously-skip-permissions",
+    ],
+    parse: (out) => out,
+    model: () => undefined,
+  },
 };
 
 /** Per-agent, per-role env override: MEMOREE_SKILLOPT_<AGENT>_<ROLE>_MODEL, then _<AGENT>_MODEL. */
@@ -127,10 +138,11 @@ export function agentModel(opts: {
  */
 export function detectScorerAgent(env: NodeJS.ProcessEnv = process.env): Agent {
   const explicit = env[SKILLOPT_ENV.AGENT];
-  if (explicit && (["claude_code", "codex"] as const).includes(explicit as Agent)) {
+  if (explicit && (["claude_code", "codex", "antigravity"] as const).includes(explicit as Agent)) {
     return explicit as Agent;
   }
   if (env.CLAUDECODE === "1" || env.CLAUDE_CODE_ENTRYPOINT) return "claude_code";
   if (env.CODEX_HOME || env.CODEX_SESSION_ID) return "codex";
+  if (env.ANTIGRAVITY || env.AGY_SESSION_ID) return "antigravity";
   return "claude_code";
 }

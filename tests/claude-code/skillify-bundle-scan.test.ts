@@ -10,7 +10,7 @@ import { join } from "node:path";
  */
 
 const ROOT = process.cwd();
-const AGENTS = ["claude-code", "codex"] as const;
+const AGENTS = ["claude-code", "codex", "antigravity"] as const;
 
 function bundlePath(agent: string, file: string): string {
   const base = join(ROOT, "harnesses", agent);
@@ -50,6 +50,11 @@ describe("triggers are wired in each agent's hook bundles", () => {
     const stop = readFileSync(bundlePath("codex", "stop.js"), "utf-8");
     expect(stop).toContain("forceSessionEndTrigger");
   });
+
+  it("antigravity: stop.js fires forceSessionEndTrigger", () => {
+    const stop = readFileSync(bundlePath("antigravity", "stop.js"), "utf-8");
+    expect(stop).toContain("forceSessionEndTrigger");
+  });
 });
 
 describe("each agent records the correct agent name", () => {
@@ -60,6 +65,9 @@ describe("each agent records the correct agent name", () => {
   });
   it("codex passes agent: 'codex' to triggers", () => {
     expect(readFileSync(bundlePath("codex", "stop.js"), "utf-8")).toContain(`"codex"`);
+  });
+  it("antigravity passes agent: 'antigravity' to triggers", () => {
+    expect(readFileSync(bundlePath("antigravity", "stop.js"), "utf-8")).toContain(`"antigravity"`);
   });
 });
 

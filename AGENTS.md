@@ -24,9 +24,10 @@ success.
 
 Production state belongs under `~/.memoree`. Automated tests and validation
 must use isolated temporary homes, config paths, and SQLite databases. Never
-write synthetic records to the real database. Claude Code and Codex are the
-only supported harnesses. The frozen pi snapshot under `experimental/pi/` is
-excluded from builds, tests, CLI discovery, graph extraction, and support.
+write synthetic records to the real database. Claude Code, Codex, and
+Antigravity are the supported harnesses. The frozen pi snapshot under
+`experimental/pi/` is excluded from builds, tests, CLI discovery, graph
+extraction, and support.
 
 `npm run runtime:promote` is never unattended GitHub Actions and never runs
 on a laptop that already hosts daily Claude Code or Codex sessions unless the
@@ -88,8 +89,9 @@ MEMOREE_RUNTIME_DIR="$PWD" npm run runtime:validate
 ```
 
 That proves this checkout’s hook bundles via direct Node invocation plus
-`claude --bare` / `codex exec`. It does **not** prove the installed Claude
-plugin.
+`claude --bare` / `codex exec` / Antigravity hook bundles. It does **not**
+prove the installed Claude plugin. Live `agy -p` is skipped when `agy` is
+missing or not signed in (`LIVE_SKIPPED`), not treated as a pass.
 
 **Unaided hooks** need the promoted/installed plugin:
 
@@ -110,7 +112,11 @@ npm run live:e2e
 ```
 
 If Codex credits are absent: `npm run runtime:validate -- --skip-live-codex`
-and record **Codex live skipped**, not passed.
+and record **Codex live skipped**, not passed. If `agy` is missing or not
+signed in: `npm run runtime:validate -- --skip-live-antigravity` and record
+**Antigravity live skipped**, not passed. Antigravity wiki workers spawn
+`agy -p` and inherit the user's Google login; do not write
+`modelProvider: "gemini"` into the operator `~/.gemini` settings.
 
 ### 4. How to measure
 
@@ -128,7 +134,7 @@ Live is green only when all of these hold:
 
 Fail closed:
 
-- Missing `claude` / `codex` / API key → `LIVE_SKIPPED`, not success
+- Missing `claude` / `codex` / `agy` / API key → `LIVE_SKIPPED`, not success
 - Rate limit or credit error → failed phase + excerpt, not success
 - 0 events after a live session → hooks did not persist; fail
 - Identifier invented by the model instead of echoed → fail
@@ -149,7 +155,7 @@ Fail closed:
 ## Feature inventory for verification agents
 
 Memoree is a SQLite-backed virtual filesystem at `~/.memoree/memory/` plus
-hooks on Claude Code and Codex and a `memoree` CLI.
+hooks on Claude Code, Codex, and Antigravity and a `memoree` CLI.
 
 ### VFS (read through sandboxed `cat` / `ls` / `grep` / `head` / `tail` / `find`)
 
@@ -180,9 +186,18 @@ PreToolUse Bash only, PostToolUse capture, Stop (capture + wiki + graph).
 No SessionEnd and no `recall.js`; Codex gets memory instructions from a
 managed block in `~/.codex/AGENTS.md`.
 
+### Antigravity hooks
+
+PreInvocation (first-call inject + recall + setup spawn), PreToolUse (steer
+off the virtual mount; never `allow`), PostToolUse capture, Stop (capture +
+wiki + graph). Memory is MCP (`memoree_ls` / `memoree_read` / `memoree_grep`
+/ `memoree_write` / `memoree_mv` / `memoree_rm`) wrapping the existing VFS.
+Claude Code and Codex keep intercept-and-rewrite. Wiki workers spawn
+`agy -p --dangerously-skip-permissions` and inherit the user's Google login.
+
 ### CLI (supported)
 
-`install` / `doctor` / `status` / `uninstall`; `claude|codex install|uninstall`;
+`install` / `doctor` / `status` / `uninstall`; `claude|codex|antigravity install|uninstall`;
 `backend`; `embeddings`; `rules` / `goal` / `kpi` / `docs` / `context`;
 `graph build|diff|history|init|pull|uninstall`; `skillify` (status, scope,
 team, install, promote, pull, push, unpull, mine-local, hygiene);
@@ -195,13 +210,14 @@ Coverage of each row, including what live still skips, is the table in
 
 Core TypeScript lives in `src/`. CLI code is under `src/cli/` and
 `src/commands/`; shared hooks are in `src/hooks/shared/`, with Codex-specific
-hooks in `src/hooks/codex/`. Runtime packaging lives in `harnesses/`, docs in
+hooks in `src/hooks/codex/` and Antigravity-specific hooks in
+`src/hooks/antigravity/`. Runtime packaging lives in `harnesses/`, docs in
 `docs/`, utilities in `scripts/`, and QA records in `library/`.
 
 Tests are grouped under `tests/claude-code/`, `tests/codex/`, `tests/cli/`, and
 `tests/shared/`. Put new agent-independent coverage in `tests/shared/`. Build
 outputs (`dist/`, `bundle/`, harness bundles, and `embeddings/`)
-are generated and must not be edited by hand. Do not add a new harness.
+are generated and must not be edited by hand. Do not add a fourth harness.
 
 ## Commands
 
@@ -211,14 +227,15 @@ are generated and must not be edited by hand. Do not add a new harness.
 - `npm run build` type-checks and builds the CLI and supported runtime bundles.
 - `npm test` runs the full source and built-artifact suite.
 - `npm run live:e2e` runs unaided Claude Code + Codex sessions against an
-  isolated DB (needs promoted runtime bundles, authenticated CLIs).
+  isolated DB (needs promoted runtime bundles, authenticated CLIs). Antigravity
+  unaided `agy` is skipped when the CLI is missing or not signed in.
 - `npm run runtime:validate` is the promote-completion live gate (needs
   promoted or `MEMOREE_RUNTIME_DIR` bundles).
 - `npx vitest run tests/shared/atomic-write.test.ts` targets one test file.
 - `npx vitest run tests/shared/graph-query-and-hygiene.test.ts` is the isolated
   VFS/product walkthrough for graph `query/` and skill hygiene.
-- `npx vitest run tests/shared/harness-wiring.test.ts` checks Claude Code and
-  Codex hook routing only. See `docs/TESTING.md`.
+- `npx vitest run tests/shared/harness-wiring.test.ts` checks Claude Code,
+  Codex, and Antigravity MCP hook routing only. See `docs/TESTING.md`.
 - `git diff --check` catches whitespace errors before commit.
 
 ## Code and Tests

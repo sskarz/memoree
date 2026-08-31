@@ -20,7 +20,7 @@ import { join } from "node:path";
  * Covers both supported harnesses that register graph-on-stop.
  */
 const REPO_ROOT = join(__dirname, "..", "..", "..");
-const HARNESSES = ["claude-code", "codex"];
+const HARNESSES = ["claude-code", "codex", "antigravity"];
 
 describe("graph-on-stop shipped bundle (tree-sitter isolation)", () => {
   const built = HARNESSES.map((h) => ({

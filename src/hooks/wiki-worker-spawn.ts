@@ -82,6 +82,32 @@ export function buildClaudeInvocation(
   };
 }
 
+/** Fixed flags for `agy -p` wiki synthesis. Inherits the user's Google login. */
+const AGY_FLAGS = ["--dangerously-skip-permissions"] as const;
+
+/**
+ * Build the `execFileSync` descriptor for the summary-generation `agy -p` call.
+ * Same Windows `.cmd` stdin handling as {@link buildClaudeInvocation}. Does not
+ * set GEMINI_API_KEY or rewrite `modelProvider` — the user must already be signed in.
+ */
+export function buildAgyInvocation(
+  agyBin: string,
+  prompt: string,
+): ClaudeInvocation {
+  if (binNeedsShell(agyBin)) {
+    return {
+      file: shellFile(agyBin),
+      args: ["-p", ...AGY_FLAGS],
+      options: { input: prompt, stdio: ["pipe", "pipe", "pipe"], shell: true, windowsHide: true },
+    };
+  }
+  return {
+    file: agyBin,
+    args: ["-p", prompt, ...AGY_FLAGS],
+    options: { stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
+  };
+}
+
 /**
  * Build an `execFileSync` descriptor for an agent CLI that takes its prompt as
  * the LAST positional arg (Codex `exec … <prompt>`). `flags` are everything

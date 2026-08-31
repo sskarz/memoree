@@ -38,6 +38,7 @@ export function findMemoreeInstalls(home: string = HOME): AgentInstall[] {
   const out: AgentInstall[] = [];
   const fixed: AgentInstall[] = [
     { id: "codex", pluginDir: join(home, ".codex", "memoree") },
+    { id: "antigravity", pluginDir: join(home, ".gemini", "antigravity-cli", "plugins", "memoree") },
   ];
   for (const inst of fixed) {
     if (existsSync(join(inst.pluginDir, "bundle"))) out.push(inst);

@@ -30,6 +30,7 @@ for (const dir of [
   "bundle",
   "harnesses/claude-code/bundle",
   "harnesses/codex/bundle",
+  "harnesses/antigravity/bundle",
 ]) rmSync(dir, { recursive: true, force: true });
 
 async function buildEntries(entries, outdir) {
@@ -96,10 +97,30 @@ const codexEntries = [
   ["src/embeddings/daemon", "embeddings/embed-daemon"],
 ].map(([entry, out]) => ({ entry: `dist/${entry}.js`, out }));
 
+const antigravityEntries = [
+  ["src/hooks/antigravity/pre-invocation", "pre-invocation"],
+  ["src/hooks/antigravity/session-start-setup", "session-start-setup"],
+  ["src/hooks/antigravity/capture", "capture"],
+  ["src/hooks/antigravity/pre-tool-use", "pre-tool-use"],
+  ["src/hooks/antigravity/stop", "stop"],
+  ["src/hooks/antigravity/wiki-worker", "wiki-worker"],
+  ["src/mcp/server", "mcp-server"],
+  ["src/cli/index", "command/memoree"],
+  ["src/hooks/graph-pull-worker", "graph-pull-worker"],
+  ["src/hooks/graph-deps-worker", "graph-deps-worker"],
+  ["src/skillify/skillify-worker", "skillify-worker"],
+  ["src/skillify/hygiene-worker", "hygiene-worker"],
+  ["src/skillify/skillopt-worker", "skillopt-worker"],
+  ["src/shell/memoree-shell", "shell/memoree-shell"],
+  ["src/embeddings/daemon", "embeddings/embed-daemon"],
+].map(([entry, out]) => ({ entry: `dist/${entry}.js`, out }));
+
 await buildEntries(claudeEntries, "harnesses/claude-code/bundle");
 await buildEntries(codexEntries, "harnesses/codex/bundle");
+await buildEntries(antigravityEntries, "harnesses/antigravity/bundle");
 await buildGraphOnStop("harnesses/claude-code/bundle");
 await buildGraphOnStop("harnesses/codex/bundle");
+await buildGraphOnStop("harnesses/antigravity/bundle");
 
 await build({
   entryPoints: { cli: "dist/src/cli/index.js" },
@@ -127,4 +148,4 @@ await build({
 });
 chmodSync("embeddings/embed-daemon.js", 0o755);
 
-console.error(`Built: ${claudeEntries.length} Claude Code + ${codexEntries.length} Codex + 1 CLI + 1 embedding daemon`);
+console.error(`Built: ${claudeEntries.length} Claude Code + ${codexEntries.length} Codex + ${antigravityEntries.length} Antigravity + 1 CLI + 1 embedding daemon`);

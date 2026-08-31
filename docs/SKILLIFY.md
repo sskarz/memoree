@@ -82,7 +82,7 @@ Cross-project caveat: same `(name, author)` from two different projects collides
 
 ## Auto-pull at SessionStart
 
-Claude Code and Codex auto-run the equivalent of `memoree skillify pull --all-users --to global` at the start of every session, so teammate-mined skills become available without a manual pull.
+Claude Code, Codex, and Antigravity auto-run the equivalent of `memoree skillify pull --all-users --to global` at the start of every session, so teammate-mined skills become available without a manual pull.
 
 There is no throttle window. File writes inside `runPull` are idempotent (skipped when the local SKILL.md version is at-or-newer than remote), symlink fan-out is `lstat`-checked, and manifest writes are dedup'd — so the per-call cost is one SQL round-trip plus a handful of `existsSync` syscalls when nothing has changed. Bounded by a 5-second timeout so a slow Memoree never blocks SessionStart. All failures (network, missing table, auth) are swallowed silently and the session starts regardless.
 

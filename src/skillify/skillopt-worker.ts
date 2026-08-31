@@ -30,7 +30,7 @@ const log = (m: string) => _log("skillopt-worker", m);
  * findAgentBin. Done in Node
  * (no shell / subprocess) so an env-derived agent name can't reach a command line.
  */
-const AGENT_CMD: Record<string, string> = { claude_code: "claude", codex: "codex" };
+const AGENT_CMD: Record<string, string> = { claude_code: "claude", codex: "codex", antigravity: "agy" };
 function resolveAgentBin(agent: string): string | undefined {
   // Only resolve KNOWN agents — no `?? agent` fallback. `agent` traces back to the
   // MEMOREE_SKILLOPT_AGENT env var; feeding an arbitrary value to a command is a

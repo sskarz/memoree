@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { WIKI_PROMPT_TEMPLATE as CLAUDE_TEMPLATE } from "../../src/hooks/spawn-wiki-worker.js";
 import { WIKI_PROMPT_TEMPLATE as CODEX_TEMPLATE } from "../../src/hooks/codex/spawn-wiki-worker.js";
+import { WIKI_PROMPT_TEMPLATE as AGY_TEMPLATE } from "../../src/hooks/antigravity/spawn-wiki-worker.js";
 
 /**
  * Contract lock-in for the `## Next Steps` instruction in the wiki-worker
@@ -15,6 +16,7 @@ import { WIKI_PROMPT_TEMPLATE as CODEX_TEMPLATE } from "../../src/hooks/codex/sp
 const TEMPLATES = {
   claude: CLAUDE_TEMPLATE,
   codex: CODEX_TEMPLATE,
+  antigravity: AGY_TEMPLATE,
 } as const;
 
 /** Extract the body of the `## Next Steps` section (up to the next blank-line

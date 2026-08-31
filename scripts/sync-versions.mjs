@@ -24,6 +24,7 @@ export const SCALAR_TARGETS = [
   "harnesses/claude-code/.claude-plugin/plugin.json",
   "harnesses/codex/package.json",
   "harnesses/codex/.codex-plugin/plugin.json",
+  "harnesses/antigravity/package.json",
 ];
 
 // Marketplace target: has BOTH metadata.version AND every plugins[].version.

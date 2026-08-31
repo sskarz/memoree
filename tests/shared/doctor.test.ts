@@ -67,6 +67,8 @@ describe("memoree doctor", () => {
     expect(fixture.lines.some(line => line.startsWith("ok  plugin:"))).toBe(true);
     expect(fixture.lines.some(line => line.startsWith("ok  Codex:"))).toBe(true);
     expect(fixture.lines.some(line => line.startsWith("ok  Codex hook bundles:"))).toBe(true);
+    expect(fixture.lines.some(line => line.startsWith("ok  Antigravity:"))).toBe(true);
+    expect(fixture.lines.some(line => line.startsWith("ok  Antigravity hook bundles:"))).toBe(true);
   });
 
   it("passes PostgreSQL and enabled local embeddings without printing its URL", async () => {
@@ -137,5 +139,35 @@ describe("memoree doctor", () => {
       existsSync: path => !String(path).includes(".codex"),
     })).toBe(0);
     expect(fixture.lines.join("\n")).not.toContain("Codex");
+  });
+
+  it("skips Antigravity checks when the plugin is not installed", async () => {
+    const fixture = baseDeps(sqlite);
+    expect(await runDoctor({
+      ...fixture.deps,
+      existsSync: path => !String(path).includes(".gemini"),
+    })).toBe(0);
+    expect(fixture.lines.join("\n")).not.toContain("Antigravity");
+  });
+
+  it("reports Antigravity binary and hook bundle failures when installed", async () => {
+    const fixture = baseDeps(sqlite);
+    const code = await runDoctor({
+      ...fixture.deps,
+      existsSync: path => {
+        const value = String(path);
+        if (value.includes("/.codex/memoree/bundle")) return false;
+        if (value.includes("antigravity-cli/plugins/memoree/bundle")) return !value.endsWith(".js");
+        return true;
+      },
+      execFileSync: ((file: string, args: readonly string[]) => {
+        if (file === "agy") throw new Error("missing");
+        if (args[0] === "plugin") return "memoree@memoree enabled";
+        return "claude 1";
+      }) as never,
+    });
+    expect(code).toBe(1);
+    expect(fixture.lines.join("\n")).toContain("agy executable not found");
+    expect(fixture.lines.join("\n")).toContain("FAIL  Antigravity hook bundles:");
   });
 });

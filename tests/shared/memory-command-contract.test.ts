@@ -30,6 +30,7 @@ describe("Memoree public sandboxed-command contract", () => {
       buildUnsupportedGuidance(),
       readFileSync(join(repoRoot, "harnesses/codex/skills/memoree-memory/SKILL.md"), "utf8"),
       readFileSync(join(repoRoot, "harnesses/claude-code/skills/memoree-memory/SKILL.md"), "utf8"),
+      readFileSync(join(repoRoot, "harnesses/antigravity/skills/memoree-memory/SKILL.md"), "utf8"),
     ];
 
     for (const surface of surfaces) {

@@ -61,6 +61,11 @@ describe("findMemoreeInstalls", () => {
     }
   });
 
+  it("detects the Antigravity plugin install", () => {
+    fakeBundleAt(join(tmpHome, ".gemini", "antigravity-cli", "plugins", "memoree"));
+    expect(findMemoreeInstalls(tmpHome).map(i => i.id)).toEqual(["antigravity"]);
+  });
+
   it("ignores agent dirs that exist but lack a bundle/ subdir (incomplete install)", () => {
     mkDir(join(tmpHome, ".codex", "memoree")); // exists but no bundle/
     expect(findMemoreeInstalls(tmpHome)).toEqual([]);

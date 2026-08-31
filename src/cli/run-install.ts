@@ -6,6 +6,7 @@ import { writeUserConfig } from "../user-config.js";
 import { docsHintShown, docsInstallLines, markDocsHintShown } from "../docs/install-hint.js";
 import { installClaude, claudeCliAvailable } from "./install-claude.js";
 import { installCodex } from "./install-codex.js";
+import { antigravityBundleExists, installAntigravity } from "./install-antigravity.js";
 import { installEmbeddings, preloadEmbeddingModel } from "./embeddings.js";
 import { detectPlatforms, log, warn, type PlatformId } from "./util.js";
 import {
@@ -22,6 +23,8 @@ export interface InstallRuntime {
   codexBundleExists: typeof codexBundleExists;
   installClaude: typeof installClaude;
   installCodex: typeof installCodex;
+  installAntigravity: typeof installAntigravity;
+  antigravityBundleExists: typeof antigravityBundleExists;
   initializeStorage: typeof initializeStorage;
   installEmbeddings: typeof installEmbeddings;
   preloadEmbeddingModel: typeof preloadEmbeddingModel;
@@ -49,6 +52,8 @@ function resolveRuntime(overrides: Partial<InstallRuntime> = {}): InstallRuntime
     codexBundleExists,
     installClaude,
     installCodex,
+    installAntigravity,
+    antigravityBundleExists,
     initializeStorage,
     installEmbeddings,
     preloadEmbeddingModel,
@@ -97,6 +102,15 @@ function wireCodex(stagedRoot: string, runtime: InstallRuntime): boolean {
   return true;
 }
 
+function wireAntigravity(stagedRoot: string, runtime: InstallRuntime): boolean {
+  if (!runtime.antigravityBundleExists(stagedRoot)) {
+    runtime.warn(`  Antigravity    skipped: bundle missing at ${stagedRoot}/harnesses/antigravity/bundle`);
+    return false;
+  }
+  runtime.installAntigravity({ packageRoot: stagedRoot });
+  return true;
+}
+
 function nextStepLines(wired: PlatformId[]): string[] {
   const lines: string[] = [];
   if (wired.includes("claude")) {
@@ -104,6 +118,9 @@ function nextStepLines(wired: PlatformId[]): string[] {
   }
   if (wired.includes("codex")) {
     lines.push("Restart Codex, then open /hooks and trust Memoree so its hooks can run.");
+  }
+  if (wired.includes("antigravity")) {
+    lines.push("Restart Antigravity (IDE and/or `agy`) so Memoree MCP tools and hooks load.");
   }
   lines.push("Then run `npx @sskarz/memoree doctor`.");
   return lines;
@@ -136,18 +153,22 @@ export async function runInstall(
   const detected = runtime.detectPlatforms().map(platform => platform.id);
   if (detected.length === 0) {
     throw new Error(
-      "No Claude Code or Codex installation found. Install one of them, then rerun `npx @sskarz/memoree install`.",
+      "No Claude Code, Codex, or Antigravity installation found. Install one of them, then rerun `npx @sskarz/memoree install`.",
     );
   }
 
   const wired: PlatformId[] = [];
   for (const target of detected) {
-    const ok = target === "claude" ? wireClaude(stagedRoot, runtime) : wireCodex(stagedRoot, runtime);
+    const ok = target === "claude"
+      ? wireClaude(stagedRoot, runtime)
+      : target === "codex"
+        ? wireCodex(stagedRoot, runtime)
+        : wireAntigravity(stagedRoot, runtime);
     if (ok) wired.push(target);
   }
   if (wired.length === 0) {
     throw new Error(
-      "Failed to wire any harness. Install the Claude Code CLI (`claude`) or Codex, then rerun `npx @sskarz/memoree install`.",
+      "Failed to wire any harness. Install Claude Code (`claude`), Codex, or Antigravity, then rerun `npx @sskarz/memoree install`.",
     );
   }
 
@@ -169,5 +190,6 @@ export function installPlatform(id: PlatformId, overrides: Partial<InstallRuntim
   const runtime = resolveRuntime(overrides);
   const stagedRoot = runtime.stagePackage({ sourceRoot: runtime.packageRootForInstall() });
   if (id === "claude") runtime.installClaude({ source: stagedRoot });
-  else runtime.installCodex({ packageRoot: stagedRoot });
+  else if (id === "codex") runtime.installCodex({ packageRoot: stagedRoot });
+  else runtime.installAntigravity({ packageRoot: stagedRoot });
 }
