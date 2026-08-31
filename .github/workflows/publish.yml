@@ -3,6 +3,12 @@ name: Publish npm
 # Users get new code via `npx -y @sskarz/memoree install`.
 # This job bumps package.json on main and publishes @sskarz/memoree.
 # It never runs runtime:promote.
+#
+# npm Trusted Publisher (OIDC) must match:
+#   repository: sskarz/memoree
+#   workflow filename: publish.yml
+#   environment: memoree github actions
+# Do not set NODE_AUTH_TOKEN / NPM_TOKEN — that overrides OIDC.
 
 on:
   push:
@@ -16,6 +22,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: memoree github actions
     if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):')
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +38,5 @@ jobs:
 
       - name: Bump, publish, and tag
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RELEASE_FROM_REF: ${{ github.event.before }}
         run: node scripts/release-from-main.mjs
