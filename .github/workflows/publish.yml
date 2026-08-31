@@ -1,0 +1,36 @@
+name: Publish npm
+
+# Users get new code via `npx -y @sskarz/memoree install`.
+# This job bumps package.json on main and publishes @sskarz/memoree.
+# It never runs runtime:promote.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: Bump, publish, and tag
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_FROM_REF: ${{ github.event.before }}
+        run: node scripts/release-from-main.mjs

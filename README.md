@@ -130,7 +130,9 @@ LLM when you run them; they are not part of `install`.
 ## Development and stable runtime
 
 Clone the repository only to change Memoree itself. Everyday use is
-`npx -y @sskarz/memoree install` above.
+`npx -y @sskarz/memoree install` above. Merges to `main` that contain `feat`
+or `fix` commits publish `@sskarz/memoree`; users pick that up by re-running
+install.
 
 ```sh
 git clone https://github.com/sskarz/memoree.git
@@ -144,8 +146,8 @@ Memoree uses three deliberately separate locations:
 | Location | Purpose |
 |---|---|
 | development checkout | edit code and run source tests |
-| `~/.local/share/memoree/pkg` | durable plugin copy staged by `npx @sskarz/memoree install` |
-| `~/.local/share/memoree-runtime` | detached, committed revision loaded globally by Claude Code and Codex |
+| `~/.local/share/memoree/pkg` | what `npx @sskarz/memoree install` actually runs (Claude/Codex hooks) |
+| `~/.local/share/memoree-runtime` | **developers only** — detached git checkout for `runtime:promote` |
 | `~/.memoree` | durable user database, configuration, graphs, models, and logs |
 
 Never globally link or register the development checkout. Initialize the
@@ -215,16 +217,18 @@ and doctor checks as promotion.
 
 ## Update
 
-Update the development checkout, verify it, commit any local work, and promote
-the desired commit:
+Re-run install. That copies the latest npm package into
+`~/.local/share/memoree/pkg` and rewires Claude Code and Codex:
 
 ```sh
-git pull --ff-only
-npm ci
-npm run verify
-npm run runtime:promote -- origin/main
-npm run runtime:validate
+npx -y @sskarz/memoree install
 ```
+
+Then restart the agent. Codex may ask you to re-trust `/hooks`.
+
+`npm run runtime:promote` is only for people hacking Memoree from a git clone.
+It swaps the developer worktree at `~/.local/share/memoree-runtime`. Everyday
+installs do not use that path and should not run it.
 
 ## Everyday commands
 
