@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, renameSync } from "node:fs";
+import { existsSync, renameSync, cpSync, rmSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 // Regression test for the static tree-sitter import bug (PR #295).
@@ -22,6 +22,20 @@ const TREE_SITTER_NM = join(REPO_ROOT, "node_modules/tree-sitter");
 const TREE_SITTER_NM_HIDDEN = join(REPO_ROOT, "node_modules/.tree-sitter-absent");
 
 const bundleBuilt = existsSync(CLI);
+
+/** Overlayfs (cloud/CI VMs) cannot rename a lower-layer node_modules dir. */
+function relocateDir(from: string, to: string): void {
+  if (!existsSync(from)) return;
+  if (existsSync(to)) rmSync(to, { recursive: true, force: true });
+  try {
+    renameSync(from, to);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EXDEV" && code !== "EPERM") throw err;
+    cpSync(from, to, { recursive: true, force: true });
+    rmSync(from, { recursive: true, force: true });
+  }
+}
 
 function runCli(args: string[]) {
   return spawnSync("node", [CLI, ...args], {
@@ -51,12 +65,16 @@ describe.skipIf(!bundleBuilt)(
       const treeSitterWasPresent = existsSync(TREE_SITTER_NM);
 
       beforeAll(() => {
-        if (treeSitterWasPresent) renameSync(TREE_SITTER_NM, TREE_SITTER_NM_HIDDEN);
+        if (!treeSitterWasPresent) return;
+        relocateDir(TREE_SITTER_NM, TREE_SITTER_NM_HIDDEN);
+        if (existsSync(TREE_SITTER_NM)) {
+          throw new Error("failed to hide node_modules/tree-sitter for the absent-dep suite");
+        }
       });
 
       afterAll(() => {
         if (treeSitterWasPresent && existsSync(TREE_SITTER_NM_HIDDEN)) {
-          renameSync(TREE_SITTER_NM_HIDDEN, TREE_SITTER_NM);
+          relocateDir(TREE_SITTER_NM_HIDDEN, TREE_SITTER_NM);
         }
       });
 

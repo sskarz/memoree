@@ -374,7 +374,9 @@ function defaultRunNpm(specs: string[], cwd: string): void {
  *    an unloadable addon is exactly the false-success we must avoid: it would
  *    stamp the ready marker and the graph would then fail at parse time every
  *    session. Forcing strict makes a load failure throw, so no marker is
- *    written and the next session retries.
+ *    written and the next session retries. `MEMOREE_HEAL_TREE_SITTER=1` is
+ *    set as well: the heal script no-ops published/npx postinstall when cwd
+ *    has no `src/`, and embed-deps is that shape.
  *
  * 2. A MISSING heal script is a FAILURE, not a silent success. The heal is the
  *    only thing that validates the native bindings actually load on this
@@ -389,6 +391,12 @@ export function defaultRunHeal(cwd: string, healScript: string = join(pkgRoot(),
   execFileSync(process.execPath, [healScript], {
     cwd,
     stdio: "inherit",
-    env: { ...process.env, MEMOREE_STRICT_POSTINSTALL: "1" },
+    env: {
+      ...process.env,
+      MEMOREE_STRICT_POSTINSTALL: "1",
+      // embed-deps has no src/; without this the heal would no-op as if it
+      // were an npx postinstall and stamp a false-ready graph marker.
+      MEMOREE_HEAL_TREE_SITTER: "1",
+    },
   });
 }

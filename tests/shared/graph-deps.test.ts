@@ -338,6 +338,7 @@ describe("graph-deps helpers", () => {
       expect(healCall).toBeDefined();
       const healOpts = healCall![2] as { env?: Record<string, string> } | undefined;
       expect(healOpts?.env?.MEMOREE_STRICT_POSTINSTALL).toBe("1");
+      expect(healOpts?.env?.MEMOREE_HEAL_TREE_SITTER).toBe("1");
     });
 
     it("deletes a MATCHING ready marker before repair, so a mid-repair crash leaves no marker", () => {
@@ -436,7 +437,7 @@ describe("graph-deps helpers", () => {
       expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
     });
 
-    it("runs the heal with MEMOREE_STRICT_POSTINSTALL=1 when the script exists", () => {
+    it("runs the heal with STRICT and HEAL env so embed-deps (no src/) still compiles", () => {
       // Use this test file itself as a stand-in "existing script" so the
       // existsSync gate passes; execFileSync is mocked so nothing really runs.
       const present = join(dir, "heal.mjs");
@@ -449,6 +450,7 @@ describe("graph-deps helpers", () => {
       expect(calls[0][1]).toEqual([present]);
       const opts = calls[0][2] as { env?: Record<string, string> };
       expect(opts.env?.MEMOREE_STRICT_POSTINSTALL).toBe("1");
+      expect(opts.env?.MEMOREE_HEAL_TREE_SITTER).toBe("1");
     });
   });
 });

@@ -4,7 +4,7 @@ const execFileSyncMock = vi.hoisted(() => vi.fn());
 
 vi.mock("node:child_process", () => ({ execFileSync: execFileSyncMock }));
 
-import { installClaude, uninstallClaude } from "../../src/cli/install-claude.js";
+import { installClaude, uninstallClaude, claudeCliAvailable } from "../../src/cli/install-claude.js";
 
 function commands(): string[] {
   return execFileSyncMock.mock.calls.map(([, args]) => (args as string[]).join(" "));
@@ -69,6 +69,7 @@ describe("local Claude Code installation", () => {
 
   it("fails with recovery guidance when Claude Code is absent", () => {
     execFileSyncMock.mockImplementation(() => { throw new Error("ENOENT"); });
+    expect(claudeCliAvailable()).toBe(false);
     expect(() => installClaude()).toThrow(/Claude Code CLI/);
   });
 

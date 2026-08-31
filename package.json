@@ -3,7 +3,7 @@
   "version": "0.7.145",
   "description": "Local-first persistent memory for Claude Code and Codex",
   "type": "module",
-  "private": true,
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sskarz/memoree.git"
@@ -11,6 +11,16 @@
   "bin": {
     "memoree": "bundle/cli.js"
   },
+  "files": [
+    "bundle/",
+    "harnesses/claude-code/",
+    "harnesses/codex/",
+    "embeddings/",
+    ".claude-plugin/",
+    "scripts/ensure-tree-sitter.mjs",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "prebuild": "node scripts/sync-versions.mjs && node scripts/clean-build.mjs",
     "build": "tsc && node esbuild.config.mjs",
@@ -23,7 +33,9 @@
     "dup": "jscpd src",
     "check:legacy": "node scripts/check-legacy-names.mjs",
     "check:runtime": "tsc --noEmit --allowJs --checkJs --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck --ignoreConfig --types node --noImplicitAny false scripts/runtime-validate.mjs",
-    "verify": "npm run typecheck && npm run check:runtime && vitest run --config vitest.source.config.ts",
+    "pack:check": "node scripts/pack-check.mjs",
+    "prepack": "npm run build",
+    "verify": "npm run typecheck && npm run check:runtime && npm run pack:check && vitest run --config vitest.source.config.ts",
     "runtime:init": "node scripts/runtime-manager.mjs init",
     "runtime:promote": "node scripts/runtime-manager.mjs promote",
     "runtime:rollback": "node scripts/runtime-manager.mjs rollback",

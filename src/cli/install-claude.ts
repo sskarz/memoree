@@ -27,9 +27,19 @@ function runClaude(args: string[]): ClaudeResult {
   }
 }
 
+export function claudeCliAvailable(): boolean {
+  try {
+    execFileSync("claude", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function requireClaudeCli(): void {
-  try { execFileSync("claude", ["--version"], { stdio: "ignore" }); }
-  catch { throw new Error("Claude Code CLI ('claude') not found on PATH. Install Claude Code first."); }
+  if (!claudeCliAvailable()) {
+    throw new Error("Claude Code CLI ('claude') not found on PATH. Install Claude Code first.");
+  }
 }
 
 function marketplaceSource(output: string): string | null {

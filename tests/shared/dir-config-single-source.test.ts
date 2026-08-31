@@ -30,7 +30,7 @@ const SRC = join(__dir, "..", "..", "src");
  * `.memoree`. Each MUST carry a reason — this list is the audit trail.
  */
 const ALLOWLIST: Record<string, string> = {
-  "cli/index.ts":
+  "cli/run-install.ts":
     "Installation initializes the selected global backend before any repository overlay exists.",
   "commands/doctor.ts":
     "Doctor validates the globally selected database and installation state, independent of the current repository.",

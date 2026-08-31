@@ -207,7 +207,7 @@ are generated and must not be edited by hand. Do not add a new harness.
 
 - `npm ci` installs dependencies; Node.js 22.13 or newer is required.
 - `npm run verify` runs TypeScript checks, the runtime-validator JavaScript
-  check, and source-level Vitest without rebuilding bundles.
+  check, the npm pack manifest check, and source-level Vitest without rebuilding bundles.
 - `npm run build` type-checks and builds the CLI and supported runtime bundles.
 - `npm test` runs the full source and built-artifact suite.
 - `npm run live:e2e` runs unaided Claude Code + Codex sessions against an
