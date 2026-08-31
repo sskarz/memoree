@@ -166,6 +166,10 @@ function assertHookContains(result, needle, phase) {
   );
 }
 
+function assertHookExitZero(result, phase) {
+  assert(result.status === 0, `${phase} hook exited ${result.status}: ${result.stderr || result.stdout}`);
+}
+
 function retryHookUntilContains(run, needle, phase, attempts = 5) {
   let last = { status: 1, stdout: "", stderr: "" };
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -309,7 +313,7 @@ function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexical
   }
 }
 
-function inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2) {
+function inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2, kpiId, kpiText) {
   const db = new DatabaseSync(databasePath, { readOnly: true });
   try {
     const rules = db.prepare(
@@ -324,6 +328,10 @@ function inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2)
     assert(goal?.owner === "runtime-validation-bob", "Runtime validation goal owner move did not persist");
     assert(goal?.status === "closed", "Runtime validation goal soft-close did not persist");
     assert(goal?.content === goalV2, "Runtime validation goal edit did not persist");
+    const kpi = db.prepare(
+      "SELECT content FROM memoree_kpis WHERE goal_id = ? AND kpi_id = ?",
+    ).get(goalId, kpiId);
+    assert(kpi?.content === kpiText, "Runtime validation KPI edit did not persist");
   } finally {
     db.close();
   }
@@ -339,10 +347,18 @@ export async function validateRuntime(options = {}) {
   const requiredBundles = [
     cli,
     join(claudeBundle, "capture.js"),
+    join(claudeBundle, "session-start.js"),
     join(claudeBundle, "session-end.js"),
     join(claudeBundle, "pre-tool-use.js"),
+    join(claudeBundle, "recall.js"),
+    join(claudeBundle, "graph-on-stop.js"),
+    join(claudeBundle, "session-start-setup.js"),
+    join(claudeBundle, "plugin-cache-gc.js"),
     join(codexBundle, "capture.js"),
+    join(codexBundle, "session-start.js"),
+    join(codexBundle, "session-start-setup.js"),
     join(codexBundle, "stop.js"),
+    join(codexBundle, "graph-on-stop.js"),
     join(codexBundle, "pre-tool-use.js"),
     join(codexBundle, "command", "memoree.js"),
   ];
@@ -383,6 +399,7 @@ export async function validateRuntime(options = {}) {
     MEMOREE_SKILLIFY_WORKER: "1",
     MEMOREE_SKILLOPT_DISABLED: "1",
     MEMOREE_SUMMARY_EVERY_N_MSGS: "1000",
+    MEMOREE_RECALL_TIMEOUT_MS: "8000",
     MEMOREE_RUNTIME_VALIDATION: "1",
     MEMOREE_VALIDATION_CLAUDE_HOME: realHome,
     ...(realClaudeConfigDir ? { MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR: realClaudeConfigDir } : {}),
@@ -399,6 +416,9 @@ export async function validateRuntime(options = {}) {
   const goalV1 = `runtime goal ${crypto.randomUUID()}`;
   const goalV2 = `${goalV1} edited`;
   const structuredMarker = crypto.randomUUID();
+  const kpiId = crypto.randomUUID();
+  const kpiV1 = `runtime kpi ${crypto.randomUUID()}`;
+  const kpiV2 = `${kpiV1} verified`;
 
   try {
     mkdirSync(state, { recursive: true });
@@ -416,9 +436,8 @@ export async function validateRuntime(options = {}) {
     writeFileSync(join(repository, "AGENTS.md"), [
       "# Runtime validation",
       "",
-      `Use only Memoree memory rooted at ${env.MEMOREE_MEMORY_PATH}.`,
-      "For memory questions, search that path with grep so the installed Memoree hook can provide the isolated results.",
-      "Do not read or write any other memory location.",
+      "When the user asks you to repeat a private test fact or identifier, reply with that exact UUID from the user message.",
+      "Do not invent identifiers. Do not read files. Do not use tools.",
       "",
     ].join("\n"));
 
@@ -444,6 +463,9 @@ export async function validateRuntime(options = {}) {
       `printf '%s' '${goalV2}' > ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md`,
       `mv ~/.memoree/memory/goal/runtime-validation/opened/${goalId}.md ~/.memoree/memory/goal/runtime-validation-bob/in_progress/${goalId}.md`,
       `rm ~/.memoree/memory/goal/runtime-validation-bob/in_progress/${goalId}.md`,
+      `printf '%s' '${kpiV1}' > ~/.memoree/memory/kpi/${goalId}/${kpiId}.md`,
+      `printf '%s' '${kpiV2}' > ~/.memoree/memory/kpi/${goalId}/${kpiId}.md`,
+      `cat ~/.memoree/memory/kpi/${goalId}/${kpiId}.md`,
     ];
     const vfsResults = runStructuredFilesystemViaHooks(codexPreTool, vfsCommands, vfsHookOptions);
     const failedVfs = vfsResults.find(result => result.status !== 0);
@@ -451,7 +473,10 @@ export async function validateRuntime(options = {}) {
       !failedVfs,
       `Structured VFS command failed (${failedVfs?.status}): ${failedVfs?.command}\n${failedVfs?.stderr || failedVfs?.stdout || ""}`,
     );
-    inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2);
+    inspectStructuredDatabase(databasePath, ruleId, goalId, ruleV2, goalV2, kpiId, kpiV2);
+    const kpiCat = vfsResults[vfsResults.length - 1];
+    assert(kpiCat, "KPI cat result missing");
+    assertHookContains(kpiCat, kpiV2, "Codex KPI cat");
 
     const hookBase = {
       session_id: crypto.randomUUID(), tool_name: "shell", tool_use_id: "runtime-validation",
@@ -544,24 +569,161 @@ export async function validateRuntime(options = {}) {
       "persistGraph",
       "Claude Bash graph query/store",
     );
+    retryHookUntilContains(
+      () => runHookResult(claudePreTool, {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_use_id: "runtime-validation-identity",
+        tool_input: { file_path: "~/.memoree/memory/identity.json" },
+      }, vfsHookOptions),
+      "runtime-validation",
+      "Claude Read identity.json",
+    );
+
+    const graphIndex = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/graph/index.md" },
+    }, vfsHookOptions);
+    assertHookContains(graphIndex, "How to query", "Codex graph index.md");
+    const graphListing = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "ls ~/.memoree/memory/graph" },
+    }, vfsHookOptions);
+    assertHookContains(graphListing, "query/", "Codex ls graph");
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/show/persistGraph" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph show/persistGraph",
+    );
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/impact/writeSnapshot" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph impact/writeSnapshot",
+    );
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/neighborhood/src/snapshot.ts" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph neighborhood/src/snapshot.ts",
+    );
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/layers" },
+      }, vfsHookOptions),
+      "Core",
+      "Codex graph layers",
+    );
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/tour" },
+      }, vfsHookOptions),
+      "writeSnapshot",
+      "Codex graph tour",
+    );
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/path/writeSnapshot/persistGraph" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph path/writeSnapshot/persistGraph",
+    );
+
+    status("checking SessionStart, docs VFS, and graph-on-stop hooks");
+    const claudeSessionStart = runHookResult(join(claudeBundle, "session-start.js"), {
+      session_id: crypto.randomUUID(),
+      cwd: repository,
+      hook_event_name: "SessionStart",
+    }, { cwd: repository, env });
+    assertHookExitZero(claudeSessionStart, "Claude SessionStart");
+    assert(
+      claudeSessionStart.stdout.includes("additionalContext") && /Memoree/i.test(claudeSessionStart.stdout),
+      `Claude SessionStart missing Memoree additionalContext; stdout=${JSON.stringify(claudeSessionStart.stdout).slice(0, 800)}`,
+    );
+    assertHookExitZero(runHookResult(join(claudeBundle, "session-start-setup.js"), {
+      session_id: crypto.randomUUID(),
+      cwd: repository,
+      hook_event_name: "SessionStart",
+    }, { cwd: repository, env }), "Claude SessionStart setup");
+    const codexSessionStart = runHookResult(join(codexBundle, "session-start.js"), {
+      session_id: crypto.randomUUID(),
+      cwd: repository,
+      hook_event_name: "SessionStart",
+      source: "startup",
+      model: "runtime-validation",
+    }, { cwd: repository, env });
+    assertHookExitZero(codexSessionStart, "Codex SessionStart");
+    assertHookExitZero(runHookResult(join(codexBundle, "session-start-setup.js"), {
+      session_id: crypto.randomUUID(),
+      cwd: repository,
+      hook_event_name: "SessionStart",
+      source: "startup",
+      model: "runtime-validation",
+    }, { cwd: repository, env }), "Codex SessionStart setup");
+    const docsIndex = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/docs/index.md" },
+    }, vfsHookOptions);
+    assertHookContains(docsIndex, "Docs Index", "docs VFS index");
+    const docsFind = runHookResult(codexPreTool, {
+      ...hookBase,
+      tool_input: { command: "cat ~/.memoree/memory/docs/find/snapshot" },
+    }, vfsHookOptions);
+    assert(
+      docsFind.status === 0 && (hookBodyContains(docsFind.stdout, "No docs match") || hookBodyContains(docsFind.stdout, "doc(s) match")),
+      `docs VFS find/ failed: ${docsFind.stderr || docsFind.stdout}`,
+    );
+    assertHookExitZero(runHookResult(join(claudeBundle, "graph-on-stop.js"), {
+      cwd: repository,
+      hook_event_name: "Stop",
+    }, { cwd: repository, env: { ...env, MEMOREE_GRAPH_TICK_INTERVAL_MS: "0" } }), "Claude graph-on-stop");
+    assertHookExitZero(runHookResult(join(codexBundle, "graph-on-stop.js"), {
+      cwd: repository,
+      hook_event_name: "Stop",
+    }, { cwd: repository, env: { ...env, MEMOREE_GRAPH_TICK_INTERVAL_MS: "0" } }), "Codex graph-on-stop");
 
     const claudeSession = crypto.randomUUID();
     const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
     status("running an authenticated Claude Code capture turn");
-    const claudeResponse = run("claude", [
-      "-p", claudePrompt,
-      "--safe-mode",
-      "--tools", "",
-      "--settings", claudeSettings,
-      "--output-format", "text",
-      "--no-session-persistence",
-      "--session-id", claudeSession,
-    ], { cwd: repository, env: claudeEnv });
-    assertAgentResponseContainsIdentifier(
-      claudeResponse,
-      semanticIdentifier,
-      "Claude Code capture turn",
-    );
+    let claudeResponse = "";
+    /** @type {unknown} */
+    let captureTurnError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      claudeResponse = run("claude", [
+        "-p", claudePrompt,
+        "--bare",
+        "--safe-mode",
+        "--tools", "",
+        "--settings", claudeSettings,
+        "--output-format", "text",
+        "--no-session-persistence",
+        "--session-id", attempt === 0 ? claudeSession : crypto.randomUUID(),
+      ], { cwd: repository, env: claudeEnv });
+      try {
+        assertAgentResponseContainsIdentifier(
+          claudeResponse,
+          semanticIdentifier,
+          "Claude Code capture turn",
+        );
+        captureTurnError = null;
+        break;
+      } catch (error) {
+        captureTurnError = error;
+      }
+    }
+    if (captureTurnError) throw captureTurnError;
 
     const claudeHookOptions = { cwd: repository, env };
     runHook(join(claudeBundle, "capture.js"), {
@@ -576,17 +738,95 @@ export async function validateRuntime(options = {}) {
       hook_event_name: "Stop",
       last_assistant_message: claudeResponse.trim(),
     }, claudeHookOptions, databasePath);
+    const postToolMarker = crypto.randomUUID();
+    runHook(join(claudeBundle, "capture.js"), {
+      session_id: claudeSession,
+      cwd: repository,
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_use_id: "runtime-validation-post",
+      tool_input: { command: `echo ${postToolMarker}` },
+      tool_response: { stdout: postToolMarker },
+    }, claudeHookOptions);
+    runHook(join(claudeBundle, "capture.js"), {
+      session_id: claudeSession,
+      cwd: repository,
+      hook_event_name: "SubagentStop",
+      last_assistant_message: `subagent recorded ${postToolMarker}`,
+    }, claudeHookOptions);
     runHook(join(claudeBundle, "session-end.js"), {
       session_id: claudeSession,
       cwd: repository,
       hook_event_name: "SessionEnd",
     }, claudeHookOptions);
+    assertHookExitZero(runHookResult(join(claudeBundle, "plugin-cache-gc.js"), {
+      session_id: claudeSession,
+      cwd: repository,
+      hook_event_name: "SessionEnd",
+    }, claudeHookOptions), "Claude plugin-cache-gc");
 
     status("waiting for the Claude Code summary");
     // Summaries are semantic by design and may paraphrase the sentence around
     // the value. The unique UUID is the durable, non-derivable proof that the
     // generated summary retained the captured fact.
     await waitForCapture(databasePath, semanticIdentifier, { requireSummary: true });
+    {
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const captured = db.prepare("SELECT message FROM sessions").all()
+          .map(row => String(row.message ?? "")).join("\n");
+        assert(captured.includes(postToolMarker), "PostToolUse/SubagentStop capture did not persist");
+      } finally {
+        db.close();
+      }
+    }
+
+    status("checking Claude proactive recall hook");
+    /** @type {{ status: number | null, stdout: string, stderr: string }} */
+    let recallResult = { status: 1, stdout: "", stderr: "" };
+    for (let attempt = 0; attempt < 8; attempt++) {
+      // Use a fresh session id so recall does not exclude the captured summary
+      // (`excludePath` is `/summaries/<user>/<session_id>.md`).
+      recallResult = runHookResult(join(claudeBundle, "recall.js"), {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Remember the unusual observatory lantern from prior Memoree work. What exact identifier did we record?",
+      }, { cwd: repository, env });
+      if (recallResult.status === 0 && recallResult.stdout.includes(semanticIdentifier)) break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    }
+    assertHookExitZero(recallResult, "Claude recall");
+    assert(
+      recallResult.stdout.includes(semanticIdentifier),
+      `Claude recall did not inject the captured identifier; stdout=${JSON.stringify(recallResult.stdout).slice(0, 1200)}`,
+    );
+
+    status("checking Claude Grep and Glob intercepts");
+    retryHookUntilContains(
+      () => runHookResult(claudePreTool, {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "PreToolUse",
+        tool_name: "Grep",
+        tool_use_id: "runtime-validation-grep",
+        tool_input: { path: "~/.memoree/memory", pattern: semanticIdentifier },
+      }, vfsHookOptions),
+      semanticIdentifier,
+      "Claude Grep memory",
+    );
+    retryHookUntilContains(
+      () => runHookResult(claudePreTool, {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "PreToolUse",
+        tool_name: "Glob",
+        tool_use_id: "runtime-validation-glob",
+        tool_input: { path: "~/.memoree/memory/" },
+      }, vfsHookOptions),
+      "identity.json",
+      "Claude Glob memory",
+    );
 
     const recallEnv = { ...env, MEMOREE_CAPTURE: "false" };
     const lexicalEnv = { ...env, MEMOREE_EMBEDDINGS: "false" };
@@ -673,6 +913,7 @@ export async function validateRuntime(options = {}) {
       skipLiveCodex
         ? `Search Memoree lexically for marker ${semanticIdentifier} and answer with only the matching identifier.`
         : `Search Memoree lexically for marker ${lexicalIdentifier} and answer with only the matching identifier.`,
+      ...(skipLiveCodex ? ["--bare"] : []),
       "--tools", "",
       "--settings", claudeSettings,
       "--output-format", "text",
@@ -699,7 +940,7 @@ export async function validateRuntime(options = {}) {
     );
     process.stdout.write(
       skipLiveCodex
-        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/, Claude capture/summary/lexical recall.\n`
+        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, Claude capture/summary/recall/Grep/Glob/lexical recall.\n`
         : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
   } finally {

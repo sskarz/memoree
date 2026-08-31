@@ -199,6 +199,15 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("runStructuredFilesystemViaHooks");
     expect(source).toContain("skipLiveCodex");
     expect(source).toContain("graph/query/store");
+    expect(source).toContain("graph/show/persistGraph");
+    expect(source).toContain("graph/impact/writeSnapshot");
+    expect(source).toContain("session-start.js");
+    expect(source).toContain("session-start-setup.js");
+    expect(source).toContain("plugin-cache-gc.js");
+    expect(source).toContain("recall.js");
+    expect(source).toContain("graph-on-stop.js");
+    expect(source).toContain("PostToolUse");
+    expect(source).toContain("SubagentStop");
     expect(source).not.toMatch(/mkdtempSync\(join\(tmpdir\(\)/);
   });
 });
