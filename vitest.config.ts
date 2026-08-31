@@ -90,6 +90,7 @@ export default defineConfig({
         "src/hooks/codex/compatibility-broker.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/codex/session-end.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/codex/transcript.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/notifications/codex-transcript-parser.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/embeddings/client.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/embeddings/nomic.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/embeddings/protocol.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

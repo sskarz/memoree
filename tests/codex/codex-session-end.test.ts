@@ -12,7 +12,7 @@ const wikiLogMock = vi.fn();
 const tryAcquireLockMock = vi.fn();
 const releaseLockMock = vi.fn();
 const markSessionEndedMock = vi.fn();
-const parseTranscriptMock = vi.fn();
+const parseCodexTranscriptMock = vi.fn();
 const appendUsageRecordMock = vi.fn();
 const debugLogMock = vi.fn();
 const forceSessionEndTriggerMock = vi.fn();
@@ -36,8 +36,8 @@ vi.mock("../../src/hooks/summary-state.js", () => ({
   releaseLock: (...a: unknown[]) => releaseLockMock(...a),
   markSessionEnded: (...a: unknown[]) => markSessionEndedMock(...a),
 }));
-vi.mock("../../src/notifications/transcript-parser.js", () => ({
-  parseTranscript: (...a: unknown[]) => parseTranscriptMock(...a),
+vi.mock("../../src/notifications/codex-transcript-parser.js", () => ({
+  parseCodexTranscript: (...a: unknown[]) => parseCodexTranscriptMock(...a),
 }));
 vi.mock("../../src/notifications/usage-tracker.js", () => ({
   appendUsageRecord: (...a: unknown[]) => appendUsageRecordMock(...a),
@@ -68,7 +68,7 @@ beforeEach(() => {
   tryAcquireLockMock.mockReset().mockReturnValue(true);
   releaseLockMock.mockReset();
   markSessionEndedMock.mockReset();
-  parseTranscriptMock.mockReset().mockReturnValue({ memorySearchCount: 0, memorySearchBytes: 0 });
+  parseCodexTranscriptMock.mockReset().mockReturnValue({ memorySearchCount: 0, memorySearchBytes: 0 });
   appendUsageRecordMock.mockReset();
   debugLogMock.mockReset();
   forceSessionEndTriggerMock.mockReset();
@@ -129,9 +129,9 @@ describe("codex session-end hook", () => {
     stdinMock.mockResolvedValue({
       session_id: "sid-1", cwd: "/proj", transcript_path: "/t.jsonl", reason: "other",
     });
-    parseTranscriptMock.mockReturnValue({ memorySearchCount: 3, memorySearchBytes: 100 });
+    parseCodexTranscriptMock.mockReturnValue({ memorySearchCount: 3, memorySearchBytes: 100 });
     await runHook();
-    expect(parseTranscriptMock).toHaveBeenCalledWith("/t.jsonl", "sid-1");
+    expect(parseCodexTranscriptMock).toHaveBeenCalledWith("/t.jsonl", "sid-1");
     expect(appendUsageRecordMock).toHaveBeenCalledWith({ memorySearchCount: 3, memorySearchBytes: 100 });
   });
 
@@ -139,7 +139,7 @@ describe("codex session-end hook", () => {
     stdinMock.mockResolvedValue({
       session_id: "sid-1", cwd: "/proj", transcript_path: "/t.jsonl",
     });
-    parseTranscriptMock.mockReturnValue({ memorySearchCount: 0, memorySearchBytes: 0 });
+    parseCodexTranscriptMock.mockReturnValue({ memorySearchCount: 0, memorySearchBytes: 0 });
     await runHook();
     expect(appendUsageRecordMock).not.toHaveBeenCalled();
   });
@@ -148,7 +148,7 @@ describe("codex session-end hook", () => {
     stdinMock.mockResolvedValue({
       session_id: "sid-1", cwd: "/proj", transcript_path: "/t.jsonl",
     });
-    parseTranscriptMock.mockImplementation(() => { throw new Error("bad transcript"); });
+    parseCodexTranscriptMock.mockImplementation(() => { throw new Error("bad transcript"); });
     await runHook();
     expect(appendUsageRecordMock).not.toHaveBeenCalled();
     expect(spawnMock).toHaveBeenCalled();

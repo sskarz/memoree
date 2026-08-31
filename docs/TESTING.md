@@ -259,7 +259,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Codex capture (UserPromptSubmit / PostToolUse / Stop / SubagentStop) | S | V | L | Stop needs a real session file; no `--ephemeral`; SubagentStop is source + validate |
 | Codex UserPromptSubmit recall.js | S | V | L | Same recall.js bundle as Claude; Codex documents additionalContext as developer context |
 | Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
-| Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock |
+| Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock. Usage recap parses Codex rollouts (`function_call` / `exec_command_*`), not Claude `tool_use` transcripts |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |

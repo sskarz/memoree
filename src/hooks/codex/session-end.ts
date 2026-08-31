@@ -21,7 +21,7 @@ import { bundleDirFromImportMeta, spawnCodexWikiWorker, wikiLog } from "./spawn-
 import { tryAcquireLock, releaseLock, markSessionEnded } from "../summary-state.js";
 import { pruneStaleSessionEventCaches } from "../session-event-cache.js";
 import { forceSessionEndTrigger } from "../../skillify/triggers.js";
-import { parseTranscript } from "../../notifications/transcript-parser.js";
+import { parseCodexTranscript } from "../../notifications/codex-transcript-parser.js";
 import { appendUsageRecord } from "../../notifications/usage-tracker.js";
 import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 
@@ -35,10 +35,16 @@ interface CodexSessionEndInput {
   reason?: string;
 }
 
+/**
+ * Parse the Codex session rollout for memory-search activity and append one
+ * record to `~/.memoree/usage-stats.jsonl`. Codex rollouts are not Claude
+ * JSONL, so this uses `parseCodexTranscript` rather than `parseTranscript`.
+ * Fail-soft on every step.
+ */
 function recordSessionUsage(transcriptPath: string | undefined, sessionId: string): void {
   if (!transcriptPath) return;
   try {
-    const record = parseTranscript(transcriptPath, sessionId);
+    const record = parseCodexTranscript(transcriptPath, sessionId);
     if (record.memorySearchCount === 0 && record.memorySearchBytes === 0) {
       log(`no memory searches in session ${sessionId} — skipping usage record`);
       return;
