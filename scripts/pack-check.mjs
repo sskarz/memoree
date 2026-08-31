@@ -1,6 +1,6 @@
 /**
  * Static check that the npm package metadata and (when present) packed
- * tarball match the end-user `npx memoree install` layout.
+ * tarball match the end-user `npx @sskarz/memoree install` layout.
  *
  * Default mode (used by `npm run verify`) does not require a build: it
  * checks package.json and git-tracked marketplace/plugin files.
@@ -38,6 +38,7 @@ export const REQUIRED_TRACKED_FILES = [
 ];
 
 export const TRUSTED_REPOSITORY_URL = "git+https://github.com/sskarz/memoree.git";
+export const NPM_PACKAGE_NAME = "@sskarz/memoree";
 export const POSTINSTALL_SCRIPT = "node scripts/ensure-tree-sitter.mjs";
 
 export const REQUIRED_ARTIFACT_FILES = [
@@ -65,6 +66,12 @@ export function loadPackageJson(root) {
 export function checkPackageManifest(pkg) {
   const errors = [];
   if (pkg.private === true) errors.push("package.json must not set private: true (npx cannot fetch it)");
+  if (pkg.name !== NPM_PACKAGE_NAME) {
+    errors.push(`package.json name must be ${NPM_PACKAGE_NAME} (npm rejects unscoped memoree as too similar to memoizee)`);
+  }
+  if (pkg.publishConfig?.access !== "public") {
+    errors.push("package.json publishConfig.access must be public (scoped packages default to restricted)");
+  }
   if (pkg.license !== "Apache-2.0") errors.push("package.json license must be Apache-2.0");
   if (pkg.bin?.memoree !== "bundle/cli.js") errors.push("package.json bin.memoree must be bundle/cli.js");
   const files = Array.isArray(pkg.files) ? pkg.files : [];

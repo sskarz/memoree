@@ -1,9 +1,12 @@
 {
-  "name": "memoree",
+  "name": "@sskarz/memoree",
   "version": "0.7.145",
   "description": "Local-first persistent memory for Claude Code and Codex",
   "type": "module",
   "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sskarz/memoree.git"

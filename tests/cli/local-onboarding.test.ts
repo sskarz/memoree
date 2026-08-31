@@ -58,7 +58,7 @@ exit 0
     });
     expect(installOutput).toContain(`Database: ${join(root, ".memoree", "memoree.sqlite3")}`);
     expect(installOutput).toContain(`Staged plugin: ${staged}`);
-    expect(installOutput).toContain("npx memoree doctor");
+    expect(installOutput).toContain("npx @sskarz/memoree doctor");
     expect(installOutput).toContain("memoree docs sync");
     expect(existsSync(join(root, ".memoree", "config.json"))).toBe(true);
     expect(existsSync(join(root, ".memoree", "memoree.sqlite3"))).toBe(true);

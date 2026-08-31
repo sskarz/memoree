@@ -35,7 +35,7 @@ export function getInstalledVersion(bundleDir: string, pluginManifestDir: string
   } catch { /* fall through */ }
   // Walk up from bundleDir looking for our package's package.json.
   // Recognized source package names.
-  const MEMOREE_PKG_NAMES = new Set(["memoree", "memoree-codex"]);
+  const MEMOREE_PKG_NAMES = new Set(["@sskarz/memoree", "memoree", "memoree-codex"]);
   let dir = bundleDir;
   for (let i = 0; i < 5; i++) {
     const candidate = join(dir, "package.json");

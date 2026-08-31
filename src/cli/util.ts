@@ -10,17 +10,20 @@ export const HOME = homedir();
 // three layouts:
 //   - source (src/cli/util.ts) → project root
 //   - local bundle (bundle/cli.js)              → project root
-//   - npm-installed (node_modules/memoree/bundle/cli.js)
+//   - npm-installed (node_modules/@sskarz/memoree/bundle/cli.js
+//     or node_modules/memoree/bundle/cli.js)
 //                                               → install dir
 // Without the walk-up, the source path resolved to `src/` (one dir up
 // from src/cli/util.ts), so unit tests importing the installers couldn't
 // find the per-agent bundles at project_root/harnesses/<agent>/bundle/.
+const PACKAGE_NAMES = new Set(["@sskarz/memoree", "memoree", "memoree-codex"]);
+
 export function pkgRoot(): string {
   let dir = fileURLToPath(new URL(".", import.meta.url));
   for (let i = 0; i < 8; i++) {
     try {
       const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-      if (pkg.name === "memoree") return dir;
+      if (PACKAGE_NAMES.has(pkg.name)) return dir;
     } catch { /* not here, keep walking */ }
     const parent = dirname(dir);
     if (parent === dir) break;
