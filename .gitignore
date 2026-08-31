@@ -26,5 +26,4 @@ deploy-to-cache.sh
 bundle/
 harnesses/claude-code/bundle/
 harnesses/codex/bundle/
-mcp/bundle/
 evals/

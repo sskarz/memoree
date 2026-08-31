@@ -40,4 +40,32 @@ export function waitForCapture(
   text: string,
   options?: WaitForCaptureOptions,
 ): Promise<IsolatedCounts>;
+export function inspectCaptureDatabase(
+  databasePath: string,
+  options?: {
+    requireInEvents?: string[];
+    requireInSummaries?: string[];
+    requireInEventsOrSummaries?: string[];
+    emptyEventsMessage?: string;
+    emptySummariesMessage?: string;
+  },
+): { events: number; summaries: number };
+export function run(
+  command: string,
+  args: string[],
+  options?: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    capture?: boolean;
+    timeout?: number;
+    input?: string;
+  },
+): string;
+export function assert(condition: unknown, message: string): asserts condition;
+export function status(message: string): void;
+export function runCodex(
+  args: string[],
+  options?: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean; timeout?: number },
+): string;
+export function removeValidationWorkspace(root: string): void;
 export function validateRuntime(options?: { skipLiveCodex?: boolean }): Promise<void>;

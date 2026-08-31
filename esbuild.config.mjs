@@ -30,7 +30,6 @@ for (const dir of [
   "bundle",
   "harnesses/claude-code/bundle",
   "harnesses/codex/bundle",
-  "mcp/bundle",
 ]) rmSync(dir, { recursive: true, force: true });
 
 async function buildEntries(entries, outdir) {
@@ -103,19 +102,6 @@ await buildGraphOnStop("harnesses/claude-code/bundle");
 await buildGraphOnStop("harnesses/codex/bundle");
 
 await build({
-  entryPoints: { server: "dist/src/mcp/server.js" },
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outdir: "mcp/bundle",
-  external: ["node:*", "node-liblzma", "@mongodb-js/zstd"],
-  banner: { js: "#!/usr/bin/env node" },
-  define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
-});
-chmodSync("mcp/bundle/server.js", 0o755);
-writeFileSync("mcp/bundle/package.json", esmPackageJson);
-
-await build({
   entryPoints: { cli: "dist/src/cli/index.js" },
   bundle: true,
   splitting: true,
@@ -141,4 +127,4 @@ await build({
 });
 chmodSync("embeddings/embed-daemon.js", 0o755);
 
-console.error(`Built: ${claudeEntries.length} Claude Code + ${codexEntries.length} Codex + 1 MCP + 1 CLI + 1 embedding daemon`);
+console.error(`Built: ${claudeEntries.length} Claude Code + ${codexEntries.length} Codex + 1 CLI + 1 embedding daemon`);

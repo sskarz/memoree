@@ -4,111 +4,29 @@
  *
  * Unlike runtime-validate's `--bare` capture turn, this runs `claude -p` and
  * `codex exec` WITH plugin/hooks enabled so SessionStart, capture, recall,
- * PreToolUse VFS, Stop, and SessionEnd fire on their own. Isolated HOME/DB only.
+ * PreToolUse VFS, and Stop fire on their own (Claude also runs SessionEnd).
+ * Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
  */
 
-import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DatabaseSync } from "node:sqlite";
 import { runtimePaths } from "./runtime-manager.mjs";
 import {
+  assert,
   assertAgentResponseContainsIdentifier,
-  classifyAgentCommandError,
   copyCodexAuthentication,
   createValidationWorkspace,
+  inspectCaptureDatabase,
   lexicalValidationPrompt,
   linkSharedEmbeddingRuntime,
+  removeValidationWorkspace,
+  run,
+  runCodex,
+  status,
   waitForCapture,
 } from "./runtime-validate.mjs";
-
-function status(message) {
-  process.stdout.write(`  ${message}\n`);
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
-function run(command, args, options = {}) {
-  try {
-    return execFileSync(command, args, {
-      cwd: options.cwd,
-      env: options.env,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: options.capture === false ? "inherit" : ["ignore", "pipe", "pipe"],
-      timeout: options.timeout ?? 300_000,
-    });
-  } catch (cause) {
-    const error = /** @type {Error & { stdout?: unknown; stderr?: unknown }} */ (cause);
-    const stdout = typeof error.stdout === "string" ? error.stdout.trim() : "";
-    const stderr = typeof error.stderr === "string" ? error.stderr.trim() : "";
-    const details = [stdout && `stdout:\n${stdout}`, stderr && `stderr:\n${stderr}`].filter(Boolean).join("\n");
-    throw new Error(details ? `${error.message}\n${details}` : error.message, { cause: error });
-  }
-}
-
-function runCodex(args, options) {
-  try {
-    return run("codex", args, options);
-  } catch (error) {
-    const classified = classifyAgentCommandError(error);
-    throw classified ? new Error(classified, { cause: error }) : error;
-  }
-}
-
-function vectorLength(value) {
-  if (Array.isArray(value)) return value.length;
-  if (typeof value !== "string") return 0;
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function inspectLiveDatabase(databasePath, harborId, lanternId) {
-  const db = new DatabaseSync(databasePath, { readOnly: true });
-  try {
-    const integrity = db.prepare("PRAGMA integrity_check").get()?.integrity_check;
-    const journal = db.prepare("PRAGMA journal_mode").get()?.journal_mode;
-    const events = db.prepare("SELECT message, message_embedding FROM sessions").all();
-    const summaries = db.prepare("SELECT path, summary, summary_embedding FROM memory WHERE path LIKE '/summaries/%'").all();
-    assert(String(integrity).toLowerCase() === "ok", "SQLite integrity_check failed");
-    assert(String(journal).toLowerCase() === "wal", "SQLite is not in WAL mode");
-    const eventText = events.map(row => String(row.message ?? "")).join("\n");
-    const summaryText = summaries.map(row => String(row.summary ?? "")).join("\n");
-    assert(events.length > 0, "Live session captured zero session events — plugin hooks did not persist");
-    assert(
-      eventText.includes(harborId) || summaryText.includes(harborId),
-      "Harbor kite identifier missing from isolated sessions/summaries",
-    );
-    if (lanternId) {
-      assert(
-        eventText.includes(lanternId) || summaryText.includes(lanternId),
-        "Codex lantern identifier missing from isolated sessions/summaries",
-      );
-    }
-    assert(summaries.length > 0, "Wiki/session reflection produced no summaries");
-    assert(
-      [...events.map(row => row.message_embedding), ...summaries.map(row => row.summary_embedding)]
-        .some(value => vectorLength(value) === 768),
-      "No 768-element embedding was stored",
-    );
-    return { events: events.length, summaries: summaries.length };
-  } finally {
-    db.close();
-  }
-}
 
 function claudeLivePrompt(harborId, ruleId) {
   return [
@@ -305,7 +223,11 @@ export async function runLiveSessionE2E() {
     status("waiting for Codex capture/summary");
     await waitForCapture(databasePath, lanternId, { requireSummary: true, timeoutMs: 180_000 });
 
-    const counts = inspectLiveDatabase(databasePath, harborId, lanternId);
+    const counts = inspectCaptureDatabase(databasePath, {
+      requireInEventsOrSummaries: [harborId, lanternId],
+      emptyEventsMessage: "Live session captured zero session events — plugin hooks did not persist",
+      emptySummariesMessage: "Wiki/session reflection produced no summaries",
+    });
     process.stdout.write(
       `Live session e2e passed: ${counts.events} events, ${counts.summaries} summaries, unaided Claude/Codex hooks, wiki reflection, 768-d embeddings, VFS, graph, docs, skillify CLI.\n`,
     );
@@ -314,16 +236,7 @@ export async function runLiveSessionE2E() {
     if (!passed) {
       process.stderr.write(`live session e2e workspace kept for inspection: ${root}\n`);
     } else {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        try {
-          rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-          break;
-        } catch (error) {
-          const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
-          if (code !== "ENOTEMPTY" && code !== "EBUSY") throw error;
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
-        }
-      }
+      removeValidationWorkspace(root);
     }
   }
 }

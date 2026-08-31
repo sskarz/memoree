@@ -88,7 +88,7 @@ export async function runDoctor(overrides: Partial<DoctorDependencies> = {}): Pr
   if (deps.existsSync(codexBundle)) {
     try { deps.execFileSync("codex", ["--version"], { stdio: "ignore" }); results.push(["Codex", true, "available"]); }
     catch { results.push(["Codex", false, "codex executable not found"]); }
-    const codexHooksOk = ["session-start.js", "capture.js", "pre-tool-use.js", "stop.js"]
+    const codexHooksOk = ["session-start.js", "capture.js", "pre-tool-use.js", "stop.js", "graph-on-stop.js"]
       .every(file => deps.existsSync(join(codexBundle, file)));
     results.push(["Codex hook bundles", codexHooksOk, codexBundle]);
   }

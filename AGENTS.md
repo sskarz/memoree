@@ -26,7 +26,7 @@ Production state belongs under `~/.memoree`. Automated tests and validation
 must use isolated temporary homes, config paths, and SQLite databases. Never
 write synthetic records to the real database. Claude Code and Codex are the
 only supported harnesses. The frozen pi snapshot under `experimental/pi/` is
-excluded from builds, tests, CLI discovery, and support.
+excluded from builds, tests, CLI discovery, graph extraction, and support.
 
 `npm run runtime:promote` is never unattended GitHub Actions and never runs
 on a laptop that already hosts daily Claude Code or Codex sessions unless the
@@ -159,7 +159,7 @@ hooks on Claude Code and Codex and a `memoree` CLI.
 - `index.md`, `summaries/`, `sessions/`
 - `graph/query|find|show|impact|neighborhood|layers|tour|path/…`
   (`query` is hybrid/semantic; `find` is substring)
-- `docs/index.md`, `docs/find/…`, `docs/leaves`
+- `docs/index.md`, `docs/find/<words>`, `docs/<source-file>.md`
 
 Writes on the mount are limited to `echo` / `printf` / `tee` with validated
 redirects; `mv`/`rm` only transition rule or goal lifecycle. Interpreters,
@@ -200,9 +200,8 @@ hooks in `src/hooks/codex/`. Runtime packaging lives in `harnesses/`, docs in
 
 Tests are grouped under `tests/claude-code/`, `tests/codex/`, `tests/cli/`, and
 `tests/shared/`. Put new agent-independent coverage in `tests/shared/`. Build
-outputs (`dist/`, `bundle/`, harness bundles, `mcp/bundle/`, and `embeddings/`)
-are generated and must not be edited by hand. The MCP server bundle is still
-emitted; the unused MCP installer was removed. Do not add a new harness.
+outputs (`dist/`, `bundle/`, harness bundles, and `embeddings/`)
+are generated and must not be edited by hand. Do not add a new harness.
 
 ## Commands
 

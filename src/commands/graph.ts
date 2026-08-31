@@ -728,7 +728,7 @@ function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] | nu
   return out;
 }
 
-function walk(dir: string, out: string[], ignore: Set<string>): void {
+function walk(dir: string, out: string[], ignore: Set<string>, relPrefix = ""): void {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -736,12 +736,13 @@ function walk(dir: string, out: string[], ignore: Set<string>): void {
     return; // unreadable dirs (permissions, races) are skipped silently
   }
   for (const entry of entries) {
-    if (ignore.has(entry.name)) continue;
+    const rel = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+    if (pathHasIgnoredSegment(rel, ignore)) continue;
     // Skip dotfiles/dotdirs except the dir itself (rare edge — we entered via name, not '.')
     if (entry.name.startsWith(".")) continue;
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
-      walk(abs, out, ignore);
+      walk(abs, out, ignore, rel);
     } else if (entry.isFile() && isSourceFile(entry.name)) {
       out.push(abs);
     }

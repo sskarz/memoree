@@ -25,6 +25,7 @@ describe("live session e2e harness", () => {
   it("keeps Memoree state on isolated HOME/DB paths", () => {
     expect(source).toContain("MEMOREE_SQLITE_PATH");
     expect(source).toContain("createValidationWorkspace");
-    expect(source).toContain("waitForCapture");
+    expect(source).toContain("inspectCaptureDatabase");
+    expect(source).toContain("removeValidationWorkspace");
   });
 });

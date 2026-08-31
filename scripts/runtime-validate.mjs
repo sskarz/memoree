@@ -64,6 +64,8 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+export { run, assert, status, runCodex, removeValidationWorkspace };
+
 export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
   const env = {
     ...baseEnv,
@@ -306,6 +308,18 @@ async function captureUntilEmbedded(bundlePath, input, options, databasePath) {
 }
 
 function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier) {
+  return inspectCaptureDatabase(databasePath, {
+    requireInEvents: lexicalIdentifier ? [semanticFact, lexicalIdentifier] : [semanticFact],
+    requireInSummaries: lexicalIdentifier ? [semanticIdentifier, lexicalIdentifier] : [semanticIdentifier],
+    emptyEventsMessage: "No runtime validation events were captured",
+    emptySummariesMessage: "No runtime validation summaries were generated",
+  });
+}
+
+export function inspectCaptureDatabase(databasePath, options = {}) {
+  const requireInEvents = options.requireInEvents ?? [];
+  const requireInSummaries = options.requireInSummaries ?? [];
+  const requireInEventsOrSummaries = options.requireInEventsOrSummaries ?? [];
   const db = new DatabaseSync(databasePath, { readOnly: true });
   try {
     const integrity = db.prepare("PRAGMA integrity_check").get()?.integrity_check;
@@ -314,18 +328,22 @@ function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexical
     const summaries = db.prepare("SELECT summary, summary_embedding FROM memory WHERE path LIKE '/summaries/%'").all();
     assert(String(integrity).toLowerCase() === "ok", "SQLite integrity_check failed");
     assert(String(journal).toLowerCase() === "wal", "SQLite is not in WAL mode");
-    assert(events.length > 0, "No runtime validation events were captured");
-    assert(summaries.length > 0, "No runtime validation summaries were generated");
-    const eventText = events.map(row => row.message).join("\n");
-    const summaryText = summaries.map(row => row.summary).join("\n");
-    assert(eventText.includes(semanticFact), "Semantic validation fact is missing from isolated SQLite events");
-    assert(
-      summaryText.includes(semanticIdentifier),
-      "Semantic validation identifier is missing from isolated summaries",
-    );
-    if (lexicalIdentifier) {
-      assert(eventText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated SQLite events");
-      assert(summaryText.includes(lexicalIdentifier), "Lexical validation identifier is missing from isolated summaries");
+    assert(events.length > 0, options.emptyEventsMessage ?? "No session events were captured");
+    assert(summaries.length > 0, options.emptySummariesMessage ?? "No summaries were generated");
+    const eventText = events.map(row => String(row.message ?? "")).join("\n");
+    const summaryText = summaries.map(row => String(row.summary ?? "")).join("\n");
+    const combined = `${eventText}\n${summaryText}`;
+    for (const needle of requireInEvents) {
+      assert(eventText.includes(needle), `Missing from isolated session events: ${needle}`);
+    }
+    for (const needle of requireInSummaries) {
+      assert(summaryText.includes(needle), `Missing from isolated summaries: ${needle}`);
+    }
+    for (const needle of requireInEventsOrSummaries) {
+      assert(
+        combined.includes(needle),
+        `Missing from isolated sessions/summaries: ${needle}`,
+      );
     }
     assert(
       [...events.map(row => row.message_embedding), ...summaries.map(row => row.summary_embedding)]

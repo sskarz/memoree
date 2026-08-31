@@ -3,8 +3,6 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { describe, expect, it } from "vitest";
 import type { Config } from "../../../src/config.js";
 import { computeSnapshotSha256 } from "../../../src/graph/snapshot.js";
@@ -118,44 +116,6 @@ async function runCli(harness: SqlStorageHarness, args: string[]): Promise<strin
     },
   );
   return result.stdout;
-}
-
-async function callMcpTools(harness: SqlStorageHarness): Promise<void> {
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: ["--import", tsxLoader, join(repoRoot, "src", "mcp", "server.ts")],
-    cwd: harness.root,
-    env: harness.childEnv as Record<string, string>,
-    stderr: "pipe",
-  });
-  const client = new Client({ name: "sql-storage-parity", version: "1.0.0" });
-  try {
-    await client.connect(transport);
-    const listed = await client.listTools();
-    expect(listed.tools.map(tool => tool.name).sort()).toEqual([
-      "memoree_docs_search",
-      "memoree_index",
-      "memoree_read",
-      "memoree_search",
-    ]);
-
-    const index = await client.callTool({ name: "memoree_index", arguments: {} });
-    expect(JSON.stringify(index)).toContain("/summaries/alice/mcp.md");
-
-    const read = await client.callTool({
-      name: "memoree_read",
-      arguments: { path: "/summaries/alice/mcp.md" },
-    });
-    expect(JSON.stringify(read)).toContain("MCP lexical needle");
-
-    const search = await client.callTool({
-      name: "memoree_search",
-      arguments: { query: "lexical needle", limit: 10 },
-    });
-    expect(JSON.stringify(search)).toContain("/summaries/alice/mcp.md");
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 export function registerSqlStorageFeatureParity(
@@ -317,27 +277,6 @@ export function registerSqlStorageFeatureParity(
         }
       });
     });
-
-    it("serves MCP list, read, and lexical search operations", async () => {
-      await withHarness(createHarness, async (harness) => {
-        harness.backend.appendRows([{
-          path: "/summaries/alice/mcp.md",
-          filename: "mcp.md",
-          contentText: "MCP lexical needle",
-          mimeType: "text/markdown",
-          sizeBytes: 18,
-          project: deriveProjectKey(harness.root).key,
-          description: "MCP parity",
-        }]);
-        await harness.backend.commit();
-        await harness.backend.execute(
-          `INSERT INTO "sessions" (id, path, filename, message, author, creation_date, project) ` +
-          `VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [randomUUID(), "/sessions/alice/mcp.jsonl", "mcp.jsonl", { type: "user_message", content: "secondary needle" }, "alice", "2026-01-01T00:00:00Z", "parity"],
-        );
-        await callMcpTools(harness);
-      });
-    }, 30_000);
 
     it("prunes only matching sessions and their summaries", async () => {
       await withHarness(createHarness, async (harness) => {

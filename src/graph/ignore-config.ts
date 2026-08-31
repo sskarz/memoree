@@ -42,6 +42,13 @@ export const DEFAULT_IGNORE_DIRS: readonly string[] = [
   ".terraform", "tmp", "temp", "logs", "third_party", "third-party",
 ];
 
+/**
+ * Repo-relative prefixes skipped even when the folders are tracked.
+ * `experimental/pi` is Memoree's frozen unsupported snapshot — not a basename
+ * ignore, so a customer `experimental/` or `pi/` tree still graphs.
+ */
+export const DEFAULT_IGNORE_PATH_PREFIXES: readonly string[] = ["experimental/pi"];
+
 export interface GraphIgnoreConfig {
   /** Directory names skipped during discovery (matched by basename). */
   ignoreDirs: string[];
@@ -97,6 +104,14 @@ export function ignoreDirSet(config: GraphIgnoreConfig): Set<string> {
   return new Set(config.ignoreDirs);
 }
 
+export function pathHasIgnoredPrefix(
+  relPath: string,
+  prefixes: readonly string[] = DEFAULT_IGNORE_PATH_PREFIXES,
+): boolean {
+  const n = relPath.replace(/\\/g, "/");
+  return prefixes.some(prefix => n === prefix || n.startsWith(`${prefix}/`));
+}
+
 /**
  * True when a repo-relative path has any IGNORED directory segment, or any
  * dot-directory segment (mirrors the manual walk's dotdir skip). The final
@@ -104,6 +119,7 @@ export function ignoreDirSet(config: GraphIgnoreConfig): Set<string> {
  * filename isn't spuriously dropped.
  */
 export function pathHasIgnoredSegment(relPath: string, ignore: Set<string>): boolean {
+  if (pathHasIgnoredPrefix(relPath)) return true;
   const segs = relPath.split("/");
   return segs.some(
     (seg, i) => ignore.has(seg) || (i < segs.length - 1 && seg.startsWith(".")),

@@ -54,7 +54,8 @@ those commands into queries. Supported sandboxed tools: `cat`, `ls`, `grep`,
 | `graph/query/<pattern>` | hybrid/semantic code-graph search |
 | `graph/find/<pattern>` | substring search (not a synonym of `query`) |
 | `graph/show`, `impact`, `neighborhood`, `layers`, `tour`, `path` | graph inspection |
-| `docs/index.md`, `docs/find/…`, `docs/leaves` | synced docs |
+| `docs/index.md`, `docs/find/<words>` | search generated docs |
+| `docs/<file>.md` | doc for one source file |
 
 ### Hooks
 
@@ -260,8 +261,7 @@ embeddings, Claude↔Codex recall, structured rules/goals/KPIs, graph
 `query`/`find` and related VFS paths, docs set/show, and skillify **status**.
 Still source-tested rather than live-LLM’d: `docs wiki` generation (live
 uses `--dry-run`), skillify mine/pull/push, graph `init`/`diff`/`pull`/
-`uninstall`, `memory flush`, and the interactive TUI. The MCP server bundle
-is still built; it is not a supported install path.
+`uninstall`, `memory flush`, and the interactive TUI.
 
 ## License
 

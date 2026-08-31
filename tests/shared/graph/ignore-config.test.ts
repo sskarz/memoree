@@ -5,8 +5,10 @@ import { join } from "node:path";
 
 import {
   DEFAULT_IGNORE_DIRS,
+  DEFAULT_IGNORE_PATH_PREFIXES,
   loadGraphIgnore,
   ignoreDirSet,
+  pathHasIgnoredPrefix,
   pathHasIgnoredSegment,
 } from "../../../src/graph/ignore-config.js";
 
@@ -86,5 +88,17 @@ describe("pathHasIgnoredSegment", () => {
 
   it("exempts a leading-dot FILE name (only directory segments are dot-skipped)", () => {
     expect(pathHasIgnoredSegment(".eslintrc.py", ignore)).toBe(false);
+  });
+});
+
+describe("DEFAULT_IGNORE_PATH_PREFIXES", () => {
+  it("skips the frozen experimental/pi snapshot without dropping experimental/ or pi/ elsewhere", () => {
+    expect(DEFAULT_IGNORE_PATH_PREFIXES).toContain("experimental/pi");
+    expect(pathHasIgnoredPrefix("experimental/pi/hooks/wiki-worker.ts")).toBe(true);
+    expect(pathHasIgnoredPrefix("experimental/pi")).toBe(true);
+    const ignore = ignoreDirSet({ ignoreDirs: [...DEFAULT_IGNORE_DIRS], respectGitignore: true });
+    expect(pathHasIgnoredSegment("experimental/pi/cli/install-pi.ts", ignore)).toBe(true);
+    expect(pathHasIgnoredSegment("experimental/other/app.ts", ignore)).toBe(false);
+    expect(pathHasIgnoredSegment("src/pi/app.ts", ignore)).toBe(false);
   });
 });

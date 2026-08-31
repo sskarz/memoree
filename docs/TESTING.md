@@ -69,7 +69,7 @@ That does **not** mean daily apps already load this code.
 | Gate | Command | What it proves | Needs API keys | Changes daily runtime |
 |---|---|---|---|---|
 | Source | `npm run verify` | TypeScript, runtime-validator JS check, source Vitest | no | no |
-| Built artifacts | `npm run build` then `npm test` | CLI + Claude/Codex/MCP/embed bundles and built-artifact tests | no | no |
+| Built artifacts | `npm run build` then `npm test` | CLI + Claude/Codex/embed bundles and built-artifact tests | no | no |
 | Whitespace | `git diff --check` | no leftover spaces | no | no |
 | Promoted-bundle live | `npm run runtime:validate` | Direct hook-bundle invocation + `claude --bare` / `codex exec` against isolated DB; VFS, capture, wiki, embeddings, cross-agent recall | yes | no (reads promoted checkout) |
 | Unaided-hook live | `npm run live:e2e` | `claude -p` **without** `--bare`, `codex exec` **without** `--ephemeral`; SessionStart/capture/Stop/SessionEnd fire on their own | yes | no (reads promoted checkout) |
@@ -264,9 +264,10 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | KPI CLI + `kpi/<goal>/<kpi>.md` | S | V | L | |
 | `index.md` / `summaries/` / `sessions/` | S | V | L | |
 | Graph `build` + `history` | S | V | L | |
-| Graph VFS query/find/show/impact/neighborhood/layers/tour/path | S | V | L | query ≠ find (semantic vs substring) |
+| Graph VFS `query/` + `layers` | S | V | L | Live e2e cats `graph/layers` and `graph/query/store` only |
+| Graph VFS `find`/`show`/`impact`/`neighborhood`/`tour`/`path` | S | V | — | Driven in `runtime:validate`, not unaided live |
 | Graph `init` / `diff` / `pull` / `uninstall` | S | — | — | CLI + git-hook unit tests; not in live harness |
-| Docs set/show/list + VFS `docs/index`, `find`, `leaves` | S | V | L | |
+| Docs set/show/list + VFS `docs/index.md`, `docs/find/<words>`, `docs/<file>.md` | S | V | L | There is no `docs/leaves` path |
 | Docs `wiki` / `generate` / `sync` LLM | S | — | dry-run | Live runs `docs wiki --dry-run` only |
 | Skillify status/scope/team CLI | S | V | L | |
 | Skillify mine-local / pull / push / hygiene LLM | S | — | — | Validate sets `MEMOREE_SKILLIFY_WORKER=1` and `MEMOREE_SKILLOPT_DISABLED=1` |
@@ -276,8 +277,6 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `backend check` / embeddings status | S | V | L | |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
-| MCP server bundle | S | — | — | Still built; installer removed; unsupported harness |
-| Skill publisher | S | — | — | Kept for deferred publish; no live share |
 
 ## Known gaps, overlap, and follow-ups
 
@@ -294,10 +293,10 @@ Not missing from the product on purpose, but not fully live-proven:
 Redundant or stale on purpose until cleaned up:
 
 - `runtime:validate` vs `live:e2e` overlap (different proofs; keep both)
-- `mcp/bundle` still built after the unused MCP installer was removed
 - Graph search is VFS-only (`~/.memoree/memory/graph/`); it is not a CLI
   subcommand. `memoree graph pull` is implemented.
-- `library/knowledge` still mentions frozen/unsupported harnesses; `experimental/pi/` is excluded
+- `library/knowledge` still mentions frozen/unsupported harnesses. Graph
+  discovery skips `experimental/pi/`.
 
 Follow-ups that would make the PR loop tighter (do not block docs):
 

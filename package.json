@@ -34,7 +34,6 @@
     "postinstall": "node scripts/ensure-tree-sitter.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "js-yaml": "^4.1.1",
     "just-bash": "^2.14.0",
     "pg": "^8.23.0",
