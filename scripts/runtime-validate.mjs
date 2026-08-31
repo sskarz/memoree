@@ -500,6 +500,15 @@ export async function validateRuntime(options = {}) {
     const kpiCat = vfsResults[vfsResults.length - 1];
     assert(kpiCat, "KPI cat result missing");
     assertHookContains(kpiCat, kpiV2, "Codex KPI cat");
+    status("checking rules/goal/kpi CLI");
+    const rulesList = run(process.execPath, [cli, "rules", "list", "--status", "all"], { cwd: repository, env });
+    assert(rulesList.includes(ruleId), `memoree rules list missed ${ruleId}; stdout=${JSON.stringify(rulesList).slice(0, 800)}`);
+    const goalsList = run(process.execPath, [cli, "goal", "list", "--all"], { cwd: repository, env });
+    assert(goalsList.includes(goalId), `memoree goal list missed ${goalId}; stdout=${JSON.stringify(goalsList).slice(0, 800)}`);
+    const kpisList = run(process.execPath, [cli, "kpi", "list", goalId], { cwd: repository, env });
+    assert(kpisList.includes(kpiId), `memoree kpi list missed ${kpiId}; stdout=${JSON.stringify(kpisList).slice(0, 800)}`);
+    const skillifyStatus = run(process.execPath, [cli, "skillify"], { cwd: repository, env });
+    assert(/scope:/i.test(skillifyStatus), `memoree skillify did not print scope; stdout=${JSON.stringify(skillifyStatus).slice(0, 800)}`);
     status("checking memoree context diagnostic");
     run(process.execPath, [cli, "context"], { cwd: repository, env });
 
@@ -553,6 +562,14 @@ export async function validateRuntime(options = {}) {
       /history\.jsonl|snapshot/i.test(graphHistory),
       `memoree graph history did not record the fixture build; stdout=${JSON.stringify(graphHistory).slice(0, 800)}`,
     );
+    status("checking docs CLI and docs VFS leaf");
+    const docsSet = run(process.execPath, [
+      cli, "docs", "set", "src/snapshot.ts",
+      "persistGraph writes snapshot bytes for the runtime validation fixture.",
+    ], { cwd: repository, env });
+    assert(/Set doc/i.test(docsSet), `memoree docs set failed; stdout=${JSON.stringify(docsSet).slice(0, 800)}`);
+    const docsShow = run(process.execPath, [cli, "docs", "show", "src/snapshot.ts"], { cwd: repository, env });
+    assert(docsShow.includes("persistGraph"), `memoree docs show missed persistGraph; stdout=${JSON.stringify(docsShow).slice(0, 800)}`);
 
     status("checking graph query/ through Codex and Claude hooks");
     const claudePreTool = join(claudeBundle, "pre-tool-use.js");
@@ -720,13 +737,21 @@ export async function validateRuntime(options = {}) {
       tool_input: { command: "cat ~/.memoree/memory/docs/index.md" },
     }, vfsHookOptions);
     assertHookContains(docsIndex, "Docs Index", "docs VFS index");
-    const docsFind = runHookResult(codexPreTool, {
-      ...hookBase,
-      tool_input: { command: "cat ~/.memoree/memory/docs/find/snapshot" },
-    }, vfsHookOptions);
-    assert(
-      docsFind.status === 0 && (hookBodyContains(docsFind.stdout, "No docs match") || hookBodyContains(docsFind.stdout, "doc(s) match")),
-      `docs VFS find/ failed: ${docsFind.stderr || docsFind.stdout}`,
+    assertHookContains(
+      runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/docs/src/snapshot.ts.md" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "docs VFS leaf src/snapshot.ts.md",
+    );
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/docs/find/persistGraph" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "docs VFS find/persistGraph",
     );
     assertHookExitZero(runHookResult(join(claudeBundle, "graph-on-stop.js"), {
       cwd: repository,
@@ -848,6 +873,18 @@ export async function validateRuntime(options = {}) {
       }, vfsHookOptions),
       "runtime-validation",
       "memory sessions listing",
+    );
+
+    status("checking sessions prune dry-run and memory backfill dry-run");
+    const pruneList = run(process.execPath, [cli, "sessions", "prune"], { cwd: repository, env });
+    assert(
+      /Sessions for|No sessions found/i.test(pruneList),
+      `memoree sessions prune did not list sessions; stdout=${JSON.stringify(pruneList).slice(0, 800)}`,
+    );
+    const backfillPlan = run(process.execPath, [cli, "memory", "backfill", "--dry-run"], { cwd: repository, env });
+    assert(
+      backfillPlan.trim().length > 0,
+      `memoree memory backfill --dry-run produced no output`,
     );
 
     status("checking Claude proactive recall hook");
@@ -1066,7 +1103,7 @@ export async function validateRuntime(options = {}) {
     );
     process.stdout.write(
       skipLiveCodex
-        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, memory index/summaries/sessions, Claude capture/summary/recall/Grep/Glob/Write-deny, Codex capture/Stop, lexical Grep.\n`
+        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, memory index/summaries/sessions, docs set/show/find, rules/goal/kpi/skillify CLI, Claude capture/summary/recall/Grep/Glob/Write-deny, Codex capture/Stop, lexical Grep.\n`
         : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
   } finally {

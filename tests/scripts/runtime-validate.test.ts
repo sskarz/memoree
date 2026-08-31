@@ -210,7 +210,10 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("PostToolUse");
     expect(source).toContain("SubagentStop");
     expect(source).toContain("Claude lexical Grep");
-    expect(source).toContain("Session Index");
+    expect(source).toContain("docs/src/snapshot.ts.md");
+    expect(source).toContain("docs/find/persistGraph");
+    expect(source).toContain("sessions");
+    expect(source).toContain("skillify");
     expect(source).toContain("embeddings");
     expect(source).toContain("\"graph\", \"history\"");
     expect(source).not.toMatch(/mkdtempSync\(join\(tmpdir\(\)/);
