@@ -106,7 +106,7 @@ async function readMessages(): Promise<void> {
 }
 
 /* c8 ignore start */
-if (isDirectRun(import.meta.url)) {
+if (isDirectRun(import.meta.url, "mcp-server") || isDirectRun(import.meta.url, "server")) {
   readMessages().catch((error) => {
     log(`fatal: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(0);

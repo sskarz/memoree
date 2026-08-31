@@ -540,7 +540,7 @@ async function main(): Promise<void> {
   process.exit(2);
 }
 
-if (isDirectRun(import.meta.url)) {
+if (isDirectRun(import.meta.url, "pre-tool-use")) {
   main().catch((e) => { log(`fatal: ${e.message}`); process.exit(0); });
 }
 /* c8 ignore stop */
