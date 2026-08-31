@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildArgs, findAgentBin, runGate, type Agent } from "../../src/skillify/gate-runner.js";
+import { buildArgs, findAgentBin, runGate, withCodexApiKey, type Agent } from "../../src/skillify/gate-runner.js";
 
 describe("supported gate runner", () => {
   it.each(["claude_code", "codex"] as Agent[])("resolves a fallback path for %s", agent => {
@@ -16,5 +16,13 @@ describe("supported gate runner", () => {
   it("returns a structured error for a missing binary", () => {
     expect(runGate({ agent: "codex", prompt: "prompt", bin: "/missing/memoree-codex" }))
       .toMatchObject({ errored: true, stdout: "" });
+  });
+
+  it("copies OPENAI_API_KEY into CODEX_API_KEY for Codex exec", () => {
+    expect(withCodexApiKey({ OPENAI_API_KEY: "sk-openai" }).CODEX_API_KEY).toBe("sk-openai");
+    expect(withCodexApiKey({
+      OPENAI_API_KEY: "sk-openai",
+      CODEX_API_KEY: "sk-codex",
+    }).CODEX_API_KEY).toBe("sk-codex");
   });
 });

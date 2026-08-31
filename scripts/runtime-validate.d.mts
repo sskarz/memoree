@@ -15,6 +15,12 @@ export function authenticatedClaudeEnvironment(
   home: string,
   configDir?: string,
 ): NodeJS.ProcessEnv;
+export function authenticatedCodexEnvironment(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
+export function prepareCodexAuthentication(
+  realHome: string,
+  isolatedCodexHome: string,
+  env?: NodeJS.ProcessEnv,
+): "auth.json" | "env";
 export function assertAgentResponseContainsIdentifier(
   response: string,
   identifier: string,

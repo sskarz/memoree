@@ -28,4 +28,9 @@ describe("live session e2e harness", () => {
     expect(source).toContain("inspectCaptureDatabase");
     expect(source).toContain("removeValidationWorkspace");
   });
+
+  it("maps OPENAI_API_KEY onto CODEX_API_KEY for isolated Codex exec", () => {
+    expect(source).toContain("authenticatedCodexEnvironment");
+    expect(source).toContain("prepareCodexAuthentication");
+  });
 });

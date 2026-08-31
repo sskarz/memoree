@@ -78,6 +78,28 @@ export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
   return env;
 }
 
+export function authenticatedCodexEnvironment(baseEnv) {
+  const env = { ...baseEnv };
+  const key = String(env.CODEX_API_KEY ?? env.OPENAI_API_KEY ?? "").trim();
+  if (key) env.CODEX_API_KEY = key;
+  return env;
+}
+
+export function prepareCodexAuthentication(realHome, isolatedCodexHome, env = {}) {
+  mkdirSync(isolatedCodexHome, { recursive: true, mode: 0o700 });
+  const source = join(realHome, ".codex", "auth.json");
+  if (existsSync(source)) {
+    copyFileSync(source, join(isolatedCodexHome, "auth.json"));
+    return "auth.json";
+  }
+  const key = String(env.CODEX_API_KEY ?? env.OPENAI_API_KEY ?? "").trim();
+  assert(
+    key,
+    `Codex authentication is missing: ${source}. Set CODEX_API_KEY or OPENAI_API_KEY, or run: printenv OPENAI_API_KEY | codex login --with-api-key`,
+  );
+  return "env";
+}
+
 export function lexicalValidationPrompt(identifier) {
   return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
 }
@@ -422,7 +444,7 @@ export async function validateRuntime(options = {}) {
   const semanticIdentifier = crypto.randomUUID();
   const semanticFact = `the observatory lantern is ${semanticIdentifier}`;
   const lexicalIdentifier = crypto.randomUUID();
-  const env = {
+  const env = authenticatedCodexEnvironment({
     ...process.env,
     HOME: isolatedHome,
     CLAUDE_CONFIG_DIR: join(isolatedHome, ".claude"),
@@ -451,7 +473,7 @@ export async function validateRuntime(options = {}) {
     TMPDIR: isolatedTmp,
     TMP: isolatedTmp,
     TEMP: isolatedTmp,
-  };
+  });
   const claudeEnv = authenticatedClaudeEnvironment(env, realHome, realClaudeConfigDir);
   const ruleId = crypto.randomUUID();
   const goalId = crypto.randomUUID();
@@ -470,7 +492,7 @@ export async function validateRuntime(options = {}) {
     mkdirSync(isolatedTmp, { recursive: true, mode: 0o700 });
     linkSharedEmbeddingRuntime(realHome, isolatedHome);
     if (skipLiveCodex) mkdirSync(isolatedCodexHome, { recursive: true, mode: 0o700 });
-    else copyCodexAuthentication(realHome, isolatedCodexHome);
+    else prepareCodexAuthentication(realHome, isolatedCodexHome, env);
     writeFileSync(claudeSettings, `${JSON.stringify({
       autoMemoryDirectory: join(state, "claude-auto-memory"),
     }, null, 2)}\n`, { mode: 0o600 });

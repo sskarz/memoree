@@ -40,6 +40,12 @@ set +a
 export PATH="$HOME/.npm-global/bin:$PATH"
 ```
 
+Codex `exec` reads `CODEX_API_KEY`, not `OPENAI_API_KEY`. Export the same
+Platform key as both, or run `scripts/prepare-codex-api-key.sh` (Cloud Agent
+`start` does this) so the live env file and `~/.codex/auth.json` stay in sync.
+Live harnesses also copy `OPENAI_API_KEY` onto `CODEX_API_KEY` when they spawn
+Codex, so an isolated `CODEX_HOME` still authenticates without `auth.json`.
+
 ## Two files for this feature
 
 **Product (no Claude, no Codex)** — does graph search and skill cleanup work?
@@ -256,7 +262,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Claude PostToolUse / Stop / SubagentStop capture | S | V | L | SubagentStop is source-tested; live is main session |
 | Claude SessionEnd wiki + plugin-cache-gc + graph-on-stop | S | V | L | Wiki worker uses `MEMOREE_VALIDATION_CLAUDE_HOME` |
 | Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume`; `codex exec` may not fire it |
-| Codex capture (UserPromptSubmit / PostToolUse / Stop) | S | V | L | Stop needs a real session file; no `--ephemeral` |
+| Codex capture (UserPromptSubmit / PostToolUse / Stop) | S | V | L | Stop needs a real session file; no `--ephemeral`. `CODEX_API_KEY` (from `OPENAI_API_KEY`) authenticates isolated `exec` |
 | Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
 | Codex SessionEnd | — | — | — | Codex has no SessionEnd; wiki is on Stop |
 | Identity / rules.md / goals.md VFS | S | V | L | |

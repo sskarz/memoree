@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
+  authenticatedCodexEnvironment,
   classifyAgentCommandError,
   copyCodexAuthentication,
   createValidationWorkspace,
@@ -14,6 +15,7 @@ import {
   linkSharedEmbeddingRuntime,
   isolatedCounts,
   lexicalValidationPrompt,
+  prepareCodexAuthentication,
   codexSemanticRecallPrompt,
   skipLiveCodexRequested,
   waitForCapture,
@@ -146,6 +148,42 @@ describe("runtime validation Codex isolation", () => {
     copyCodexAuthentication(realHome, isolated);
     expect(readFileSync(join(isolated, "auth.json"), "utf8")).toContain("test");
     expect(existsSync(join(isolated, "config.toml"))).toBe(false);
+  });
+
+  it("maps OPENAI_API_KEY onto CODEX_API_KEY without overwriting an explicit Codex key", () => {
+    expect(authenticatedCodexEnvironment({ OPENAI_API_KEY: "sk-openai" }).CODEX_API_KEY).toBe("sk-openai");
+    expect(authenticatedCodexEnvironment({
+      OPENAI_API_KEY: "sk-openai",
+      CODEX_API_KEY: "sk-codex",
+    }).CODEX_API_KEY).toBe("sk-codex");
+    expect(authenticatedCodexEnvironment({}).CODEX_API_KEY).toBeUndefined();
+  });
+
+  it("accepts CODEX_API_KEY when auth.json is absent", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-codex-env-"));
+    const realHome = join(root, "real");
+    const isolated = join(root, "isolated", ".codex");
+    mkdirSync(join(realHome, ".codex"), { recursive: true });
+    expect(prepareCodexAuthentication(realHome, isolated, { CODEX_API_KEY: "sk-codex" })).toBe("env");
+    expect(existsSync(join(isolated, "auth.json"))).toBe(false);
+  });
+
+  it("prefers copying auth.json when it exists even if an API key is also set", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-codex-copy-"));
+    const realHome = join(root, "real");
+    const isolated = join(root, "isolated", ".codex");
+    mkdirSync(join(realHome, ".codex"), { recursive: true });
+    writeFileSync(join(realHome, ".codex", "auth.json"), "{\"OPENAI_API_KEY\":\"copied\"}\n");
+    expect(prepareCodexAuthentication(realHome, isolated, { OPENAI_API_KEY: "sk-env" })).toBe("auth.json");
+    expect(readFileSync(join(isolated, "auth.json"), "utf8")).toContain("copied");
+  });
+
+  it("fails closed when neither auth.json nor an API key is present", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-codex-none-"));
+    const realHome = join(root, "real");
+    const isolated = join(root, "isolated", ".codex");
+    mkdirSync(join(realHome, ".codex"), { recursive: true });
+    expect(() => prepareCodexAuthentication(realHome, isolated, {})).toThrow(/CODEX_API_KEY/);
   });
 });
 
