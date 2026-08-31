@@ -53,6 +53,7 @@ exit 0
       encoding: "utf-8",
     });
     expect(installOutput).toContain(`Database: ${join(root, ".memoree", "memoree.sqlite3")}`);
+    expect(installOutput).toContain("memoree docs sync");
     expect(existsSync(join(root, ".memoree", "config.json"))).toBe(true);
     expect(existsSync(join(root, ".memoree", "memoree.sqlite3"))).toBe(true);
     expect(JSON.parse(readFileSync(join(root, ".memoree", "config.json"), "utf-8"))).toMatchObject({

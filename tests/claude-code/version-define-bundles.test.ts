@@ -8,10 +8,8 @@ import { readdirSync, statSync } from "node:fs";
  *
  * Every per-agent esbuild block must replace the `__MEMOREE_VERSION__`
  * placeholder via `define`. Without it, bundled code that interpolates the
- * constant (e.g. `memoreeClientValue()` for the X-Memoree-Client header)
- * crashes at runtime with "__MEMOREE_VERSION__ is not defined" on the very
- * first Memoree API call. This guard prevents a per-harness build from
- * silently dropping the substitution.
+ * version constant crashes at runtime with "__MEMOREE_VERSION__ is not defined".
+ * This guard prevents a per-harness build from silently dropping the substitution.
  */
 
 const ROOT = resolve(process.cwd());

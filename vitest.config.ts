@@ -11,9 +11,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   // Match esbuild's `define` for __MEMOREE_VERSION__ so source files that
-  // read it directly (e.g. src/utils/client-header.ts) don't need a typeof
-  // guard for tests. Bundled builds substitute the real version; tests get
-  // the "dev" sentinel.
+  // read it directly don't need a typeof guard for tests. Bundled builds
+  // substitute the real version; tests get the "dev" sentinel.
   define: {
     __MEMOREE_VERSION__: JSON.stringify("dev"),
   },

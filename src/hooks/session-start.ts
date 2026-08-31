@@ -26,6 +26,7 @@ import { renderContextBlock } from "./shared/context-renderer.js";
 import { countLocalManifestEntries } from "../skillify/local-manifest.js";
 import { renderLocalMinedNote } from "../skillify/local-mined-banner.js";
 import { maybeAutoMineLocal } from "../skillify/spawn-mine-local-worker.js";
+import { maybeAutoBackfillMemory } from "../skillify/spawn-backfill-memory-worker.js";
 import { graphContextLine } from "../graph/session-context.js";
 import { MEMORY_COMMAND_GUIDANCE } from "./shared/memory-command-contract.js";
 import { spawnGraphPullWorker } from "../graph/spawn-pull-worker.js";
@@ -180,6 +181,18 @@ async function main(): Promise<void> {
       agent: "claude_code",
     });
     if (spawned.triggered) log("hygiene worker spawned");
+  } catch {
+    // administrative; must never block SessionStart
+  }
+  try {
+    const mined = maybeAutoMineLocal();
+    if (mined.triggered) log("auto mine-local spawned");
+  } catch {
+    // administrative; must never block SessionStart
+  }
+  try {
+    const backfill = maybeAutoBackfillMemory();
+    if (backfill.triggered) log("auto memory backfill spawned");
   } catch {
     // administrative; must never block SessionStart
   }

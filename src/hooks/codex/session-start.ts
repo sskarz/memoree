@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { readStdin } from "../../utils/stdin.js";
 import { countLocalManifestEntries } from "../../skillify/local-manifest.js";
 import { maybeAutoMineLocal } from "../../skillify/spawn-mine-local-worker.js";
+import { maybeAutoBackfillMemory } from "../../skillify/spawn-backfill-memory-worker.js";
 import { log as _log } from "../../utils/debug.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { autoPullSkills } from "../../skillify/auto-pull.js";
@@ -86,6 +87,18 @@ async function main(): Promise<void> {
       bundleDir: __bundleDir,
       agent: "codex",
     });
+  } catch {
+    // administrative; must never block SessionStart
+  }
+  try {
+    const mined = maybeAutoMineLocal();
+    if (mined.triggered) log("auto mine-local spawned");
+  } catch {
+    // administrative; must never block SessionStart
+  }
+  try {
+    const backfill = maybeAutoBackfillMemory();
+    if (backfill.triggered) log("auto memory backfill spawned");
   } catch {
     // administrative; must never block SessionStart
   }

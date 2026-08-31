@@ -46,8 +46,6 @@ The code paths that actually perform capture, recall, and summary generation are
 | `src/hooks/spawn-wiki-worker.ts` | Detached spawn helper. Writes a temp config JSON and forks `wiki-worker.js` as an unref'd child. |
 | `src/hooks/shared/context-renderer.ts` | Renders the rules and goals block injected at SessionStart. Read-only; absorbs its own errors. |
 | `src/hooks/shared/capture-gate.ts` | `MEMOREE_CAPTURE !== "false"` gate and only-CLI entrypoint check used by every capture path. |
-| `src/hooks/shared/autoupdate.ts` | `autoUpdate(creds, { agent })`: checks npm registry, spawns the removed updater command if a newer version is found. |
-| `src/hooks/shared/goals-instructions.ts` | `GOALS_INSTRUCTIONS_CLI`: the CLI-variant goal-management instructions injected for Cursor, Hermes, and pi. |
 | `src/hooks/shared/skillopt-hook.ts` | Arms the skill-optimization counter when the agent invokes an org skill. |
 | `src/hooks/summary-state.ts` | Per-session sidecar: `clearSessionEnded`, `markSessionEnded`, `tryAcquireLock`, `releaseLock`, `finalizeSummary`. |
 

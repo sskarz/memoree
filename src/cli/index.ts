@@ -19,6 +19,7 @@ import { runBackfillMemory } from "../commands/backfill-memory.js";
 import { runFlushMemory } from "../commands/flush-memory.js";
 import { sessionPrune } from "../commands/session-prune.js";
 import { ensureGraphDeps } from "./graph-deps.js";
+import { docsHintShown, docsInstallLines, markDocsHintShown } from "../docs/install-hint.js";
 
 const USAGE = `
 memoree — local-first memory for coding agents
@@ -94,6 +95,10 @@ async function runInstall(args: string[]): Promise<void> {
   log("");
   log(`Database: ${location}`);
   log(`Embeddings: ${noEmbeddings ? "disabled (lexical retrieval only)" : "enabled"}`);
+  if (!docsHintShown()) {
+    for (const line of docsInstallLines()) log(line);
+    markDocsHintShown();
+  }
   log("Restart Claude Code to activate Memoree, then run `memoree doctor`.");
 }
 

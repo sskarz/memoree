@@ -17,11 +17,9 @@ import { SESSIONS_COLUMNS } from "../../src/storage/schema.js";
  */
 // The Claude/Codex capture hooks and codex/stop.ts all build
 // their single-row INSERT through the shared buildDirectSessionInsertSql
-// helper, so its one column list covers every direct-insert agent. The
-// batched queue path keeps its own inline column list.
+// helper, so its one column list covers every direct-insert agent.
 const SESSIONS_INSERT_FILES = [
   "src/hooks/shared/session-insert-sql.ts",
-  "src/hooks/session-queue.ts",
 ];
 
 const CANONICAL = new Set(SESSIONS_COLUMNS.map(c => c.name.toLowerCase()));

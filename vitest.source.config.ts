@@ -25,7 +25,6 @@ export default defineConfig({
       "tests/claude-code/wiki-worker-upload-sql.test.ts",
       "tests/cli/cli-bundle-runtime.test.ts",
       "tests/cli/cli-install-codex-fs.test.ts",
-      "tests/cli/cli-install-mcp-shared.test.ts",
       "tests/shared/embeddings-schema.test.ts",
       "tests/shared/graph/graph-on-stop-bundle.test.ts",
     ],
