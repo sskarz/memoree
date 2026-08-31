@@ -221,6 +221,74 @@ describe("parseCodexTranscript — function_call", () => {
     expect(r.memorySearchCount).toBe(1);
     expect(r.memorySearchBytes).toBe(0);
   });
+
+  it("dedupes function_call and exec_command events that share a call_id", () => {
+    const output = "one-shell-hit";
+    const path = writeTranscript([
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "shell",
+          call_id: "shared_1",
+          arguments: JSON.stringify({ command: "grep -r foo ~/.memoree/memory/" }),
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "exec_command_begin",
+          call_id: "shared_1",
+          command: ["bash", "-lc", "grep -r foo ~/.memoree/memory/"],
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "exec_command_end",
+          call_id: "shared_1",
+          aggregated_output: output,
+        },
+      },
+      {
+        type: "response_item",
+        payload: { type: "function_call_output", call_id: "shared_1", output: output },
+      },
+    ]);
+    const r = parseCodexTranscript(path, "fb");
+    expect(r.memorySearchCount).toBe(1);
+    expect(r.memorySearchBytes).toBe(Buffer.byteLength(output, "utf8"));
+  });
+
+  it("keeps distinct call_ids as separate memory searches", () => {
+    const path = writeTranscript([
+      {
+        type: "function_call",
+        call_id: "a",
+        arguments: { command: "cat ~/.memoree/memory/a.md" },
+      },
+      {
+        type: "function_call_output",
+        call_id: "a",
+        output: "A",
+      },
+      {
+        type: "exec_command_begin",
+        call_id: "b",
+        command: "cat ~/.memoree/memory/b.md",
+      },
+      {
+        type: "exec_command_end",
+        call_id: "b",
+        stdout: "B",
+      },
+    ]);
+    const r = parseCodexTranscript(path, "fb");
+    expect(r.memorySearchCount).toBe(2);
+    expect(r.memorySearchBytes).toBe(
+      Buffer.byteLength("A", "utf8") + Buffer.byteLength("B", "utf8"),
+    );
+  });
 });
 
 describe("parseCodexTranscript — exec_command events", () => {

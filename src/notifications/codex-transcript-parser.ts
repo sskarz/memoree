@@ -9,7 +9,9 @@
  *
  * This parser returns the same `UsageRecord` Claude's SessionEnd hook
  * appends. Memory lookups are any tool command whose text contains
- * `.memoree/memory` (same `isMemoryLookupCommand` substring).
+ * `.memoree/memory` (same `isMemoryLookupCommand` substring). Codex
+ * records the same shell call twice (`function_call` plus
+ * `exec_command_*` with one `call_id`); we count each id once.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -138,8 +140,9 @@ export function parseCodexTranscript(
   }
 
   const memoryLookupCallIds = new Set<string>();
-  let memorySearchBytes = 0;
-  let memorySearchCount = 0;
+  const memorySearchBytesByCall = new Map<string, number>();
+  let unlabeledMemorySearchCount = 0;
+  let unlabeledMemorySearchBytes = 0;
   let sessionId = fallbackSessionId;
   let endedAt = "";
 
@@ -173,20 +176,29 @@ export function parseCodexTranscript(
     if (isToolStart(type)) {
       const command = commandFromPayload(payload);
       if (!isMemoryLookupCommand(command)) continue;
-      memorySearchCount += 1;
-      if (callId) memoryLookupCallIds.add(callId);
+      if (callId) {
+        memoryLookupCallIds.add(callId);
+      } else {
+        unlabeledMemorySearchCount += 1;
+      }
       continue;
     }
 
-    if (isToolEnd(type) && callId && memoryLookupCallIds.has(callId)) {
-      memorySearchBytes += outputBytesFromPayload(payload);
+    if (!isToolEnd(type)) continue;
+    const bytes = outputBytesFromPayload(payload);
+    if (callId && memoryLookupCallIds.has(callId)) {
+      const previous = memorySearchBytesByCall.get(callId) ?? 0;
+      memorySearchBytesByCall.set(callId, Math.max(previous, bytes));
+    } else if (!callId && unlabeledMemorySearchCount > 0) {
+      unlabeledMemorySearchBytes += bytes;
     }
   }
 
   return {
     endedAt: endedAt || now.toISOString(),
     sessionId,
-    memorySearchBytes,
-    memorySearchCount,
+    memorySearchBytes: [...memorySearchBytesByCall.values()].reduce((sum, n) => sum + n, 0)
+      + unlabeledMemorySearchBytes,
+    memorySearchCount: memoryLookupCallIds.size + unlabeledMemorySearchCount,
   };
 }
