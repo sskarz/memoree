@@ -16,6 +16,12 @@
 
 ## Test plan
 
-- [ ] Tests pass locally (`npm test`)
+Follow `AGENTS.md` (PR verification loop) and `docs/TESTING.md`.
+
+- [ ] `npm run verify` (every PR)
+- [ ] Runtime-affecting: `npm run build`, `npm test`, `git diff --check`
+- [ ] Live, when keys exist: `npm run runtime:validate` (and `npm run live:e2e` for unaided hooks)
+- [ ] Isolated DBs only; no writes to the operator `~/.memoree`
+- [ ] If Codex or Claude live was skipped, say so — do not mark it passed
 - [ ] Relevant new tests added
 - [ ] Version bumped in `package.json`, or no release needed for this change

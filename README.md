@@ -28,6 +28,67 @@ the affected agent after installation.
 
 For lexical-only retrieval, use `memoree install --no-embeddings`.
 
+If you already run Memoree from `~/.local/share/memoree-runtime`, do not
+`npm link` a development clone. Promote a committed SHA instead (below).
+
+## What Memoree does
+
+Memoree is a SQLite-backed virtual filesystem at `~/.memoree/memory/`, plus
+hooks on Claude Code and Codex, plus a CLI. Agents read team memory with
+ordinary `cat` / `ls` / `grep` on that mount; the PreToolUse hook rewrites
+those commands into queries. Supported sandboxed tools: `cat`, `ls`, `grep`,
+`head`, `tail`, `wc`, `find`, `jq`, `echo`, `printf`, `tee`, and lifecycle
+`mv`/`rm` for a single rule or goal file. Do not spawn subagents to read it.
+
+### Memory files
+
+| Path | Role |
+|---|---|
+| `identity.json` | userName, organization, workspace, backend |
+| `rules.md` / `rules/{active,done}/` | shared rules |
+| `goals.md` / `goal/<owner>/{opened,in_progress,closed}/` | goals |
+| `kpi/<goal-id>/<kpi-id>.md` | KPIs on a goal |
+| `index.md` | recent session inventory |
+| `summaries/` | wiki/session reflections (search these first) |
+| `sessions/` | rendered transcript fallback |
+| `graph/query/<pattern>` | hybrid/semantic code-graph search |
+| `graph/find/<pattern>` | substring search (not a synonym of `query`) |
+| `graph/show`, `impact`, `neighborhood`, `layers`, `tour`, `path` | graph inspection |
+| `docs/index.md`, `docs/find/…`, `docs/leaves` | synced docs |
+
+### Hooks
+
+**Claude Code:** SessionStart (inject + async setup, and auto-mine/backfill
+when due), UserPromptSubmit (capture + recall), PreToolUse (Bash, Read,
+Grep, Glob), PostToolUse / Stop / SubagentStop capture, SessionEnd (wiki
+worker, plugin cache GC, graph auto-build).
+
+**Codex:** SessionStart (matcher `startup|resume`), UserPromptSubmit capture,
+PreToolUse Bash only, PostToolUse capture, Stop (capture + wiki + graph).
+Codex has no SessionEnd and no `recall.js`; instructions live in a managed
+block in `~/.codex/AGENTS.md`.
+
+Claude Code and Codex are the only supported harnesses.
+
+### CLI
+
+```
+memoree install|doctor|status|uninstall
+memoree claude|codex install|uninstall
+memoree backend status|check|use <sqlite|postgres>
+memoree embeddings install|enable|disable|status|uninstall
+memoree rules|goal|kpi|docs|context …
+memoree graph build|diff|history|init|pull|uninstall
+memoree skillify …
+memoree memory backfill|flush
+memoree sessions prune
+```
+
+History backfill, documentation ingestion, graph construction, and skill
+mining are explicit operations; installation does not scan old agent history.
+`memoree docs wiki` / `docs generate` / skillify `mine-local` call a host
+LLM when you run them; they are not part of `install`.
+
 ## Development and stable runtime
 
 Memoree uses three deliberately separate locations:
@@ -89,8 +150,10 @@ phase and evidence; do not report a successful rollout.
 
 Validation requires authenticated Claude Code and Codex CLIs and closed
 interactive sessions. It exercises the globally installed integrations against
-disposable state. Run it manually with explicit authorization, not in
-unattended PR automation.
+disposable state. Unattended GitHub Actions must not promote. A PR agent on a
+disposable VM may run `runtime:validate` / `live:e2e` against isolated DBs;
+it may promote only when that VM does not host daily operator sessions. See
+[docs/TESTING.md](docs/TESTING.md).
 
 Restore the previously recorded revision with:
 
@@ -129,10 +192,6 @@ memoree graph build
 memoree embeddings status
 ```
 
-History backfill, documentation ingestion, graph construction, and skill mining
-are explicit operations; installation does not scan or import old agent
-history.
-
 ## PostgreSQL (advanced)
 
 SQLite is the credential-free default. PostgreSQL remains an opt-in backend for
@@ -157,19 +216,16 @@ memoree codex uninstall
 Uninstalling integrations does not delete `~/.memoree`. Remove that specific
 directory yourself only after making any desired backup.
 
-## Development checks
+## Testing (every PR, and live)
 
-See [docs/TESTING.md](docs/TESTING.md) for the full flow. Short version: `npm run
-verify` is the everyday gate (no install, no closing Claude or Codex). Installing
-a commit onto daily Claude Code / Codex (`runtime:promote`) is a separate, rare
-step.
+See [AGENTS.md](AGENTS.md) for the agent loop and [docs/TESTING.md](docs/TESTING.md)
+for commands, isolation env, coverage map, and pass/fail measurement.
 
-`npm run verify` is the routine local gate: strict TypeScript, a static check of
+`npm run verify` is the everyday gate: strict TypeScript, a static check of
 the JavaScript runtime validator, and source-level Vitest, without rebuilding
-runtime bundles.
+runtime bundles or installing hooks.
 
-Every PR must report `npm run verify`. Major or runtime-affecting PRs must also
-run:
+Every PR must report `npm run verify`. Runtime-affecting PRs must also run:
 
 ```sh
 npm run build
@@ -177,11 +233,35 @@ npm test
 git diff --check
 ```
 
-For a major or runtime-affecting PR, record the exact committed SHA and its
-successful `npm run runtime:validate` result before declaring the rollout
-complete. When validation cannot run before merge because authenticated agent
-sessions must be closed, mark that gate pending and complete it manually after
-merge. Documentation-only and other non-runtime PRs do not require promotion.
+When Claude and Codex are authenticated, add live gates against **isolated**
+SQLite/config/memory paths (never the operator `~/.memoree`):
+
+```sh
+npm run runtime:validate    # promoted (or MEMOREE_RUNTIME_DIR) bundles, driven as Node
+npm run live:e2e            # unaided claude -p / codex exec; no --bare, no --ephemeral
+```
+
+Those two are not duplicates. `runtime:validate` is the promote-completion
+check (VFS writes, hook security, embeddings, `--bare` capture). `live:e2e`
+proves plugin hooks actually fire. Measure a live pass by SQLite
+`integrity_check=ok`, WAL mode, event and summary counts &gt; 0, 768-d
+vectors, and the test UUID present in both agents’ answers **and**
+`/summaries/%`. Missing keys or `--skip-live-codex` is a skip, not a pass.
+
+For a major or runtime-affecting rollout, record the exact committed SHA and
+its successful `npm run runtime:validate` (and, when hooks matter,
+`npm run live:e2e`) before calling the runtime change complete. If that must
+wait until sessions are closed, mark it pending in the PR.
+
+### What is proven vs still source-only
+
+Live harnesses on this repo have proven capture, wiki summaries, 768-d
+embeddings, Claude↔Codex recall, structured rules/goals/KPIs, graph
+`query`/`find` and related VFS paths, docs set/show, and skillify **status**.
+Still source-tested rather than live-LLM’d: `docs wiki` generation (live
+uses `--dry-run`), skillify mine/pull/push, graph `init`/`diff`/`pull`/
+`uninstall`, `memory flush`, and the interactive TUI. The MCP server bundle
+is still built; it is not a supported install path.
 
 ## License
 

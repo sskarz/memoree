@@ -100,7 +100,8 @@ Usage:
   memoree graph --help
       Show this message.
 
-  Future subcommands (Phase 1.5+): daemon, search, latest, push, pull, prune.
+  Graph search is the VFS under ~/.memoree/memory/graph/ (query, find, show,
+  impact, neighborhood, layers, tour, path), not a CLI subcommand.
 `;
 
 // Which directories to skip during discovery lives in

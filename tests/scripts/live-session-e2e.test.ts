@@ -17,6 +17,11 @@ describe("live session e2e harness", () => {
     expect(source).not.toMatch(/["']--ephemeral["']/);
   });
 
+  it("is wired as npm run live:e2e", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+    expect(pkg.scripts["live:e2e"]).toBe("node scripts/live-session-e2e.mjs");
+  });
+
   it("keeps Memoree state on isolated HOME/DB paths", () => {
     expect(source).toContain("MEMOREE_SQLITE_PATH");
     expect(source).toContain("createValidationWorkspace");

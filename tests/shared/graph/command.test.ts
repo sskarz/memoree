@@ -63,6 +63,9 @@ describe("runGraphCommand — help and dispatch", () => {
     const { out } = await captureOutput(() => runGraphCommand([]));
     expect(out).toContain("memoree graph");
     expect(out).toContain("build");
+    expect(out).toContain("memoree graph pull");
+    expect(out).toContain("Graph search is the VFS");
+    expect(out).not.toContain("Future subcommands");
   });
 
   it("prints USAGE on --help / -h / help", async () => {

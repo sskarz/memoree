@@ -28,6 +28,7 @@
     "runtime:promote": "node scripts/runtime-manager.mjs promote",
     "runtime:rollback": "node scripts/runtime-manager.mjs rollback",
     "runtime:validate": "node scripts/runtime-validate.mjs",
+    "live:e2e": "node scripts/live-session-e2e.mjs",
     "rebuild:native": "node scripts/ensure-tree-sitter.mjs",
     "ci": "npm run check:legacy && npm run verify && npm run dup",
     "postinstall": "node scripts/ensure-tree-sitter.mjs"
