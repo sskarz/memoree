@@ -21,6 +21,7 @@ export function assertAgentResponseContainsIdentifier(
   phase: string,
 ): void;
 export function lexicalValidationPrompt(identifier: string): string;
+export function codexSemanticRecallPrompt(): string;
 export function copyCodexAuthentication(realHome: string, isolatedCodexHome: string): void;
 export function createValidationWorkspace(home?: string): string;
 export function classifyAgentCommandError(error: unknown): string | null;

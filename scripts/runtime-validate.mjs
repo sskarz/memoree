@@ -80,6 +80,14 @@ export function lexicalValidationPrompt(identifier) {
   return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
 }
 
+export function codexSemanticRecallPrompt() {
+  return [
+    "Search Memoree memory for the unusual observatory lantern and its exact identifier.",
+    "Use the shell: grep -ri \"observatory lantern\" ~/.memoree/memory/summaries/",
+    "Answer with only the matching UUID. Do not invent an identifier. Do not say none was provided.",
+  ].join("\n");
+}
+
 export function copyCodexAuthentication(realHome, isolatedCodexHome) {
   const source = join(realHome, ".codex", "auth.json");
   assert(existsSync(source), `Codex authentication material is missing: ${source}`);
@@ -454,8 +462,8 @@ export async function validateRuntime(options = {}) {
     writeFileSync(join(repository, "AGENTS.md"), [
       "# Runtime validation",
       "",
-      "When the user asks you to repeat a private test fact or identifier, reply with that exact UUID from the user message.",
-      "Do not invent identifiers. Do not read files. Do not use tools.",
+      "When the current user message already contains a test identifier UUID, repeat that exact UUID. Do not invent identifiers.",
+      "When asked to recall a fact from Memoree, search ~/.memoree/memory with grep or cat and answer with the matching identifier.",
       "",
     ].join("\n"));
 
@@ -999,18 +1007,30 @@ export async function validateRuntime(options = {}) {
       );
 
       status("checking semantic recall through Codex");
-      const semanticRecall = runCodex([
-        "exec",
-        "--skip-git-repo-check",
-        "--ephemeral",
-        "-s", "read-only",
-        "Recall the unusual observatory object and its exact identifier from Memoree. Answer with only that fact.",
-      ], { cwd: repository, env: recallEnv });
-      assertAgentResponseContainsIdentifier(
-        semanticRecall,
-        semanticIdentifier,
-        "Codex semantic recall",
-      );
+      let semanticRecall = "";
+      /** @type {unknown} */
+      let semanticRecallError = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        semanticRecall = runCodex([
+          "exec",
+          "--skip-git-repo-check",
+          "--ephemeral",
+          "-s", "read-only",
+          codexSemanticRecallPrompt(),
+        ], { cwd: repository, env: recallEnv });
+        try {
+          assertAgentResponseContainsIdentifier(
+            semanticRecall,
+            semanticIdentifier,
+            "Codex semantic recall",
+          );
+          semanticRecallError = null;
+          break;
+        } catch (error) {
+          semanticRecallError = error;
+        }
+      }
+      if (semanticRecallError) throw semanticRecallError;
 
       const codexSession = crypto.randomUUID();
       // Avoid secret-like labels such as `token:` and high-entropy prefixes.

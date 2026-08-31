@@ -14,6 +14,7 @@ import {
   linkSharedEmbeddingRuntime,
   isolatedCounts,
   lexicalValidationPrompt,
+  codexSemanticRecallPrompt,
   skipLiveCodexRequested,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
@@ -163,6 +164,16 @@ describe("runtime validation lexical marker", () => {
   });
 });
 
+describe("runtime validation Codex semantic recall prompt", () => {
+  it("tells Codex to grep Memoree summaries instead of answering from the user message", () => {
+    const prompt = codexSemanticRecallPrompt();
+    expect(prompt).toContain("grep -ri");
+    expect(prompt).toContain("~/.memoree/memory/summaries/");
+    expect(prompt).toContain("observatory lantern");
+    expect(prompt).not.toMatch(/do not (read files|use tools)/i);
+  });
+});
+
 describe("runtime validation agent responses", () => {
   const identifier = "a912d384-5605-43ab-bae7-e34b50e6f81a";
 
@@ -196,6 +207,8 @@ describe("runtime validation agent responses", () => {
     expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
     expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(6);
     expect(source).toContain("createValidationWorkspace");
+    expect(source).toContain("codexSemanticRecallPrompt");
+    expect(source).not.toContain("Do not read files. Do not use tools.");
     expect(source).toContain("removeValidationWorkspace");
     expect(source).toContain("runStructuredFilesystemViaHooks");
     expect(source).toContain("skipLiveCodex");
