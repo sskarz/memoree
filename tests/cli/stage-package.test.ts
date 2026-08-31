@@ -24,7 +24,7 @@ function tmp(prefix: string): string {
   return dir;
 }
 
-function seedPackage(root: string, opts: { bundle?: boolean; codexBundle?: boolean } = {}): void {
+function seedPackage(root: string, opts: { bundle?: boolean; codexBundle?: boolean; healScript?: boolean } = {}): void {
   writeFileSync(join(root, "package.json"), JSON.stringify({ name: "memoree", version: "0.0.0" }) + "\n");
   mkdirSync(join(root, ".claude-plugin"), { recursive: true });
   writeFileSync(join(root, ".claude-plugin", "marketplace.json"), JSON.stringify({
@@ -43,17 +43,22 @@ function seedPackage(root: string, opts: { bundle?: boolean; codexBundle?: boole
     mkdirSync(join(root, "harnesses", "codex", "bundle"), { recursive: true });
     writeFileSync(join(root, "harnesses", "codex", "bundle", "session-start.js"), "export {}\n");
   }
+  if (opts.healScript) {
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    writeFileSync(join(root, "scripts", "ensure-tree-sitter.mjs"), "export {}\n");
+  }
 }
 
 describe("stagePackage", () => {
   it("copies marketplace, harnesses, and optional bundles into the durable dest", () => {
     const source = tmp("memoree-stage-src-");
     const dest = tmp("memoree-stage-dst-");
-    seedPackage(source, { bundle: true, codexBundle: true });
+    seedPackage(source, { bundle: true, codexBundle: true, healScript: true });
     expect(stagePackage({ sourceRoot: source, destRoot: dest })).toBe(dest);
     expect(readFileSync(join(dest, ".claude-plugin", "marketplace.json"), "utf-8")).toContain("memoree");
     expect(existsSync(join(dest, "bundle", "cli.js"))).toBe(true);
     expect(existsSync(join(dest, "harnesses", "codex", "bundle", "session-start.js"))).toBe(true);
+    expect(existsSync(join(dest, "scripts", "ensure-tree-sitter.mjs"))).toBe(true);
     expect(codexBundleExists(dest)).toBe(true);
   });
 
@@ -64,6 +69,7 @@ describe("stagePackage", () => {
     stagePackage({ sourceRoot: source, destRoot: dest });
     expect(existsSync(join(dest, "bundle"))).toBe(false);
     expect(codexBundleExists(dest)).toBe(false);
+    expect(existsSync(join(dest, "scripts", "ensure-tree-sitter.mjs"))).toBe(false);
   });
 
   it("throws when the source is not a Memoree package", () => {

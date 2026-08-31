@@ -1,6 +1,12 @@
 # Installing Memoree for Codex
 
-From any directory:
+Confirm `npm view memoree repository.url` is
+`git+https://github.com/sskarz/memoree.git` before using npx. If that
+command 404s or points elsewhere, do not run `npx memoree` — clone the
+repo, `npm ci && npm run build`, then `node bundle/cli.js install`.
+Never `npm link`.
+
+From any directory, once the registry URL matches:
 
 ```sh
 npx -y memoree install

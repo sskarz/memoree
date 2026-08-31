@@ -17,6 +17,7 @@
     "harnesses/codex/",
     "embeddings/",
     ".claude-plugin/",
+    "scripts/ensure-tree-sitter.mjs",
     "README.md",
     "LICENSE"
   ],

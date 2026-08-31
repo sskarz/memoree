@@ -277,7 +277,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `sessions prune` | S | — | L | |
 | `backend check` / embeddings status | S | V | L | |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
-| `npx memoree install` / durable package stage | S | — | — | Pack layout + fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
+| `npx memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
 
 ## Known gaps, overlap, and follow-ups

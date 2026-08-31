@@ -10,6 +10,21 @@ account or hosted service.
 Requirements: Node.js 22.13 or newer, and Claude Code and/or Codex already
 installed.
 
+Confirm the npm package is this project before you (or an agent) run `npx`.
+Until the first publish, `npx -y memoree` can resolve to someone else's
+package:
+
+```sh
+npm view memoree repository.url
+```
+
+That must print `git+https://github.com/sskarz/memoree.git`. If it 404s or
+points elsewhere, do not run `npx memoree` — use the clone path under
+[Development](#development-and-stable-runtime), then `node bundle/cli.js install`.
+Never `npm link`.
+
+Once the registry URL matches:
+
 ```sh
 npx -y memoree install
 ```
@@ -36,13 +51,19 @@ Paste this into Claude Code or Codex:
 
 ```
 Install Memoree (local persistent memory for this agent). Requirements:
-Node.js 22.13+. Do not clone the repository and do not npm link.
+Node.js 22.13+. Never npm link.
 
-1. Check whether it is already installed: `npx -y memoree doctor`.
+1. Run `npm view memoree repository.url`.
+   If it prints git+https://github.com/sskarz/memoree.git, continue.
+   If it 404s or the URL is different, STOP. Do not run `npx memoree`.
+   Tell me the npm package is unpublished or untrusted. I can clone
+   https://github.com/sskarz/memoree.git, run `npm ci && npm run build`,
+   then `node bundle/cli.js install` — never npm link.
+2. Check whether it is already installed: `npx -y memoree doctor`.
    If doctor reports the database and plugin as ok, stop and tell me.
-2. Run `npx -y memoree install`.
-3. Tell me to restart this session.
-4. If this is Codex, tell me to open /hooks after restart and trust
+3. Run `npx -y memoree install`.
+4. Tell me to restart this session.
+5. If this is Codex, tell me to open /hooks after restart and trust
    Memoree — you cannot complete that trust step for me.
 ```
 

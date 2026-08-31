@@ -13,109 +13,131 @@
 // available it warns and exits 0 rather than breaking the install.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = process.cwd();
-// Published/npx installs do not ship `src/`. Skip the native heal there so
-// `npx memoree install` is not blocked on a tree-sitter compile. Graph
-// commands still heal via src/cli/graph-deps.ts when src is present.
-if (!existsSync(join(ROOT, "src", "cli", "index.ts")) && process.env.MEMOREE_HEAL_TREE_SITTER !== "1") {
-  process.exit(0);
-}
-const require = createRequire(`${ROOT}/`);
-const PKGS = [
-  'tree-sitter',
-  'tree-sitter-typescript',
-  'tree-sitter-javascript',
-  'tree-sitter-python',
-  'tree-sitter-go',
-  'tree-sitter-rust',
-  'tree-sitter-java',
-  'tree-sitter-ruby',
-  'tree-sitter-c',
-  'tree-sitter-cpp',
-];
-
-function bindingsLoad() {
-  try {
-    const Parser = require('tree-sitter');
-    const langs = [
-      require('tree-sitter-typescript').typescript,
-      require('tree-sitter-javascript'),
-      require('tree-sitter-python'),
-      require('tree-sitter-go'),
-      require('tree-sitter-rust'),
-      require('tree-sitter-java'),
-      require('tree-sitter-ruby'),
-      require('tree-sitter-c'),
-      require('tree-sitter-cpp'),
-    ];
-    for (const lang of langs) {
-      const p = new Parser();
-      p.setLanguage(lang);
-      p.parse('x');
-    }
-    return true;
-  } catch {
+/**
+ * Skip the native heal only for published/npx `postinstall` (cwd is the
+ * extracted package, which has no `src/`). Graph provisioning runs this
+ * same script with cwd = ~/.memoree/embed-deps (also no `src/`) and MUST
+ * still compile: `defaultRunHeal` sets MEMOREE_STRICT_POSTINSTALL=1 and
+ * MEMOREE_HEAL_TREE_SITTER=1 so this returns false there.
+ */
+export function shouldSkipPublishedPostinstall(root = process.cwd(), env = process.env) {
+  if (env.MEMOREE_HEAL_TREE_SITTER === "1" || env.MEMOREE_STRICT_POSTINSTALL === "1") {
     return false;
   }
+  return !existsSync(join(root, "src", "cli", "index.ts"));
 }
 
-if (process.env.ENSURE_TS_RUNNING) process.exit(0); // recursion guard for the nested npm calls below
-if (bindingsLoad()) process.exit(0); // healthy prebuild / prior build → nothing to do
+function runHeal() {
+  const ROOT = process.cwd();
+  if (shouldSkipPublishedPostinstall(ROOT, process.env)) {
+    console.error(
+      "[ensure-tree-sitter] skipping native heal (published/npx postinstall; set MEMOREE_HEAL_TREE_SITTER=1 to force)",
+    );
+    process.exit(0);
+  }
+  const require = createRequire(`${ROOT}/`);
+  const PKGS = [
+    'tree-sitter',
+    'tree-sitter-typescript',
+    'tree-sitter-javascript',
+    'tree-sitter-python',
+    'tree-sitter-go',
+    'tree-sitter-rust',
+    'tree-sitter-java',
+    'tree-sitter-ruby',
+    'tree-sitter-c',
+    'tree-sitter-cpp',
+  ];
 
-console.error('[ensure-tree-sitter] native bindings not loadable on this platform — building from source...');
-
-const pkg = JSON.parse(readFileSync(`${ROOT}/package.json`, 'utf8'));
-const declared = { ...pkg.dependencies, ...pkg.optionalDependencies };
-
-const env = { ...process.env, ENSURE_TS_RUNNING: '1' };
-if (process.platform !== 'win32') {
-  // Node >=22 V8 headers require C++20; tree-sitter@0.21's binding.gyp doesn't request it.
-  env.CXXFLAGS = `${process.env.CXXFLAGS ?? ''} -std=c++20`.trim();
-}
-const run = (cmd) => execSync(cmd, { stdio: 'inherit', env, cwd: ROOT });
-
-try {
-  // 1. Re-fetch any package npm dropped — an optional dependency whose build failed is
-  //    removed from node_modules. --ignore-scripts: fetch only, so the compile below is
-  //    the single source of truth and the project build isn't triggered prematurely.
-  const missing = PKGS.filter((n) => !existsSync(`${ROOT}/node_modules/${n}/package.json`));
-  if (missing.length) {
-    const specs = missing.map((n) => `${n}@${declared[n] ?? 'latest'}`);
-    run(`npm install ${specs.join(' ')} --no-save --ignore-scripts`);
+  function bindingsLoad() {
+    try {
+      const Parser = require('tree-sitter');
+      const langs = [
+        require('tree-sitter-typescript').typescript,
+        require('tree-sitter-javascript'),
+        require('tree-sitter-python'),
+        require('tree-sitter-go'),
+        require('tree-sitter-rust'),
+        require('tree-sitter-java'),
+        require('tree-sitter-ruby'),
+        require('tree-sitter-c'),
+        require('tree-sitter-cpp'),
+      ];
+      for (const lang of langs) {
+        const p = new Parser();
+        p.setLanguage(lang);
+        p.parse('x');
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  // 2. Force a from-source compile. These packages install via node-gyp-build, which uses
-  //    a local prebuild when present and otherwise compiles from source — no network. By
-  //    removing the (absent or wrong-arch) prebuilds plus any stale build, the rebuild is
-  //    guaranteed to compile locally, and node-gyp-build loads build/Release ahead of
-  //    prebuilds, so the correct binary always wins.
-  for (const n of PKGS) {
-    rmSync(`${ROOT}/node_modules/${n}/prebuilds`, { recursive: true, force: true });
-    rmSync(`${ROOT}/node_modules/${n}/build`, { recursive: true, force: true });
+  if (process.env.ENSURE_TS_RUNNING) process.exit(0); // recursion guard for the nested npm calls below
+  if (bindingsLoad()) process.exit(0); // healthy prebuild / prior build → nothing to do
+
+  console.error('[ensure-tree-sitter] native bindings not loadable on this platform — building from source...');
+
+  const pkg = JSON.parse(readFileSync(`${ROOT}/package.json`, 'utf8'));
+  const declared = { ...pkg.dependencies, ...pkg.optionalDependencies };
+
+  const env = { ...process.env, ENSURE_TS_RUNNING: '1' };
+  if (process.platform !== 'win32') {
+    // Node >=22 V8 headers require C++20; tree-sitter@0.21's binding.gyp doesn't request it.
+    env.CXXFLAGS = `${process.env.CXXFLAGS ?? ''} -std=c++20`.trim();
   }
-  run(`npm rebuild ${PKGS.join(' ')}`);
-} catch (err) {
-  console.error('[ensure-tree-sitter] rebuild command failed:', err.message);
+  const run = (cmd) => execSync(cmd, { stdio: 'inherit', env, cwd: ROOT });
+
+  try {
+    // 1. Re-fetch any package npm dropped — an optional dependency whose build failed is
+    //    removed from node_modules. --ignore-scripts: fetch only, so the compile below is
+    //    the single source of truth and the project build isn't triggered prematurely.
+    const missing = PKGS.filter((n) => !existsSync(`${ROOT}/node_modules/${n}/package.json`));
+    if (missing.length) {
+      const specs = missing.map((n) => `${n}@${declared[n] ?? 'latest'}`);
+      run(`npm install ${specs.join(' ')} --no-save --ignore-scripts`);
+    }
+
+    // 2. Force a from-source compile. These packages install via node-gyp-build, which uses
+    //    a local prebuild when present and otherwise compiles from source — no network. By
+    //    removing the (absent or wrong-arch) prebuilds plus any stale build, the rebuild is
+    //    guaranteed to compile locally, and node-gyp-build loads build/Release ahead of
+    //    prebuilds, so the correct binary always wins.
+    for (const n of PKGS) {
+      rmSync(`${ROOT}/node_modules/${n}/prebuilds`, { recursive: true, force: true });
+      rmSync(`${ROOT}/node_modules/${n}/build`, { recursive: true, force: true });
+    }
+    run(`npm rebuild ${PKGS.join(' ')}`);
+  } catch (err) {
+    console.error('[ensure-tree-sitter] rebuild command failed:', err.message);
+  }
+
+  if (bindingsLoad()) {
+    console.error('[ensure-tree-sitter] OK — bindings compiled from source and loadable.');
+    process.exit(0);
+  }
+
+  // Strict mode: turn the warning into a hard failure. Opt-in via
+  // MEMOREE_STRICT_POSTINSTALL=1 — set by this repo's own CI workflows so a
+  // heal failure surfaces as a red check on the PR instead of getting swallowed
+  // and re-emerging downstream as `tsc: Cannot find module 'tree-sitter'`.
+  // Default stays non-fatal so end-user consumers of memoree never
+  // get a hard install break — the runtime check at use-time is enough for them.
+  const strict = process.env.MEMOREE_STRICT_POSTINSTALL === '1';
+  console.error(
+    '[ensure-tree-sitter] WARNING: tree-sitter bindings still unavailable. ' +
+      'Install a C/C++ toolchain and re-run `npm run rebuild:native`.' +
+      (strict ? ' (strict mode — failing this install)' : ' (non-fatal)'),
+  );
+  process.exit(strict ? 1 : 0);
 }
 
-if (bindingsLoad()) {
-  console.error('[ensure-tree-sitter] OK — bindings compiled from source and loadable.');
-  process.exit(0);
+const __entryUrl = process.argv[1] ? fileURLToPath(import.meta.url) === resolve(process.argv[1]) : false;
+if (__entryUrl) {
+  runHeal();
 }
-
-// Strict mode: turn the warning into a hard failure. Opt-in via
-// MEMOREE_STRICT_POSTINSTALL=1 — set by this repo's own CI workflows so a
-// heal failure surfaces as a red check on the PR instead of getting swallowed
-// and re-emerging downstream as `tsc: Cannot find module 'tree-sitter'`.
-// Default stays non-fatal so end-user consumers of memoree never
-// get a hard install break — the runtime check at use-time is enough for them.
-const strict = process.env.MEMOREE_STRICT_POSTINSTALL === '1';
-console.error(
-  '[ensure-tree-sitter] WARNING: tree-sitter bindings still unavailable. ' +
-    'Install a C/C++ toolchain and re-run `npm run rebuild:native`.' +
-    (strict ? ' (strict mode — failing this install)' : ' (non-fatal)'),
-);
-process.exit(strict ? 1 : 0);

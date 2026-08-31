@@ -20,6 +20,7 @@ export const REQUIRED_FILES_FIELD = [
   "harnesses/codex/",
   "embeddings/",
   ".claude-plugin/",
+  "scripts/ensure-tree-sitter.mjs",
   "README.md",
   "LICENSE",
 ];
@@ -31,9 +32,13 @@ export const REQUIRED_TRACKED_FILES = [
   "harnesses/claude-code/hooks/hooks.json",
   "harnesses/codex/.codex-plugin/plugin.json",
   "harnesses/codex/hooks/hooks.json",
+  "scripts/ensure-tree-sitter.mjs",
   "README.md",
   "LICENSE",
 ];
+
+export const TRUSTED_REPOSITORY_URL = "git+https://github.com/sskarz/memoree.git";
+export const POSTINSTALL_SCRIPT = "node scripts/ensure-tree-sitter.mjs";
 
 export const REQUIRED_ARTIFACT_FILES = [
   "bundle/cli.js",
@@ -78,6 +83,14 @@ export function checkPackageManifest(pkg) {
   if (pkg.scripts?.prepack !== "npm run build") {
     errors.push("package.json scripts.prepack must be npm run build");
   }
+  if (pkg.scripts?.postinstall !== POSTINSTALL_SCRIPT) {
+    errors.push(`package.json postinstall must be ${POSTINSTALL_SCRIPT} (packed; no-ops on npx without src/)`);
+  }
+  const repo = pkg.repository;
+  const repoUrl = typeof repo === "string" ? repo : repo && typeof repo === "object" ? repo.url : undefined;
+  if (repoUrl !== TRUSTED_REPOSITORY_URL) {
+    errors.push(`package.json repository.url must be ${TRUSTED_REPOSITORY_URL}`);
+  }
   return errors;
 }
 
@@ -110,6 +123,7 @@ export function checkTarballListing(names) {
     "bundle/cli.js",
     "harnesses/claude-code/bundle/session-start.js",
     "harnesses/codex/bundle/session-start.js",
+    "scripts/ensure-tree-sitter.mjs",
   ]) {
     if (!has(rel)) errors.push(`tarball missing ${rel}`);
   }

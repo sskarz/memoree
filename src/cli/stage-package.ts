@@ -20,6 +20,7 @@ export const STAGED_ENTRIES = [
   "harnesses/claude-code",
   "harnesses/codex",
   "embeddings",
+  "scripts/ensure-tree-sitter.mjs",
 ] as const;
 
 export function defaultStagedPackageDir(home: string = homedir()): string {

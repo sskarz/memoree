@@ -23,7 +23,11 @@ describe("pack-check", () => {
       license: "Apache-2.0",
       bin: { memoree: "bundle/cli.js" },
       files: REQUIRED_FILES_FIELD,
-      scripts: { prepack: "npm run build" },
+      repository: { type: "git", url: "git+https://github.com/sskarz/memoree.git" },
+      scripts: {
+        prepack: "npm run build",
+        postinstall: "node scripts/ensure-tree-sitter.mjs",
+      },
     });
     expect(errors).toEqual([]);
   });
@@ -38,6 +42,8 @@ describe("pack-check", () => {
     expect(errors.some(error => error.includes("private"))).toBe(true);
     expect(errors.some(error => error.includes("src/"))).toBe(true);
     expect(errors.some(error => error.includes("Apache-2.0"))).toBe(true);
+    expect(errors.some(error => error.includes("postinstall"))).toBe(true);
+    expect(errors.some(error => error.includes("repository.url"))).toBe(true);
   });
 
   it("rejects a tarball that ships source or omits hook bundles", () => {
@@ -60,6 +66,7 @@ describe("pack-check", () => {
       "package/bundle/cli.js",
       "package/harnesses/claude-code/bundle/session-start.js",
       "package/harnesses/codex/bundle/session-start.js",
+      "package/scripts/ensure-tree-sitter.mjs",
     ])).toEqual([]);
   });
 
