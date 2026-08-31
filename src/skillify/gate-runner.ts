@@ -100,6 +100,13 @@ export function buildArgs(agent: Agent, prompt: string, opts: GateRunOptions): s
   }
 }
 
+export function withCodexApiKey(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const next = { ...env };
+  const key = (next.CODEX_API_KEY ?? next.OPENAI_API_KEY ?? "").trim();
+  if (key) next.CODEX_API_KEY = key;
+  return next;
+}
+
 export function runGate(opts: GateRunOptions): GateRunResult {
   const bin = opts.bin ?? findAgentBin(opts.agent);
   if (!existsSync(bin)) {
@@ -118,7 +125,7 @@ export function runGate(opts: GateRunOptions): GateRunResult {
       windowsHide: true,
       timeout: opts.timeoutMs ?? 120_000,
       maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
+      env: { ...withCodexApiKey(process.env), MEMOREE_WIKI_WORKER: "1", MEMOREE_CAPTURE: "false" },
     });
     return { stdout: result.toString("utf-8"), stderr: "", errored: false };
   } catch (e: any) {

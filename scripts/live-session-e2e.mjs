@@ -16,7 +16,8 @@ import { runtimePaths } from "./runtime-manager.mjs";
 import {
   assert,
   assertAgentResponseContainsIdentifier,
-  copyCodexAuthentication,
+  authenticatedCodexEnvironment,
+  prepareCodexAuthentication,
   createValidationWorkspace,
   inspectCaptureDatabase,
   lexicalValidationPrompt,
@@ -80,7 +81,7 @@ export async function runLiveSessionE2E() {
   const kpiId = crypto.randomUUID();
   let passed = false;
 
-  const env = {
+  const env = authenticatedCodexEnvironment({
     ...process.env,
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
@@ -108,7 +109,7 @@ export async function runLiveSessionE2E() {
     MEMOREE_VALIDATION_CLAUDE_HOME: realHome,
     MEMOREE_VALIDATION_CLAUDE_CONFIG_DIR: realClaudeConfigDir,
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-  };
+  });
 
   try {
     mkdirSync(state, { recursive: true, mode: 0o700 });
@@ -116,7 +117,7 @@ export async function runLiveSessionE2E() {
     mkdirSync(isolatedTmp, { recursive: true, mode: 0o700 });
     mkdirSync(join(isolatedHome, ".claude"), { recursive: true, mode: 0o700 });
     linkSharedEmbeddingRuntime(realHome, isolatedHome);
-    copyCodexAuthentication(realHome, isolatedCodexHome);
+    prepareCodexAuthentication(realHome, isolatedCodexHome, env);
 
     mkdirSync(join(repository, "src"), { recursive: true });
     run("git", ["init", repository], { env, capture: false });

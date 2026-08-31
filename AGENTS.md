@@ -80,6 +80,10 @@ set -a; . "$HOME/.config/memoree-live.env"; set +a
 export PATH="$HOME/.npm-global/bin:$PATH"
 ```
 
+Codex headless `exec` authenticates with `CODEX_API_KEY` or `~/.codex/auth.json`,
+not `OPENAI_API_KEY` alone. `scripts/prepare-codex-api-key.sh` copies the
+Platform key and runs `codex login --with-api-key`.
+
 **Without promoting** (safe on a laptop; tests whatever
 `~/.local/share/memoree-runtime` currently is, or `$PWD` if you override):
 
