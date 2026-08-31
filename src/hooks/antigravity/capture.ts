@@ -15,6 +15,7 @@ import { buildSessionPath } from "../../utils/session-path.js";
 import { EmbedClient } from "../../embeddings/client.js";
 import { embeddingSqlLiteral } from "../../embeddings/sql.js";
 import { embeddingsDisabled } from "../../embeddings/disable.js";
+import { ensurePluginNodeModulesLink } from "../../embeddings/self-heal.js";
 import { buildDirectSessionInsertSql } from "../shared/session-insert-sql.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -40,6 +41,10 @@ function resolveEmbedDaemonPath(): string {
 
 const __bundleDir = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_VERSION = getInstalledVersion(__bundleDir, ".antigravity-plugin") ?? "";
+
+if (!embeddingsDisabled()) {
+  try { ensurePluginNodeModulesLink({ bundleDir: __bundleDir }); } catch { /* best-effort */ }
+}
 
 export interface CaptureEvent {
   type: "user_message" | "tool_call" | "assistant_message";

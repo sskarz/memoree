@@ -105,6 +105,9 @@ describe("shipped shell/memoree-shell.js — embed daemon path resolves to an ex
     ["codex",
       join(repoRoot, "harnesses", "codex", "bundle", "shell", "memoree-shell.js"),
       join(repoRoot, "harnesses", "codex", "bundle", "embeddings", "embed-daemon.js")],
+    ["antigravity",
+      join(repoRoot, "harnesses", "antigravity", "bundle", "shell", "memoree-shell.js"),
+      join(repoRoot, "harnesses", "antigravity", "bundle", "embeddings", "embed-daemon.js")],
   ];
 
   it.each(SHELL_BUNDLES)("%s shell bundle exists", (_label, shellPath) => {
