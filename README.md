@@ -5,31 +5,46 @@ configuration, graphs, model files, and captured sessions stay under
 `~/.memoree`; local embeddings are enabled by default and require no Memoree
 account or hosted service.
 
-## Install from source
+## Install
 
-Requirements: Git, Node.js 22.13 or newer, and an authenticated Claude Code or
-Codex CLI.
+Requirements: Node.js 22.13 or newer, and Claude Code and/or Codex already
+installed.
 
 ```sh
-git clone https://github.com/sskarz/memoree.git
-cd memoree
-npm ci
-npm run build
-npm link
-memoree install
-memoree codex install  # when using Codex
-memoree doctor
+npx -y memoree install
 ```
 
-`memoree install` initializes SQLite and local embeddings, then installs the
-Claude Code plugin. `memoree codex install` adds the Codex hooks and skill. Both
-installers are idempotent and preserve unrelated user configuration. Restart
-the affected agent after installation.
+That command initializes SQLite and local embeddings, copies the plugin to a
+durable directory (`~/.local/share/memoree/pkg`, not the npx cache), and
+wires every detected harness. Re-run it to upgrade. For lexical-only
+retrieval: `npx -y memoree install --no-embeddings`.
 
-For lexical-only retrieval, use `memoree install --no-embeddings`.
+Then:
 
-If you already run Memoree from `~/.local/share/memoree-runtime`, do not
-`npm link` a development clone. Promote a committed SHA instead (below).
+- **Claude Code:** restart the session (or `/reload-plugins`).
+- **Codex:** restart, then open `/hooks` and trust Memoree. Codex does not
+  auto-trust plugin hooks; that step has to be a person.
+- Check: `npx memoree doctor`
+
+Later CLI commands also work through npx (`npx memoree status`,
+`npx memoree uninstall`). Do not `npm link` a development clone — that
+replaces the code Claude Code and Codex are already running.
+
+### Ask an agent to install it
+
+Paste this into Claude Code or Codex:
+
+```
+Install Memoree (local persistent memory for this agent). Requirements:
+Node.js 22.13+. Do not clone the repository and do not npm link.
+
+1. Check whether it is already installed: `npx -y memoree doctor`.
+   If doctor reports the database and plugin as ok, stop and tell me.
+2. Run `npx -y memoree install`.
+3. Tell me to restart this session.
+4. If this is Codex, tell me to open /hooks after restart and trust
+   Memoree — you cannot complete that trust step for me.
+```
 
 ## What Memoree does
 
@@ -92,11 +107,22 @@ LLM when you run them; they are not part of `install`.
 
 ## Development and stable runtime
 
+Clone the repository only to change Memoree itself. Everyday use is
+`npx -y memoree install` above.
+
+```sh
+git clone https://github.com/sskarz/memoree.git
+cd memoree
+npm ci
+npm run build
+```
+
 Memoree uses three deliberately separate locations:
 
 | Location | Purpose |
 |---|---|
 | development checkout | edit code and run source tests |
+| `~/.local/share/memoree/pkg` | durable plugin copy staged by `npx memoree install` |
 | `~/.local/share/memoree-runtime` | detached, committed revision loaded globally by Claude Code and Codex |
 | `~/.memoree` | durable user database, configuration, graphs, models, and logs |
 
@@ -181,9 +207,9 @@ npm run runtime:validate
 ## Everyday commands
 
 ```sh
-memoree doctor
-memoree status
-memoree context
+npx memoree doctor
+npx memoree status
+npx memoree context
 cat ~/.memoree/memory/identity.json
 cat ~/.memoree/memory/rules.md
 cat ~/.memoree/memory/goals.md
@@ -210,8 +236,8 @@ Return to local SQLite with `memoree backend use sqlite`.
 ## Remove integrations
 
 ```sh
-memoree uninstall
-memoree codex uninstall
+npx memoree uninstall
+npx memoree codex uninstall
 ```
 
 Uninstalling integrations does not delete `~/.memoree`. Remove that specific

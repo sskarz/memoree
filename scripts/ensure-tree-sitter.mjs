@@ -13,9 +13,16 @@
 // available it warns and exits 0 rather than breaking the install.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
 
 const ROOT = process.cwd();
+// Published/npx installs do not ship `src/`. Skip the native heal there so
+// `npx memoree install` is not blocked on a tree-sitter compile. Graph
+// commands still heal via src/cli/graph-deps.ts when src is present.
+if (!existsSync(join(ROOT, "src", "cli", "index.ts")) && process.env.MEMOREE_HEAL_TREE_SITTER !== "1") {
+  process.exit(0);
+}
 const require = createRequire(`${ROOT}/`);
 const PKGS = [
   'tree-sitter',
