@@ -105,7 +105,7 @@ function nextStepLines(wired: PlatformId[]): string[] {
   if (wired.includes("codex")) {
     lines.push("Restart Codex, then open /hooks and trust Memoree so its hooks can run.");
   }
-  lines.push("Then run `npx memoree doctor`.");
+  lines.push("Then run `npx @sskarz/memoree doctor`.");
   return lines;
 }
 
@@ -136,7 +136,7 @@ export async function runInstall(
   const detected = runtime.detectPlatforms().map(platform => platform.id);
   if (detected.length === 0) {
     throw new Error(
-      "No Claude Code or Codex installation found. Install one of them, then rerun `npx memoree install`.",
+      "No Claude Code or Codex installation found. Install one of them, then rerun `npx @sskarz/memoree install`.",
     );
   }
 
@@ -147,7 +147,7 @@ export async function runInstall(
   }
   if (wired.length === 0) {
     throw new Error(
-      "Failed to wire any harness. Install the Claude Code CLI (`claude`) or Codex, then rerun `npx memoree install`.",
+      "Failed to wire any harness. Install the Claude Code CLI (`claude`) or Codex, then rerun `npx @sskarz/memoree install`.",
     );
   }
 

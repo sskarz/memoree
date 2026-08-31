@@ -20,9 +20,11 @@ afterEach(() => {
 describe("pack-check", () => {
   it("accepts the published-package manifest shape", () => {
     const errors = checkPackageManifest({
+      name: "@sskarz/memoree",
       license: "Apache-2.0",
       bin: { memoree: "bundle/cli.js" },
       files: REQUIRED_FILES_FIELD,
+      publishConfig: { access: "public" },
       repository: { type: "git", url: "git+https://github.com/sskarz/memoree.git" },
       scripts: {
         prepack: "npm run build",
@@ -44,6 +46,8 @@ describe("pack-check", () => {
     expect(errors.some(error => error.includes("Apache-2.0"))).toBe(true);
     expect(errors.some(error => error.includes("postinstall"))).toBe(true);
     expect(errors.some(error => error.includes("repository.url"))).toBe(true);
+    expect(errors.some(error => error.includes("@sskarz/memoree"))).toBe(true);
+    expect(errors.some(error => error.includes("publishConfig.access"))).toBe(true);
   });
 
   it("rejects a tarball that ships source or omits hook bundles", () => {

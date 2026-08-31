@@ -154,7 +154,7 @@ describe("runInstall", () => {
     expect(logs).toContain("Docs (optional)");
     expect(logs).toContain("Restart Claude Code to activate Memoree.");
     expect(logs).toContain("Restart Codex, then open /hooks and trust Memoree so its hooks can run.");
-    expect(logs).toContain("Then run `npx memoree doctor`.");
+    expect(logs).toContain("Then run `npx @sskarz/memoree doctor`.");
     expect(markDocsHintShown).toHaveBeenCalledOnce();
   });
 });

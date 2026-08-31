@@ -98,7 +98,7 @@ npm run verify
 ```
 
 That type-checks, checks the runtime-validator script, checks the npm pack
-manifest for `npx memoree install`, and runs source tests,
+manifest for `npx @sskarz/memoree install`, and runs source tests,
 including the two files above. No rebuild, no install.
 
 Put agent-independent tests under `tests/shared/`. Inject filesystem, time,
@@ -277,7 +277,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `sessions prune` | S | — | L | |
 | `backend check` / embeddings status | S | V | L | |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
-| `npx memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
+| `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
 
 ## Known gaps, overlap, and follow-ups

@@ -42,7 +42,7 @@ const AGENTS: AgentLayout[] = [
 
 describe("plugin_version stamps a non-empty value for every shipped agent", () => {
   it.each(AGENTS)("$agent resolves getInstalledVersion to a semver string", ({ bundleDir, manifestDir }) => {
-    // The repo-level package.json has name "memoree" (in the
+    // The repo-level package.json has name "@sskarz/memoree" (in the
     // MEMOREE_PKG_NAMES set), so even agents without an in-repo manifest
     // Runtime must never see an empty version here.
     const version = getInstalledVersion(bundleDir, manifestDir);

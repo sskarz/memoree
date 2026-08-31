@@ -1,15 +1,15 @@
 # Installing Memoree for Codex
 
-Confirm `npm view memoree repository.url` is
+Confirm `npm view @sskarz/memoree repository.url` is
 `git+https://github.com/sskarz/memoree.git` before using npx. If that
-command 404s or points elsewhere, do not run `npx memoree` — clone the
-repo, `npm ci && npm run build`, then `node bundle/cli.js install`.
+command 404s or points elsewhere, do not run npx — clone the repo,
+`npm ci && npm run build`, then `node bundle/cli.js install`.
 Never `npm link`.
 
 From any directory, once the registry URL matches:
 
 ```sh
-npx -y memoree install
+npx -y @sskarz/memoree install
 ```
 
 The installer detects `~/.codex`, copies hook bundles to
@@ -21,11 +21,11 @@ update.
 Restart Codex, then open `/hooks` and trust Memoree. Codex skips
 plugin-bundled hooks until that review happens.
 
-`npx memoree codex install` wires Codex only, after a prior `install` has
-initialized storage. Remove the integration with:
+`npx @sskarz/memoree codex install` wires Codex only, after a prior
+`install` has initialized storage. Remove the integration with:
 
 ```sh
-npx memoree codex uninstall
+npx @sskarz/memoree codex uninstall
 ```
 
 For repository development, do not `npm link` the development checkout.

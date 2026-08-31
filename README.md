@@ -10,39 +10,38 @@ account or hosted service.
 Requirements: Node.js 22.13 or newer, and Claude Code and/or Codex already
 installed.
 
-Confirm the npm package is this project before you (or an agent) run `npx`.
-Until the first publish, `npx -y memoree` can resolve to someone else's
-package:
+The npm package is `@sskarz/memoree` (unscoped `memoree` is blocked by the
+registry as too similar to `memoizee`). Confirm it is this project:
 
 ```sh
-npm view memoree repository.url
+npm view @sskarz/memoree repository.url
 ```
 
 That must print `git+https://github.com/sskarz/memoree.git`. If it 404s or
-points elsewhere, do not run `npx memoree` — use the clone path under
+points elsewhere, do not run npx — use the clone path under
 [Development](#development-and-stable-runtime), then `node bundle/cli.js install`.
 Never `npm link`.
 
 Once the registry URL matches:
 
 ```sh
-npx -y memoree install
+npx -y @sskarz/memoree install
 ```
 
 That command initializes SQLite and local embeddings, copies the plugin to a
 durable directory (`~/.local/share/memoree/pkg`, not the npx cache), and
 wires every detected harness. Re-run it to upgrade. For lexical-only
-retrieval: `npx -y memoree install --no-embeddings`.
+retrieval: `npx -y @sskarz/memoree install --no-embeddings`.
 
 Then:
 
 - **Claude Code:** restart the session (or `/reload-plugins`).
 - **Codex:** restart, then open `/hooks` and trust Memoree. Codex does not
   auto-trust plugin hooks; that step has to be a person.
-- Check: `npx memoree doctor`
+- Check: `npx @sskarz/memoree doctor`
 
-Later CLI commands also work through npx (`npx memoree status`,
-`npx memoree uninstall`). Do not `npm link` a development clone — that
+Later CLI commands also work through npx (`npx @sskarz/memoree status`,
+`npx @sskarz/memoree uninstall`). Do not `npm link` a development clone — that
 replaces the code Claude Code and Codex are already running.
 
 ### Ask an agent to install it
@@ -53,15 +52,15 @@ Paste this into Claude Code or Codex:
 Install Memoree (local persistent memory for this agent). Requirements:
 Node.js 22.13+. Never npm link.
 
-1. Run `npm view memoree repository.url`.
+1. Run `npm view @sskarz/memoree repository.url`.
    If it prints git+https://github.com/sskarz/memoree.git, continue.
-   If it 404s or the URL is different, STOP. Do not run `npx memoree`.
+   If it 404s or the URL is different, STOP. Do not run npx.
    Tell me the npm package is unpublished or untrusted. I can clone
    https://github.com/sskarz/memoree.git, run `npm ci && npm run build`,
    then `node bundle/cli.js install` — never npm link.
-2. Check whether it is already installed: `npx -y memoree doctor`.
+2. Check whether it is already installed: `npx -y @sskarz/memoree doctor`.
    If doctor reports the database and plugin as ok, stop and tell me.
-3. Run `npx -y memoree install`.
+3. Run `npx -y @sskarz/memoree install`.
 4. Tell me to restart this session.
 5. If this is Codex, tell me to open /hooks after restart and trust
    Memoree — you cannot complete that trust step for me.
@@ -129,7 +128,7 @@ LLM when you run them; they are not part of `install`.
 ## Development and stable runtime
 
 Clone the repository only to change Memoree itself. Everyday use is
-`npx -y memoree install` above.
+`npx -y @sskarz/memoree install` above.
 
 ```sh
 git clone https://github.com/sskarz/memoree.git
@@ -143,7 +142,7 @@ Memoree uses three deliberately separate locations:
 | Location | Purpose |
 |---|---|
 | development checkout | edit code and run source tests |
-| `~/.local/share/memoree/pkg` | durable plugin copy staged by `npx memoree install` |
+| `~/.local/share/memoree/pkg` | durable plugin copy staged by `npx @sskarz/memoree install` |
 | `~/.local/share/memoree-runtime` | detached, committed revision loaded globally by Claude Code and Codex |
 | `~/.memoree` | durable user database, configuration, graphs, models, and logs |
 
@@ -228,9 +227,9 @@ npm run runtime:validate
 ## Everyday commands
 
 ```sh
-npx memoree doctor
-npx memoree status
-npx memoree context
+npx @sskarz/memoree doctor
+npx @sskarz/memoree status
+npx @sskarz/memoree context
 cat ~/.memoree/memory/identity.json
 cat ~/.memoree/memory/rules.md
 cat ~/.memoree/memory/goals.md
@@ -257,8 +256,8 @@ Return to local SQLite with `memoree backend use sqlite`.
 ## Remove integrations
 
 ```sh
-npx memoree uninstall
-npx memoree codex uninstall
+npx @sskarz/memoree uninstall
+npx @sskarz/memoree codex uninstall
 ```
 
 Uninstalling integrations does not delete `~/.memoree`. Remove that specific
