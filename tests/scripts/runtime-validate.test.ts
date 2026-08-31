@@ -196,6 +196,7 @@ describe("runtime validation agent responses", () => {
     expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
     expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(6);
     expect(source).toContain("createValidationWorkspace");
+    expect(source).toContain("removeValidationWorkspace");
     expect(source).toContain("runStructuredFilesystemViaHooks");
     expect(source).toContain("skipLiveCodex");
     expect(source).toContain("graph/query/store");

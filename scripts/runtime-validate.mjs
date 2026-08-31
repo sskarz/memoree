@@ -93,6 +93,23 @@ export function createValidationWorkspace(home = homedir()) {
   return mkdtempSync(join(cacheDir, "memoree-runtime-validate-"));
 }
 
+function removeValidationWorkspace(root) {
+  /** @type {unknown} */
+  let lastError = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (code !== "ENOTEMPTY" && code !== "EBUSY" && code !== "EPERM") throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+    }
+  }
+  throw lastError;
+}
+
 export function classifyAgentCommandError(error) {
   const text = [
     error instanceof Error ? error.message : String(error ?? ""),
@@ -1052,7 +1069,7 @@ export async function validateRuntime(options = {}) {
         : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeValidationWorkspace(root);
   }
 }
 
