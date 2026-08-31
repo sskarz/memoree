@@ -281,10 +281,12 @@ export async function runLiveSessionE2E() {
     assertAgentResponseContainsIdentifier(recallOut, harborId, "live Claude Code recall");
 
     status("running a live Codex capture session (hooks enabled)");
+    // Do not use --ephemeral: that skips session files, so Stop cannot read the
+    // transcript and UserPromptSubmit/Stop capture never persist the prompt.
     const codexCapture = runCodex([
       "exec",
       "--skip-git-repo-check",
-      "--ephemeral",
+      "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       lexicalValidationPrompt(lanternId),
     ], { cwd: repository, env, timeout: 300_000 });
@@ -294,7 +296,7 @@ export async function runLiveSessionE2E() {
     const codexRecall = runCodex([
       "exec",
       "--skip-git-repo-check",
-      "--ephemeral",
+      "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       codexLivePrompt(),
     ], { cwd: repository, env, timeout: 300_000 });
