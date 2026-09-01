@@ -42,29 +42,66 @@ export const MEMOREE_MCP_TOOL_NAMES = [
 ] as const;
 
 /**
- * Unique product job for each MCP tool. echo/printf/tee collapse to
- * memoree_write: they are three shell spellings of the same lifecycle write.
- * Dropping any other tool would break the published sandbox contract
- * (Claude/Codex SKILL.md + MEMORY_COMMAND_GUIDANCE).
+ * Unique product job for each MCP tool, plus why it is not an alias of a
+ * sibling. echo/printf/tee collapse to memoree_write: they are three shell
+ * spellings of the same lifecycle write. Dropping any other tool would break
+ * the published sandbox contract (Claude/Codex SKILL.md + MEMORY_COMMAND_GUIDANCE).
  */
-export const MCP_TOOL_JOBS: Record<(typeof MEMOREE_MCP_TOOL_NAMES)[number], string> = {
-  memoree_ls: "Inventory a directory without opening file bodies.",
-  memoree_read: "Read a whole virtual file (identity, rules.md, summaries, graph/query, docs).",
-  memoree_grep: "Search file contents across a subtree (recall).",
-  memoree_head: "Read the start of a large file without loading all of it.",
-  memoree_tail: "Read the end of a large file (recent index/session lines).",
-  memoree_wc: "Measure line count before deciding to cat a huge transcript.",
-  memoree_find: "Locate files by name, not by content.",
-  memoree_jq: "Extract fields from real JSON (identity.json). Not session .jsonl views.",
-  memoree_write: "Create or overwrite a rule, goal, or KPI file (printf/echo/tee).",
-  memoree_mv: "Move a rule or goal between lifecycle dirs, keeping the same id.",
-  memoree_rm: "Mark a rule done or close a goal (lifecycle, not a hard delete).",
-};
+export const MCP_TOOL_UNIQUENESS = {
+  memoree_ls: {
+    job: "Inventory a directory without opening file bodies.",
+    unlike: "memoree_read opens file bodies; ls only lists names.",
+  },
+  memoree_read: {
+    job: "Read a whole virtual file (identity, rules.md, summaries, graph/query, docs).",
+    unlike: "head/tail/wc slice or measure a file; ls lists names; grep searches contents.",
+  },
+  memoree_grep: {
+    job: "Search file contents across a subtree (recall).",
+    unlike: "memoree_find matches filenames, not bodies.",
+  },
+  memoree_head: {
+    job: "Read the start of a large file without loading all of it.",
+    unlike: "memoree_read is the whole file; memoree_tail is the end.",
+  },
+  memoree_tail: {
+    job: "Read the end of a large file (recent index/session lines).",
+    unlike: "memoree_head is the start; memoree_read is the whole file.",
+  },
+  memoree_wc: {
+    job: "Measure line count before deciding to cat a huge transcript.",
+    unlike: "memoree_read returns the body; wc returns a count.",
+  },
+  memoree_find: {
+    job: "Locate files by name, not by content.",
+    unlike: "memoree_grep searches bodies; find searches names.",
+  },
+  memoree_jq: {
+    job: "Extract fields from real JSON (identity.json). Not session .jsonl views.",
+    unlike: "memoree_read dumps the whole JSON document.",
+  },
+  memoree_write: {
+    job: "Create or overwrite a rule, goal, or KPI file (printf/echo/tee).",
+    unlike: "memoree_mv transitions an existing id; memoree_rm closes it.",
+  },
+  memoree_mv: {
+    job: "Move a rule or goal between lifecycle dirs, keeping the same id.",
+    unlike: "memoree_write creates; memoree_rm closes without choosing the destination.",
+  },
+  memoree_rm: {
+    job: "Mark a rule done or close a goal (lifecycle, not a hard delete).",
+    unlike: "memoree_mv is an explicit status move; rm is close/done. Neither unlinks.",
+  },
+} as const satisfies Record<(typeof MEMOREE_MCP_TOOL_NAMES)[number], { job: string; unlike: string }>;
+
+export const MCP_TOOL_JOBS = Object.fromEntries(
+  MEMOREE_MCP_TOOL_NAMES.map(name => [name, MCP_TOOL_UNIQUENESS[name].job]),
+) as Record<(typeof MEMOREE_MCP_TOOL_NAMES)[number], string>;
 
 export const MEMOREE_MCP_TOOLS = [
   {
     name: "memoree_ls",
-    description: "List a directory in Memoree memory (identity, rules, goals, summaries, graph, docs).",
+    description: "Inventory a Memoree directory by name only (identity, rules, goals, summaries, graph, docs). Does not open file bodies — use memoree_read for content.",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string", description: "Memory-relative path, e.g. \"\" or \"summaries\"" } },
@@ -72,7 +109,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_read",
-    description: "Read a file in Memoree memory. Paths are virtual (identity.json, rules.md, graph/query/<q>, docs/...).",
+    description: "Read an entire virtual file (identity.json, rules.md, graph/query/<q>, docs/...). Use head/tail/wc for large files instead of loading everything.",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string", description: "Memory-relative path, e.g. identity.json" } },
@@ -81,7 +118,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_grep",
-    description: "Search Memoree memory with grep. Prefer summaries/ for recall.",
+    description: "Search file CONTENTS across a Memoree subtree (recall). Prefer summaries/. Use memoree_find to locate files by name.",
     inputSchema: {
       type: "object",
       properties: {
@@ -93,7 +130,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_head",
-    description: "Read the first N lines of a Memoree memory file (same as sandboxed head).",
+    description: "First N lines of a large Memoree file without a full read. Use memoree_tail for the end.",
     inputSchema: {
       type: "object",
       properties: {
@@ -105,7 +142,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_tail",
-    description: "Read the last N lines of a Memoree memory file (same as sandboxed tail).",
+    description: "Last N lines of a large Memoree file (recent index/session text) without a full read. Use memoree_head for the start.",
     inputSchema: {
       type: "object",
       properties: {
@@ -117,7 +154,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_wc",
-    description: "Count lines in a Memoree memory file (wc -l).",
+    description: "Line count of a Memoree file (wc -l). Returns a count, not the body — use before deciding to memoree_read a huge transcript.",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string" } },
@@ -126,7 +163,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_find",
-    description: "Find names under a Memoree memory directory (find <path> -name <pattern>).",
+    description: "Locate files by NAME glob (find <path> -name <pattern>). Use memoree_grep to search file contents.",
     inputSchema: {
       type: "object",
       properties: {
@@ -137,7 +174,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_jq",
-    description: "Run jq on a JSON file in Memoree memory. Do not use on rendered session .jsonl views.",
+    description: "Extract a JSON field (identity.json). Not a full-document read — do not use on rendered session .jsonl views.",
     inputSchema: {
       type: "object",
       properties: {
@@ -149,7 +186,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_write",
-    description: "Write a rule, goal, or KPI file. Path encodes lifecycle (rules/active/<uuid>.md, goal/<owner>/<status>/<id>.md).",
+    description: "Create or overwrite a rule, goal, or KPI (printf/echo/tee). Path encodes lifecycle. Use memoree_mv to change status of an existing id.",
     inputSchema: {
       type: "object",
       properties: {
@@ -161,7 +198,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_mv",
-    description: "Move a rule or goal between lifecycle directories, keeping the same id.",
+    description: "Move a rule or goal between lifecycle directories, keeping the same id (active↔done, opened→in_progress). Not a create and not a close.",
     inputSchema: {
       type: "object",
       properties: { from: { type: "string" }, to: { type: "string" } },
@@ -170,7 +207,7 @@ export const MEMOREE_MCP_TOOLS = [
   },
   {
     name: "memoree_rm",
-    description: "Mark a rule done or close a goal (lifecycle transition, not a hard delete).",
+    description: "Mark a rule done or close a goal. Lifecycle transition, not a hard delete — the id remains readable under done/closed.",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string" } },

@@ -7,16 +7,19 @@ description: Global team and org memory powered by sskarz. ALWAYS check BOTH bui
 
 You have persistent memory shared across sessions, users, and agents in the org.
 
-**Antigravity:** `~/.memoree/memory` is virtual. Use MCP tools (same VFS as Claude/Codex `cat`/`ls`/`grep`/`head`/`tail`/`wc`/`find`/`jq`/`printf`/`mv`/`rm`):
+**Antigravity:** `~/.memoree/memory` is virtual. Use MCP tools (same VFS as Claude/Codex `cat`/`ls`/`grep`/`head`/`tail`/`wc`/`find`/`jq`/`printf`/`mv`/`rm`). Each tool is a distinct job — do not substitute one for another:
 
-- `memoree_read` — cat a virtual file (`identity.json`, `rules.md`, `graph/query/<q>`, `docs/...`)
-- `memoree_ls` — list a directory
-- `memoree_grep` — search (`pattern`, optional `path`)
-- `memoree_head` / `memoree_tail` — first/last N lines (`path`, optional `lines`)
-- `memoree_wc` — line count (`path`)
-- `memoree_find` — `find <path> -name <pattern>`
-- `memoree_jq` — jq filter on known JSON (`path`, optional `filter`)
-- `memoree_write` / `memoree_mv` / `memoree_rm` — rule and goal lifecycle
+- `memoree_ls` — directory names only. Does not open file bodies.
+- `memoree_read` — whole virtual file (`identity.json`, `rules.md`, `graph/query/<q>`, `docs/...`).
+- `memoree_grep` — search file **contents** (recall). Not a filename search.
+- `memoree_head` — first N lines of a large file without a full read.
+- `memoree_tail` — last N lines (recent index/session text). Not the start.
+- `memoree_wc` — line **count** only; use before deciding to read a huge transcript.
+- `memoree_find` — locate files by **name** glob. Not content.
+- `memoree_jq` — extract a JSON field (`identity.json`). Not a full-document read; not for session `.jsonl` views.
+- `memoree_write` — create or overwrite a rule, goal, or KPI (`printf`/`echo`/`tee` are the same job).
+- `memoree_mv` — lifecycle move, same id (`active`↔`done`, `opened`→`in_progress`). Not a create.
+- `memoree_rm` — mark a rule done or close a goal. Not a hard delete.
 
 Do not `cat` / `ls` / `grep` `~/.memoree/memory` with `run_command` or `view_file`.
 

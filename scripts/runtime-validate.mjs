@@ -976,8 +976,13 @@ export async function validateRuntime(options = {}) {
     const mcpLs = callMemoreeMcpTool(mcpServer, "memoree_ls", { path: "" }, mcpOpts);
     assert(mcpLs.ok && /identity\.json|rules\.md/.test(mcpLs.text),
       `Antigravity MCP ls missed inventory: ${mcpLs.text.slice(0, 400)}`);
-    const mcpHead = callMemoreeMcpTool(mcpServer, "memoree_head", { path: "identity.json", lines: 8 }, mcpOpts);
-    assert(mcpHead.ok, `Antigravity MCP head failed: ${mcpHead.text.slice(0, 400)}`);
+    assert(!/"userName"/.test(mcpLs.text),
+      `Antigravity MCP ls must not dump identity.json body: ${mcpLs.text.slice(0, 400)}`);
+    const mcpHead = callMemoreeMcpTool(mcpServer, "memoree_head", { path: "identity.json", lines: 2 }, mcpOpts);
+    assert(mcpHead.ok && mcpHead.text.includes("userName"),
+      `Antigravity MCP head missed the start of identity.json: ${mcpHead.text.slice(0, 400)}`);
+    assert(mcpHead.text !== mcpIdentity.text,
+      "Antigravity MCP head must be a prefix, not the whole identity.json");
     const mcpFind = callMemoreeMcpTool(mcpServer, "memoree_find", { path: "", name: "identity.json" }, mcpOpts);
     assert(mcpFind.ok && mcpFind.text.includes("identity.json"),
       `Antigravity MCP find missed identity.json: ${mcpFind.text.slice(0, 400)}`);
@@ -994,15 +999,21 @@ export async function validateRuntime(options = {}) {
     const mcpGrep = callMemoreeMcpTool(mcpServer, "memoree_grep", { pattern: "antigravity mcp rule", path: "rules" }, mcpOpts);
     assert(mcpGrep.ok && mcpGrep.text.includes(mcpRuleText),
       `Antigravity MCP grep missed rule: ${mcpGrep.text.slice(0, 400)}`);
-    const mcpTail = callMemoreeMcpTool(mcpServer, "memoree_tail", { path: "identity.json", lines: 4 }, mcpOpts);
-    assert(mcpTail.ok && mcpTail.text.includes("runtime-validation"),
-      `Antigravity MCP tail missed identity: ${mcpTail.text.slice(0, 400)}`);
+    const mcpTail = callMemoreeMcpTool(mcpServer, "memoree_tail", { path: "identity.json", lines: 2 }, mcpOpts);
+    assert(mcpTail.ok && mcpTail.text.includes("backend"),
+      `Antigravity MCP tail missed the end of identity.json: ${mcpTail.text.slice(0, 400)}`);
+    assert(mcpTail.text !== mcpHead.text,
+      "Antigravity MCP tail must differ from head on identity.json");
+    assert(!mcpTail.text.includes("userName"),
+      `Antigravity MCP tail must not include the start of identity.json: ${mcpTail.text.slice(0, 400)}`);
     const mcpWc = callMemoreeMcpTool(mcpServer, "memoree_wc", { path: "identity.json" }, mcpOpts);
-    assert(mcpWc.ok && /\d+/.test(mcpWc.text),
-      `Antigravity MCP wc missed a count: ${mcpWc.text.slice(0, 400)}`);
+    assert(mcpWc.ok && /^\s*\d+\b/.test(mcpWc.text) && !mcpWc.text.includes("runtime-validation"),
+      `Antigravity MCP wc must be a count, not the file body: ${mcpWc.text.slice(0, 400)}`);
     const mcpJq = callMemoreeMcpTool(mcpServer, "memoree_jq", { path: "identity.json", filter: ".userName" }, mcpOpts);
     assert(mcpJq.ok && mcpJq.text.includes("runtime-validation"),
       `Antigravity MCP jq missed userName: ${mcpJq.text.slice(0, 400)}`);
+    assert(!/organization|workspace/.test(mcpJq.text),
+      `Antigravity MCP jq .userName must not dump the rest of identity.json: ${mcpJq.text.slice(0, 400)}`);
     const mcpMv = callMemoreeMcpTool(mcpServer, "memoree_mv", {
       from: `rules/active/${mcpRuleId}.md`,
       to: `rules/done/${mcpRuleId}.md`,

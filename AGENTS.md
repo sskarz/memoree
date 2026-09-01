@@ -157,7 +157,7 @@ Fail closed:
 Memoree is a SQLite-backed virtual filesystem at `~/.memoree/memory/` plus
 hooks on Claude Code, Codex, and Antigravity and a `memoree` CLI.
 
-### VFS (read through sandboxed `cat` / `ls` / `grep` / `head` / `tail` / `find`)
+### VFS (read through sandboxed `cat` / `ls` / `grep` / `head` / `tail` / `wc` / `find` / `jq`)
 
 - `identity.json`, `rules.md`, `goals.md`
 - `rules/{active,done}/<id>.md` and `goal/<owner>/{opened,in_progress,closed}/<id>.md`
@@ -170,7 +170,10 @@ hooks on Claude Code, Codex, and Antigravity and a `memoree` CLI.
 Writes on the mount are limited to `echo` / `printf` / `tee` with validated
 redirects; `mv`/`rm` only transition rule or goal lifecycle. Interpreters,
 network clients, and `find -exec` are denied. Do not spawn subagents to read
-this mount.
+this mount. Each command is a distinct job (ls inventories names, cat reads a
+body, grep searches contents, find matches names, head/tail/wc slice or
+measure, jq extracts JSON fields). Antigravity exposes the same jobs as MCP
+tools; see [docs/TESTING.md](docs/TESTING.md) “Why each sandboxed command exists”.
 
 ### Claude Code hooks
 

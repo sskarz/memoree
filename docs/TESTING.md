@@ -305,24 +305,27 @@ Antigravity must expose the same jobs (as MCP tools) or an agent following
 the skill cannot finish the work. echo/printf/tee are three shell spellings
 of one write; they share `memoree_write`. Everything else is a distinct job:
 
-| Command | MCP tool | Unique job |
-|---|---|---|
-| `ls` | `memoree_ls` | Inventory a directory without opening file bodies |
-| `cat` | `memoree_read` | Read a whole virtual file (identity, summaries, `graph/query/…`, docs) |
-| `grep` | `memoree_grep` | Search file contents (recall) |
-| `head` | `memoree_head` | First N lines of a large file without a full cat |
-| `tail` | `memoree_tail` | Last N lines (recent index/session text) |
-| `wc` | `memoree_wc` | Line count before deciding to cat a huge transcript |
-| `find` | `memoree_find` | Locate files by **name**, not content |
-| `jq` | `memoree_jq` | Field extract on real JSON (`identity.json`). Not session `.jsonl` views |
-| `echo` / `printf` / `tee` | `memoree_write` | Create or overwrite a rule, goal, or KPI |
-| `mv` | `memoree_mv` | Lifecycle move, same id (`active`↔`done`, `opened`→`in_progress`) |
-| `rm` | `memoree_rm` | Mark a rule done or close a goal — not a hard delete |
+| Command | MCP tool | Unique job | Not the same as |
+|---|---|---|---|
+| `ls` | `memoree_ls` | Inventory a directory without opening file bodies | `cat` dumps bodies |
+| `cat` | `memoree_read` | Read a whole virtual file (identity, summaries, `graph/query/…`, docs) | `head`/`tail`/`wc` slice or measure |
+| `grep` | `memoree_grep` | Search file contents (recall) | `find` matches names |
+| `head` | `memoree_head` | First N lines of a large file without a full cat | `tail` is the end; `cat` is everything |
+| `tail` | `memoree_tail` | Last N lines (recent index/session text) | `head` is the start |
+| `wc` | `memoree_wc` | Line count before deciding to cat a huge transcript | `cat` returns the body |
+| `find` | `memoree_find` | Locate files by **name**, not content | `grep` searches bodies |
+| `jq` | `memoree_jq` | Field extract on real JSON (`identity.json`). Not session `.jsonl` views | `cat` dumps the whole document |
+| `echo` / `printf` / `tee` | `memoree_write` | Create or overwrite a rule, goal, or KPI | `mv`/`rm` change status of an existing id |
+| `mv` | `memoree_mv` | Lifecycle move, same id (`active`↔`done`, `opened`→`in_progress`) | `write` creates; `rm` closes |
+| `rm` | `memoree_rm` | Mark a rule done or close a goal — not a hard delete | `mv` is an explicit destination; neither unlinks |
 
-`runtime:validate` drives all 11 MCP tools through the sandbox. Unaided `agy`
-must `call_mcp_tool` for read, write, and grep (the discovery, create, and
-search jobs). head/tail/wc/find/jq/mv/rm stay on the Node MCP client so a
-single model turn is not required to hit every alias.
+Source lock: `tests/shared/mcp-vfs-job-uniqueness.test.ts` (observable
+head≠tail≠cat≠wc, ls vs body, grep vs find, jq vs cat, write vs mv vs rm).
+`runtime:validate` drives all 11 MCP tools through the sandbox and asserts
+those unique outputs. Unaided `agy` must `call_mcp_tool` for read, write, and
+grep (the discovery, create, and search jobs). head/tail/wc/find/jq/mv/rm stay
+on the Node MCP client so a single model turn is not required to hit every
+alias.
 
 ## Known gaps, overlap, and follow-ups
 

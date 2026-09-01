@@ -253,6 +253,11 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("memoree_jq");
     expect(source).toContain("memoree_mv");
     expect(source).toContain("memoree_rm");
+    expect(source).toContain("ls must not dump identity.json body");
+    expect(source).toContain("head must be a prefix, not the whole identity.json");
+    expect(source).toContain("tail must differ from head on identity.json");
+    expect(source).toContain("wc must be a count, not the file body");
+    expect(source).toContain("jq .userName must not dump the rest of identity.json");
     expect(source).toContain("graph/query/store");
     expect(source).toContain("graph/show/persistGraph");
     expect(source).toContain("graph/impact/writeSnapshot");
