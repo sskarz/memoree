@@ -16,6 +16,7 @@ import { runFlushMemory } from "../commands/flush-memory.js";
 import { sessionPrune } from "../commands/session-prune.js";
 import { ensureGraphDeps } from "./graph-deps.js";
 import { installPlatform, runInstall } from "./run-install.js";
+import { runUninstall } from "./run-uninstall.js";
 
 const USAGE = `
 memoree — local-first memory for coding agents
@@ -24,7 +25,7 @@ Usage:
   memoree install [--no-embeddings] [--all]
   memoree doctor
   memoree status
-  memoree uninstall [--all]
+  memoree uninstall [--purge] [--yes]
   memoree <claude|codex|antigravity> install|uninstall
   memoree backend status|check|use <sqlite|postgres>
   memoree embeddings install|enable|disable|status|uninstall [--prune]
@@ -39,6 +40,10 @@ Default installation initializes SQLite and embeddings, stages a durable
 plugin copy, then installs every detected Claude Code, Codex, and Antigravity integration.
 \`--all\` is an alias for that default. PostgreSQL is opt-in through
 MEMOREE_POSTGRES_URL.
+
+Default uninstall unwires detected harnesses and keeps ~/.memoree.
+\`--purge\` also deletes leftover plugin copies, the staged package, Memoree-managed
+skills, and ~/.memoree. Non-interactive purge requires \`--yes\`.
 `.trim();
 
 function requireNode(): void {
@@ -112,12 +117,7 @@ async function main(): Promise<void> {
     else throw new Error(`Usage: memoree ${command} install|uninstall`);
     return;
   }
-  if (command === "uninstall") {
-    const detected = detectPlatforms().map(p => p.id);
-    const targets: PlatformId[] = detected.length > 0 ? detected : ["claude", "codex", "antigravity"];
-    for (const target of [...new Set(targets)]) uninstallOne(target);
-    return;
-  }
+  if (command === "uninstall") { await runUninstall(args.slice(1)); return; }
   throw new Error(`Unknown command: ${command}`);
 }
 

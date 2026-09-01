@@ -113,4 +113,14 @@ describe("local Claude Code installation", () => {
       "plugin uninstall memoree@memoree --scope user",
     ]);
   });
+
+  it("also removes the local marketplace when requested", () => {
+    uninstallClaude({ removeMarketplace: true });
+    expect(commands()).toEqual([
+      "--version",
+      "plugin disable memoree@memoree --scope user",
+      "plugin uninstall memoree@memoree --scope user",
+      "plugin marketplace remove memoree",
+    ]);
+  });
 });
