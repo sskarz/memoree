@@ -184,9 +184,9 @@ function chunkToBuffer(chunk: unknown): Buffer {
 async function readMessages(): Promise<void> {
   let buffer = Buffer.alloc(0);
   for await (const chunk of process.stdin) {
-    buffer = Buffer.concat([buffer, chunkToBuffer(chunk)]);
+    buffer = Buffer.from(Buffer.concat([buffer, chunkToBuffer(chunk)]));
     const consumed = consumeMcpBuffer(buffer);
-    buffer = consumed.rest;
+    buffer = Buffer.from(consumed.rest);
     for (const item of consumed.messages) {
       const reply = await handleMcpRequest(item.msg);
       if (reply) process.stdout.write(encodeMcpMessage(reply, item.framing));
