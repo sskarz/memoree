@@ -249,6 +249,7 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(preSrc).toContain("maybeAutoMineLocal");
     expect(preSrc).toContain("maybeAutoBackfillMemory");
     expect(preSrc).toContain("spawnGraphPullWorker");
+    expect(preSrc).toContain('isDirectRun(import.meta.url, "pre-invocation")');
   });
 
   it("runs wiki and skillify end-of-session work on Stop (no SessionEnd event)", () => {
@@ -256,6 +257,7 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(stopSrc).toContain("forceSessionEndTrigger");
     expect(stopSrc).toContain("spawnAntigravityWikiWorker");
     expect(stopSrc).toContain("captureAntigravityEvent");
+    expect(stopSrc).toContain('isDirectRun(import.meta.url, "stop")');
     expect(wikiSpawn).toContain("buildAgyInvocation");
     expect(wikiSpawn).toContain("--dangerously-skip-permissions");
     expect(agy.memoree.SessionEnd).toBeUndefined();
@@ -279,6 +281,10 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(mcpSrc).toContain("content-length");
     expect(mcpSrc).toContain("await captureMcpToolCall");
     expect(mcpSrc).toContain("if (!process.env.VITEST)");
+    const captureSrc = readFileSync(join(ROOT, "src/hooks/antigravity/capture.ts"), "utf-8");
+    expect(captureSrc).toContain('isDirectRun(import.meta.url, "capture")');
+    const preToolSrc = readFileSync(join(ROOT, "src/hooks/antigravity/pre-tool-use.ts"), "utf-8");
+    expect(preToolSrc).toContain('isDirectRun(import.meta.url, "pre-tool-use")');
     expect(installSrc).toContain('"config", "plugins", "memoree"');
     expect(installSrc).toContain("antigravity-cli");
     expect(installSrc).toContain('{"type":"module"}');

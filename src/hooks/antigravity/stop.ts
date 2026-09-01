@@ -90,7 +90,7 @@ async function main(): Promise<void> {
   process.stdout.write(JSON.stringify(await processStop(input)) + "\n");
 }
 
-if (isDirectRun(import.meta.url)) {
+if (isDirectRun(import.meta.url, "stop")) {
   main().catch((error) => {
     log(`fatal: ${error instanceof Error ? error.message : String(error)}`);
     process.stdout.write(JSON.stringify(stopDecision()) + "\n");

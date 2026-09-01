@@ -30,7 +30,7 @@ async function main(): Promise<void> {
   process.stdout.write(JSON.stringify(decidePreToolUse(input)) + "\n");
 }
 
-if (isDirectRun(import.meta.url)) {
+if (isDirectRun(import.meta.url, "pre-tool-use")) {
   main().catch((error) => {
     log(`fatal: ${error instanceof Error ? error.message : String(error)}`);
     process.stdout.write("{}\n");

@@ -5,6 +5,10 @@
  * unaided runs had 0 session rows and no wake lock). MCP still runs, so this
  * is the unaided capture path. Interactive IDE sessions still get hook
  * capture when the platform invokes them.
+ *
+ * The capture hook main must use isDirectRun(..., "capture"). Without the
+ * entry name, esbuild inlines that main into mcp-server.js and it pauses
+ * stdin after the first JSON-RPC frame, so `agy` never lists MCP tools.
  */
 
 import { captureAntigravityEvent } from "../hooks/antigravity/capture.js";

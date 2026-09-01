@@ -147,7 +147,7 @@ async function main(): Promise<void> {
   process.stdout.write(JSON.stringify(await processPreInvocation(input)) + "\n");
 }
 
-if (isDirectRun(import.meta.url)) {
+if (isDirectRun(import.meta.url, "pre-invocation")) {
   main().catch((error) => {
     log(`fatal: ${error instanceof Error ? error.message : String(error)}`);
     process.stdout.write("{}\n");

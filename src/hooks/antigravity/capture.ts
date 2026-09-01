@@ -165,7 +165,7 @@ async function main(): Promise<void> {
   await captureFromHook(input, eventName);
 }
 
-if (isDirectRun(import.meta.url)) {
+if (isDirectRun(import.meta.url, "capture")) {
   main().catch((error) => {
     log(`fatal: ${error instanceof Error ? error.message : String(error)}`);
     process.stdout.write("{}\n");

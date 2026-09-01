@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { isDirectRun } from "../../src/utils/direct-run.js";
 
 const repoRoot = process.cwd();
@@ -24,6 +24,7 @@ describe("shipped mcp-server.js — Codex PreToolUse main must not steal stdin",
     const mcp = readFileSync(mcpServer, "utf-8");
     const pre = readFileSync(codexPre, "utf-8");
     expect(mcp).toMatch(/isDirectRun\([^,]+,\s*"mcp-server"\)/);
+    expect(mcp).toMatch(/isDirectRun\([^,]+,\s*"capture"\)/);
     expect(pre).toMatch(/isDirectRun\([^,]+,\s*"pre-tool-use"\)/);
   });
 
@@ -66,4 +67,37 @@ describe("shipped mcp-server.js — Codex PreToolUse main must not steal stdin",
     expect(result.stdout.trim().startsWith("{")).toBe(true);
     expect(result.stdout).not.toMatch(/Content-Length/i);
   });
+
+  it("does not pause stdin after the first JSON-RPC frame (agy sends tools/list later)", async () => {
+    const child = spawn(process.execPath, [mcpServer], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => { stdout += chunk; });
+    const waitFor = (re: RegExp, ms: number) => new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        if (re.test(stdout)) return resolve();
+        if (Date.now() - start > ms) return reject(new Error(`timeout waiting for ${re} in ${stdout.slice(0, 400)}`));
+        setTimeout(tick, 25);
+      };
+      tick();
+    });
+    try {
+      child.stdin.write(`${JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "agy", version: "0" } },
+      })}\n`);
+      await waitFor(/"name":"memoree"/, 3_000);
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" })}\n`);
+      await waitFor(/memoree_read/, 3_000);
+      expect(stdout).toContain("memoree_ls");
+    } finally {
+      child.kill("SIGTERM");
+    }
+  }, 10_000);
 });
