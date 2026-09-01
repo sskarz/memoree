@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  encodeMcpStdio,
   assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
   classifyAgentCommandError,
@@ -239,6 +240,8 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("pre-invocation.js");
     expect(source).toContain("mcp-server.js");
     expect(source).toContain("callMemoreeMcpTool");
+    expect(source).toContain("encodeMcpStdio");
+    expect(source).toContain("ndjson");
     expect(source).toContain("antigravityLivePrompt");
     expect(source).toContain("memoree_head");
     expect(source).toContain("graph/query/store");
@@ -292,6 +295,12 @@ describe("runtime validation skip-live-antigravity", () => {
     expect(parseMcpFramedMessages(framed)).toEqual([{ jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: "ok" }] } }]);
     expect(antigravityLivePrompt("abc")).toContain("memoree_read");
     expect(antigravityLivePrompt("abc")).toContain("abc");
+  });
+
+  it("encodes and parses NDJSON MCP frames for Antigravity stdio", () => {
+    const msg = { jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: "ok" }] } };
+    expect(encodeMcpStdio(msg, "ndjson")).toBe(`${JSON.stringify(msg)}\n`);
+    expect(parseMcpFramedMessages(`${JSON.stringify(msg)}\n`)).toEqual([msg]);
   });
 });
 

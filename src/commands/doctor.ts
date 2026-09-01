@@ -93,8 +93,12 @@ export async function runDoctor(overrides: Partial<DoctorDependencies> = {}): Pr
     results.push(["Codex hook bundles", codexHooksOk, codexBundle]);
   }
 
-  const agyBundle = join(deps.homedir(), ".gemini", "antigravity-cli", "plugins", "memoree", "bundle");
-  if (deps.existsSync(agyBundle)) {
+  const agyBundleCandidates = [
+    join(deps.homedir(), ".gemini", "config", "plugins", "memoree", "bundle"),
+    join(deps.homedir(), ".gemini", "antigravity-cli", "plugins", "memoree", "bundle"),
+  ];
+  const agyBundle = agyBundleCandidates.find(path => deps.existsSync(path));
+  if (agyBundle) {
     try { deps.execFileSync("agy", ["--version"], { stdio: "ignore" }); results.push(["Antigravity", true, "available"]); }
     catch { results.push(["Antigravity", false, "agy executable not found"]); }
     const agyHooksOk = ["pre-invocation.js", "pre-tool-use.js", "capture.js", "stop.js", "mcp-server.js", "graph-on-stop.js"]

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleMcpRequest } from "../../src/mcp/server.js";
+import {
+  handleMcpRequest,
+  consumeMcpBuffer,
+  encodeMcpMessage,
+  DEFAULT_MCP_PROTOCOL_VERSION,
+} from "../../src/mcp/server.js";
 import {
   buildMemoryCommand,
   normalizeMemoryPath,
@@ -109,10 +114,44 @@ describe("Memoree MCP VFS tools", () => {
 
   it("handles initialize, ping, and unknown methods", async () => {
     expect((await handleMcpRequest({ id: 2, method: "initialize" }))?.result).toMatchObject({
+      protocolVersion: DEFAULT_MCP_PROTOCOL_VERSION,
       serverInfo: { name: "memoree" },
     });
+    expect((await handleMcpRequest({
+      id: 2,
+      method: "initialize",
+      params: { protocolVersion: "2025-03-26" },
+    }))?.result).toMatchObject({ protocolVersion: "2025-03-26" });
     expect(await handleMcpRequest({ id: 3, method: "ping" })).toEqual({ jsonrpc: "2.0", id: 3, result: {} });
+    expect(await handleMcpRequest({ id: 5, method: "logging/setLevel" })).toEqual({ jsonrpc: "2.0", id: 5, result: {} });
+    expect((await handleMcpRequest({ id: 6, method: "prompts/list" }))?.result).toEqual({ prompts: [] });
+    expect((await handleMcpRequest({ id: 7, method: "resources/list" }))?.result).toEqual({ resources: [] });
+    expect((await handleMcpRequest({ id: 8, method: "resources/templates/list" }))?.result)
+      .toEqual({ resourceTemplates: [] });
     expect((await handleMcpRequest({ id: 4, method: "nope" }))?.error).toMatchObject({ code: -32601 });
     expect(await handleMcpRequest({ method: "notifications/initialized" })).toBeNull();
+  });
+
+  it("consumes official NDJSON stdio and Content-Length frames", () => {
+    const ndjson = encodeMcpMessage({ jsonrpc: "2.0", id: 1, method: "ping" }, "ndjson");
+    const nd = consumeMcpBuffer(Buffer.from(`${ndjson}not-json\n`));
+    expect(nd.messages).toEqual([{ msg: { jsonrpc: "2.0", id: 1, method: "ping" }, framing: "ndjson" }]);
+    expect(nd.rest.length).toBe(0);
+
+    const framed = encodeMcpMessage({ jsonrpc: "2.0", id: 2, method: "ping" }, "content-length");
+    const cl = consumeMcpBuffer(Buffer.from(framed));
+    expect(cl.messages[0]?.framing).toBe("content-length");
+    expect(cl.messages[0]?.msg).toEqual({ jsonrpc: "2.0", id: 2, method: "ping" });
+
+    const lfBody = "{\"jsonrpc\":\"2.0\",\"id\":3}";
+    const lf = consumeMcpBuffer(Buffer.from(`Content-Length: ${Buffer.byteLength(lfBody)}\n\n${lfBody}`));
+    expect(lf.messages[0]?.msg).toEqual({ jsonrpc: "2.0", id: 3 });
+
+    const skipped = consumeMcpBuffer(Buffer.from("Content-Length:\r\n\r\n{}"));
+    expect(skipped.messages).toEqual([]);
+
+    const incomplete = consumeMcpBuffer(Buffer.from("{\"jsonrpc\":\"2.0\",\"id\":4"));
+    expect(incomplete.messages).toEqual([]);
+    expect(incomplete.rest.toString("utf8")).toContain("\"id\":4");
   });
 });

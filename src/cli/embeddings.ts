@@ -38,10 +38,19 @@ export function findMemoreeInstalls(home: string = HOME): AgentInstall[] {
   const out: AgentInstall[] = [];
   const fixed: AgentInstall[] = [
     { id: "codex", pluginDir: join(home, ".codex", "memoree") },
-    { id: "antigravity", pluginDir: join(home, ".gemini", "antigravity-cli", "plugins", "memoree") },
   ];
   for (const inst of fixed) {
     if (existsSync(join(inst.pluginDir, "bundle"))) out.push(inst);
+  }
+  const agyDirs = [
+    join(home, ".gemini", "config", "plugins", "memoree"),
+    join(home, ".gemini", "antigravity-cli", "plugins", "memoree"),
+  ];
+  for (const pluginDir of agyDirs) {
+    if (existsSync(join(pluginDir, "bundle"))) {
+      out.push({ id: "antigravity", pluginDir });
+      break;
+    }
   }
   // Claude Code marketplace cache: ~/.claude/plugins/cache/memoree/memoree/<version>/
   // Multiple versions can coexist — link each one that has a bundle.

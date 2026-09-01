@@ -157,7 +157,9 @@ describe("memoree doctor", () => {
       existsSync: path => {
         const value = String(path);
         if (value.includes("/.codex/memoree/bundle")) return false;
-        if (value.includes("antigravity-cli/plugins/memoree/bundle")) return !value.endsWith(".js");
+        if (value.includes("config/plugins/memoree/bundle") || value.includes("antigravity-cli/plugins/memoree/bundle")) {
+          return !value.endsWith(".js");
+        }
         return true;
       },
       execFileSync: ((file: string, args: readonly string[]) => {

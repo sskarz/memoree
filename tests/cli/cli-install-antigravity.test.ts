@@ -74,6 +74,8 @@ describe("installAntigravity", () => {
     expect(mcp.mcpServers.memoree.command).toBe("node");
     expect(mcp.mcpServers.memoree.args[0]).toBe(join(ANTIGRAVITY_PLUGIN_DIR, "bundle", "mcp-server.js"));
     expect(mcp.mcpServers.memoree.args[0]).not.toContain("$PLUGIN_ROOT");
+    expect(ANTIGRAVITY_PLUGIN_DIR).toContain(join(".gemini", "config", "plugins", "memoree"));
+    expect(existsSync(join(tmpHome, ".gemini", "antigravity-cli", "plugins"))).toBe(false);
   });
 
   it("is idempotent: a second install does not rewrite identical hooks.json", async () => {

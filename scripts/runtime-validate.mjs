@@ -201,36 +201,58 @@ export function antigravityLivePrompt(identifier) {
   ].join(" ");
 }
 
+export function encodeMcpStdio(msg, framing = "ndjson") {
+  const body = JSON.stringify(msg);
+  if (framing === "content-length") {
+    return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+  }
+  return `${body}\n`;
+}
+
 export function parseMcpFramedMessages(stdout) {
+  const text = String(stdout ?? "");
+  if (/Content-Length:\s*\d+/i.test(text)) {
+    const messages = [];
+    let rest = text;
+    while (true) {
+      const idx = rest.search(/Content-Length:\s*\d+/i);
+      if (idx < 0) break;
+      rest = rest.slice(idx);
+      const header = /^(Content-Length:\s*(\d+)\r\n\r\n)/i.exec(rest)
+        ?? /^(Content-Length:\s*(\d+)\n\n)/i.exec(rest);
+      if (!header) break;
+      const length = Number(header[2]);
+      const start = header[1].length;
+      const json = rest.slice(start, start + length);
+      rest = rest.slice(start + length);
+      try {
+        messages.push(JSON.parse(json));
+      } catch {
+        /* ignore a truncated frame */
+      }
+    }
+    return messages;
+  }
   const messages = [];
-  let rest = String(stdout ?? "");
-  while (true) {
-    const idx = rest.search(/Content-Length:\s*\d+/i);
-    if (idx < 0) break;
-    rest = rest.slice(idx);
-    const header = /^(Content-Length:\s*(\d+)\r\n\r\n)/i.exec(rest);
-    if (!header) break;
-    const length = Number(header[2]);
-    const start = header[1].length;
-    const json = rest.slice(start, start + length);
-    rest = rest.slice(start + length);
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
     try {
-      messages.push(JSON.parse(json));
+      messages.push(JSON.parse(trimmed));
     } catch {
-      /* ignore a truncated frame */
+      /* ignore a truncated line */
     }
   }
   return messages;
 }
 
 export function callMemoreeMcpTool(serverPath, name, args, options) {
+  const framing = options.framing ?? "ndjson";
   const frames = [
-    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {} } },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
     { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } },
-  ].map(msg => {
-    const body = JSON.stringify(msg);
-    return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
-  }).join("");
+  ].map(msg => encodeMcpStdio(msg, framing)).join("");
   const result = spawnSync(process.execPath, [serverPath], {
     cwd: options.cwd,
     env: options.env,
@@ -889,18 +911,31 @@ export async function validateRuntime(options = {}) {
     }, { cwd: repository, env: { ...env, MEMOREE_WIKI_WORKER: "1" }, hookArgs: ["PreInvocation"] });
     assertHookExitZero(agyPre, "Antigravity PreInvocation wiki-worker short-circuit");
     const mcpServer = join(antigravityBundle, "mcp-server.js");
-    const mcpInit = spawnSync(process.execPath, [mcpServer], {
+    const mcpNdjsonInit = spawnSync(process.execPath, [mcpServer], {
       cwd: repository,
       env,
       encoding: "utf8",
-      input: (() => {
-        const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
-        return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
-      })(),
+      input: encodeMcpStdio({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "agy", version: "0" } },
+      }, "ndjson"),
       timeout: 10_000,
     });
-    assert(mcpInit.status === 0 || (mcpInit.stdout ?? "").includes("memoree"),
-      `Antigravity MCP initialize failed: status=${mcpInit.status} stdout=${(mcpInit.stdout ?? "").slice(0, 400)} stderr=${(mcpInit.stderr ?? "").slice(0, 400)}`);
+    assert((mcpNdjsonInit.stdout ?? "").includes('"name":"memoree"'),
+      `Antigravity MCP NDJSON initialize failed: status=${mcpNdjsonInit.status} stdout=${(mcpNdjsonInit.stdout ?? "").slice(0, 400)} stderr=${(mcpNdjsonInit.stderr ?? "").slice(0, 400)}`);
+    assert(!(mcpNdjsonInit.stdout ?? "").includes("Content-Length"),
+      "Antigravity MCP must reply to NDJSON (agy stdio) with NDJSON, not Content-Length");
+    const mcpClInit = spawnSync(process.execPath, [mcpServer], {
+      cwd: repository,
+      env,
+      encoding: "utf8",
+      input: encodeMcpStdio({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, "content-length"),
+      timeout: 10_000,
+    });
+    assert((mcpClInit.stdout ?? "").includes("memoree"),
+      `Antigravity MCP Content-Length initialize failed: status=${mcpClInit.status} stdout=${(mcpClInit.stdout ?? "").slice(0, 400)}`);
     status("checking Antigravity MCP VFS (same commands as Claude/Codex intercept)");
     const mcpOpts = { cwd: repository, env };
     const mcpIdentity = callMemoreeMcpTool(mcpServer, "memoree_read", { path: "identity.json" }, mcpOpts);

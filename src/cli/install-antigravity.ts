@@ -8,7 +8,10 @@ import {
 import { getVersion } from "./version.js";
 
 const GEMINI_HOME = join(HOME, ".gemini");
-export const ANTIGRAVITY_PLUGIN_DIR = join(GEMINI_HOME, "antigravity-cli", "plugins", "memoree");
+/** Canonical plugin dir after Gemini's AppDataDir → config/ migration. */
+export const ANTIGRAVITY_PLUGIN_DIR = join(GEMINI_HOME, "config", "plugins", "memoree");
+/** Pre-migration layout; still scanned by doctor/embeddings. */
+export const ANTIGRAVITY_LEGACY_PLUGIN_DIR = join(GEMINI_HOME, "antigravity-cli", "plugins", "memoree");
 export const ANTIGRAVITY_HOOKS_PATH = join(GEMINI_HOME, "config", "hooks.json");
 export const ANTIGRAVITY_MCP_PATH = join(GEMINI_HOME, "config", "mcp_config.json");
 

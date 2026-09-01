@@ -271,11 +271,11 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Codex UserPromptSubmit recall.js | S | V | L | Same recall.js bundle as Claude; Codex documents additionalContext as developer context |
 | Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
 | Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock. Usage recap parses Codex rollouts (`function_call` / `exec_command_*`), not Claude `tool_use` transcripts |
-| Antigravity install/uninstall + named hooks + MCP | S | V | — | Merges `memoree` into `~/.gemini/config/hooks.json` and `mcp_config.json` |
+| Antigravity install/uninstall + named hooks + MCP | S | V | — | Plugin at `~/.gemini/config/plugins/memoree`; merges `memoree` into `~/.gemini/config/hooks.json` and `mcp_config.json` |
 | Antigravity PreInvocation inject + recall | S | V | — | First `invocationNum` 0/1 claims wake lock; `injectSteps` |
 | Antigravity PreToolUse steer (never `allow`) | S | V | — | `{ decision: "deny", reason }` on the mount; unrelated tools `{}` |
 | Antigravity capture + Stop wiki (`agy -p`) | S | V | — | Live `agy` skipped when missing or not signed in |
-| Antigravity MCP VFS tools | S | V | — | `memoree_read`/`ls`/`grep`/`head`/`tail`/`wc`/`find`/`jq`/`write`/`mv`/`rm` wrap the same sandbox as Claude/Codex |
+| Antigravity MCP VFS tools | S | V | L | Same sandbox as Claude/Codex. Stdio is official NDJSON (agy); Content-Length still accepted. Tools: `memoree_read`/`ls`/`grep`/`head`/`tail`/`wc`/`find`/`jq`/`write`/`mv`/`rm` |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |

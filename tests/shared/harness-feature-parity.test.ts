@@ -269,5 +269,14 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(esbuild).toContain('["src/hooks/antigravity/session-start-setup", "session-start-setup"]');
     expect(esbuild).toContain("buildGraphOnStop(\"harnesses/antigravity/bundle\")");
   });
+
+  it("speaks official MCP NDJSON stdio and installs into config/plugins", () => {
+    const mcpSrc = readFileSync(join(ROOT, "src/mcp/server.ts"), "utf-8");
+    const installSrc = readFileSync(join(ROOT, "src/cli/install-antigravity.ts"), "utf-8");
+    expect(mcpSrc).toContain('framing === "ndjson"');
+    expect(mcpSrc).toContain("content-length");
+    expect(installSrc).toContain('"config", "plugins", "memoree"');
+    expect(installSrc).toContain("antigravity-cli");
+  });
 });
 

@@ -40,4 +40,24 @@ describe("shipped mcp-server.js — Codex PreToolUse main must not steal stdin",
     expect(result.stdout).toContain('"name":"memoree"');
     expect(result.stdout).toContain("protocolVersion");
   });
+
+  it("answers initialize over NDJSON stdio the way Antigravity speaks MCP", () => {
+    const framed = `${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "agy", version: "0" } },
+    })}\n`;
+    const result = spawnSync(process.execPath, [mcpServer], {
+      encoding: "utf8",
+      input: framed,
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('"name":"memoree"');
+    expect(result.stdout).toContain("2025-03-26");
+    expect(result.stdout.trim().startsWith("{")).toBe(true);
+    expect(result.stdout).not.toMatch(/Content-Length/i);
+  });
 });
