@@ -108,7 +108,6 @@ export default defineConfig({
         "src/mcp/session-capture.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/session-summary.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/payload.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
-        "src/hooks/antigravity/pre-tool-use.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/transcript.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/pre-invocation.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/cli/install-antigravity.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

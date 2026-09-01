@@ -66,9 +66,10 @@ describe("installAntigravity", () => {
 
     const hooks = JSON.parse(readFileSync(ANTIGRAVITY_HOOKS_PATH, "utf-8"));
     expect(hooks["user-linter"]).toEqual({ PostToolUse: [] });
-    expect(Object.keys(hooks.memoree).sort()).toEqual(["PostToolUse", "PreInvocation", "PreToolUse", "Stop"]);
+    expect(Object.keys(hooks.memoree).sort()).toEqual(["PostToolUse", "PreInvocation", "Stop"]);
+    expect(hooks.memoree.PreToolUse).toBeUndefined();
     expect(hooks.memoree.PreInvocation[0].command).toContain("pre-invocation.js");
-    expect(hooks.memoree.PreToolUse[0].matcher).toBe("*");
+    expect(hooks.memoree.PostToolUse[0].matcher).toBe("*");
     expect(existsSync(ANTIGRAVITY_LEGACY_HOOKS_PATH)).toBe(true);
     expect(JSON.parse(readFileSync(ANTIGRAVITY_LEGACY_HOOKS_PATH, "utf-8")).memoree.PreInvocation).toEqual(
       hooks.memoree.PreInvocation,
@@ -84,6 +85,23 @@ describe("installAntigravity", () => {
     const pluginInstall = execFileSyncMock.mock.calls.find(call => call[0] === "agy" && Array.isArray(call[1]) && call[1][0] === "plugin" && call[1][1] === "install");
     expect(pluginInstall?.[1]?.[2]).toBe(join(tmpPkg, "harnesses", "antigravity"));
     expect(pluginInstall?.[1]?.[2]).not.toBe(ANTIGRAVITY_PLUGIN_DIR);
+  });
+
+  it("strips a previously installed PreToolUse gate on reinstall", async () => {
+    const { installAntigravity, ANTIGRAVITY_HOOKS_PATH } = await importInstaller();
+    mkdirSync(join(tmpHome, ".gemini", "config"), { recursive: true });
+    writeFileSync(ANTIGRAVITY_HOOKS_PATH, JSON.stringify({
+      memoree: {
+        PreInvocation: [],
+        PreToolUse: [{ matcher: "*", hooks: [{ command: "node deny.js" }] }],
+        PostToolUse: [],
+        Stop: [],
+      },
+    }));
+    installAntigravity({ packageRoot: tmpPkg });
+    const hooks = JSON.parse(readFileSync(ANTIGRAVITY_HOOKS_PATH, "utf-8"));
+    expect(hooks.memoree.PreToolUse).toBeUndefined();
+    expect(Object.keys(hooks.memoree).sort()).toEqual(["PostToolUse", "PreInvocation", "Stop"]);
   });
 
   it("is idempotent: a second install does not rewrite identical hooks.json", async () => {
@@ -122,6 +140,7 @@ describe("merge helpers", () => {
     const merged = mergeNamedHooks({ other: 1 }, buildMemoreeHookBlock());
     expect(merged.other).toBe(1);
     expect(merged.memoree).toHaveProperty("PreInvocation");
+    expect(merged.memoree).not.toHaveProperty("PreToolUse");
     const mcp = mergeMcpServers({ mcpServers: { sqlite: { command: "x" } } }, { command: "node" });
     expect(Object.keys(mcp.mcpServers as object).sort()).toEqual(["memoree", "sqlite"]);
     expect(stripMcpServer(mcp).mcpServers).toEqual({ sqlite: { command: "x" } });

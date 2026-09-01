@@ -603,7 +603,6 @@ export async function validateRuntime(options = {}) {
     join(codexBundle, "pre-tool-use.js"),
     join(codexBundle, "command", "memoree.js"),
     join(antigravityBundle, "pre-invocation.js"),
-    join(antigravityBundle, "pre-tool-use.js"),
     join(antigravityBundle, "capture.js"),
     join(antigravityBundle, "stop.js"),
     join(antigravityBundle, "mcp-server.js"),
@@ -969,21 +968,14 @@ export async function validateRuntime(options = {}) {
       source: "startup",
       model: "runtime-validation",
     }, { cwd: repository, env }), "Codex SessionStart setup");
-    status("checking Antigravity PreToolUse steer, Stop, and PreInvocation");
-    const agySteer = runHookResult(join(antigravityBundle, "pre-tool-use.js"), {
-      toolCall: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
-    }, { cwd: repository, env, hookArgs: ["PreToolUse"] });
-    assertHookExitZero(agySteer, "Antigravity PreToolUse steer");
-    const agySteerBody = JSON.parse(agySteer.stdout.trim() || "{}");
-    assert(agySteerBody.decision === "deny" && typeof agySteerBody.reason === "string",
-      `Antigravity PreToolUse must deny the mount; stdout=${agySteer.stdout.slice(0, 400)}`);
-    assert(agySteerBody.decision !== "allow", "Antigravity PreToolUse must never return allow");
-    const agyPass = runHookResult(join(antigravityBundle, "pre-tool-use.js"), {
-      toolCall: { name: "run_command", args: { CommandLine: "ls /tmp" } },
-    }, { cwd: repository, env, hookArgs: ["PreToolUse"] });
-    assertHookExitZero(agyPass, "Antigravity PreToolUse unrelated");
-    assert(JSON.parse(agyPass.stdout.trim() || "{}").decision === undefined,
-      `Antigravity PreToolUse must leave unrelated tools alone; stdout=${agyPass.stdout.slice(0, 400)}`);
+    status("checking Antigravity hooks omit PreToolUse; Stop and PreInvocation still run");
+    const agyHookManifest = JSON.parse(readFileSync(join(runtimeDir, "harnesses", "antigravity", "hooks", "hooks.json"), "utf8"));
+    assert(agyHookManifest?.memoree?.PreToolUse === undefined,
+      "Antigravity must not register PreToolUse; memory is MCP and a deny gate is hostile UX");
+    assert(Array.isArray(agyHookManifest?.memoree?.PreInvocation) && agyHookManifest.memoree.PreInvocation.length > 0,
+      "Antigravity must keep PreInvocation");
+    assert(Array.isArray(agyHookManifest?.memoree?.PostToolUse) && agyHookManifest.memoree.PostToolUse.length > 0,
+      "Antigravity must keep PostToolUse capture");
     const agyStop = runHookResult(join(antigravityBundle, "stop.js"), {}, {
       cwd: repository, env, hookArgs: ["Stop"],
     });

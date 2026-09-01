@@ -1,16 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearFakeHome, setFakeHome } from "./fake-home.js";
-import { decidePreToolUse } from "../../src/hooks/antigravity/pre-tool-use.js";
 import {
-  MEMORY_STEER,
   eventNameFromArgv,
   isMemoreeMcpToolCall,
   normalizeAntigravityInput,
   sessionIdOf,
-  toolPayloadTouchesMemory,
   workspaceCwd,
 } from "../../src/hooks/antigravity/payload.js";
 import {
@@ -33,21 +30,6 @@ describe("Antigravity hook adapters", () => {
     if (home) rmSync(home, { recursive: true, force: true });
     if (priorWiki === undefined) delete process.env.MEMOREE_WIKI_WORKER;
     else process.env.MEMOREE_WIKI_WORKER = priorWiki;
-  });
-
-  it("steers memory-touching tools and leaves others alone", () => {
-    expect(decidePreToolUse({
-      toolCall: { name: "run_command", args: { CommandLine: "ls /tmp" } },
-    })).toEqual({});
-    const denied = decidePreToolUse({
-      toolCall: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
-    });
-    expect(denied).toEqual({ decision: "deny", reason: MEMORY_STEER });
-    expect(denied).not.toHaveProperty("allow");
-    expect(toolPayloadTouchesMemory(
-      { toolCall: { name: "view_file", args: { AbsolutePath: "/home/x/.memoree/memory/rules.md" } } },
-      (value) => value.includes(".memoree/memory"),
-    )).toBe(true);
   });
 
   it("parses transcript JSONL including array/object text shapes", () => {
@@ -74,7 +56,7 @@ describe("Antigravity hook adapters", () => {
     expect(isFirstModelCall(0)).toBe(true);
     expect(isFirstModelCall(1)).toBe(true);
     expect(isFirstModelCall(2)).toBe(false);
-    expect(eventNameFromArgv(["node", "pre-tool-use.js", "PreToolUse"])).toBe("PreToolUse");
+    expect(eventNameFromArgv(["node", "capture.js", "PostToolUse"])).toBe("PostToolUse");
     expect(eventNameFromArgv(["node"])).toBe("");
     expect(workspaceCwd({})).toBe(process.cwd());
     expect(workspaceCwd({ workspacePaths: ["  /repo  "] })).toBe("/repo");
@@ -163,9 +145,6 @@ describe("Antigravity hook adapters", () => {
       name: undefined,
       args: { x: 1 },
     });
-    expect(decidePreToolUse({
-      tool_call: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
-    })).toEqual({ decision: "deny", reason: MEMORY_STEER });
   });
 
   it("treats memoree MCP names and call_mcp_tool wrappers as MCP capture", () => {

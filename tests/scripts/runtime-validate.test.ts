@@ -271,6 +271,7 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("skipLiveCodex");
     expect(source).toContain("skipLiveAntigravity");
     expect(source).toContain("pre-invocation.js");
+    expect(source).toContain("must not register PreToolUse");
     expect(source).toContain("mcp-server.js");
     expect(source).toContain("callMemoreeMcpTool");
     expect(source).toContain("encodeMcpStdio");

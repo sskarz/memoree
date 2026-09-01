@@ -103,7 +103,6 @@ const antigravityEntries = [
   ["src/hooks/antigravity/pre-invocation", "pre-invocation"],
   ["src/hooks/antigravity/session-start-setup", "session-start-setup"],
   ["src/hooks/antigravity/capture", "capture"],
-  ["src/hooks/antigravity/pre-tool-use", "pre-tool-use"],
   ["src/hooks/antigravity/stop", "stop"],
   ["src/hooks/antigravity/wiki-worker", "wiki-worker"],
   ["src/mcp/server", "mcp-server"],

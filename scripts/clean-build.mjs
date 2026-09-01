@@ -7,6 +7,7 @@ for (const path of [
   "bundle",
   "harnesses/claude-code/bundle",
   "harnesses/codex/bundle",
+  "harnesses/antigravity/bundle",
 ]) {
   rmSync(path, { recursive: true, force: true });
 }
