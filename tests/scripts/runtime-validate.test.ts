@@ -23,6 +23,7 @@ import {
   writeIsolatedAntigravityGeminiSettings,
   parseMcpFramedMessages,
   antigravityLivePrompt,
+  assertAntigravityLiveUsedMcp,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
 import { redactSecrets } from "../../src/hooks/shared/redact.js";
@@ -244,8 +245,14 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("ndjson");
     expect(source).toContain("call_mcp_tool");
     expect(source).toContain("do not have access to the `memoree_read`");
+    expect(source).toContain("assertAntigravityLiveUsedMcp");
     expect(source).toContain("antigravityLivePrompt");
     expect(source).toContain("memoree_head");
+    expect(source).toContain("memoree_tail");
+    expect(source).toContain("memoree_wc");
+    expect(source).toContain("memoree_jq");
+    expect(source).toContain("memoree_mv");
+    expect(source).toContain("memoree_rm");
     expect(source).toContain("graph/query/store");
     expect(source).toContain("graph/show/persistGraph");
     expect(source).toContain("graph/impact/writeSnapshot");
@@ -296,6 +303,8 @@ describe("runtime validation skip-live-antigravity", () => {
     const framed = `noise\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
     expect(parseMcpFramedMessages(framed)).toEqual([{ jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: "ok" }] } }]);
     expect(antigravityLivePrompt("abc")).toContain("memoree_read");
+    expect(antigravityLivePrompt("abc")).toContain("memoree_write");
+    expect(antigravityLivePrompt("abc")).toContain("memoree_grep");
     expect(antigravityLivePrompt("abc")).toContain("abc");
   });
 
@@ -303,6 +312,20 @@ describe("runtime validation skip-live-antigravity", () => {
     const msg = { jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: "ok" }] } };
     expect(encodeMcpStdio(msg, "ndjson")).toBe(`${JSON.stringify(msg)}\n`);
     expect(parseMcpFramedMessages(`${JSON.stringify(msg)}\n`)).toEqual([msg]);
+  });
+
+  it("requires call_mcp_tool read/write/grep in the isolated Antigravity profile", () => {
+    root = mkdtempSync(join(tmpdir(), "runtime-validate-agy-mcp-"));
+    const home = root;
+    const brain = join(home, ".gemini", "antigravity-cli", "brain");
+    mkdirSync(brain, { recursive: true });
+    writeFileSync(join(brain, "turn.jsonl"), [
+      '{"tool_calls":[{"name":"call_mcp_tool","args":{"ToolName":"memoree_read"}}]}',
+      "memoree_write memoree_grep",
+      "",
+    ].join("\n"));
+    expect(() => assertAntigravityLiveUsedMcp(home, "used tools")).not.toThrow();
+    expect(() => assertAntigravityLiveUsedMcp(home, "I do not have access to the `memoree_read` tools")).toThrow(/did not receive Memoree MCP tools/);
   });
 });
 

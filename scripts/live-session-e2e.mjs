@@ -31,6 +31,7 @@ import {
   writeIsolatedAntigravityGeminiSettings,
   antigravityCliAvailable,
   antigravityLivePrompt,
+  assertAntigravityLiveUsedMcp,
 } from "./runtime-validate.mjs";
 
 function claudeLivePrompt(harborId, ruleId) {
@@ -232,11 +233,14 @@ export async function runLiveSessionE2E() {
     const runLiveAntigravity = !skipLiveAntigravityRequested()
       && antigravityCliAvailable()
       && geminiKey.length > 0;
+    /** @type {string | null} */
+    let agyLiveId = null;
     if (runLiveAntigravity) {
       status("installing Antigravity hooks into the isolated profile");
       run(process.execPath, [cli, "antigravity", "install"], { cwd: repository, env });
       writeIsolatedAntigravityGeminiSettings(isolatedHome);
       const agyId = crypto.randomUUID();
+      agyLiveId = agyId;
       status("running a live Antigravity session (hooks + MCP enabled)");
       const agyOut = run("agy", [
         "-p",
@@ -251,13 +255,14 @@ export async function runLiveSessionE2E() {
         timeout: 180_000,
       });
       assertAgentResponseContainsIdentifier(agyOut, agyId, "live Antigravity session");
+      assertAntigravityLiveUsedMcp(isolatedHome, agyOut);
       await waitForCapture(databasePath, agyId, { requireSummary: false, timeoutMs: 60_000 });
     } else {
       status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
     }
 
     const counts = inspectCaptureDatabase(databasePath, {
-      requireInEventsOrSummaries: [harborId, lanternId],
+      requireInEventsOrSummaries: [harborId, lanternId, ...(agyLiveId ? [agyLiveId] : [])],
       emptyEventsMessage: "Live session captured zero session events — plugin hooks did not persist",
       emptySummariesMessage: "Wiki/session reflection produced no summaries",
     });

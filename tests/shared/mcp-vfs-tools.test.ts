@@ -10,6 +10,7 @@ import {
   normalizeMemoryPath,
   positiveLineCount,
   runMemoreeTool,
+  MCP_TOOL_JOBS,
   MEMOREE_MCP_TOOLS,
   MEMOREE_MCP_TOOL_NAMES,
   SANDBOXED_COMMAND_MCP_TOOLS,
@@ -61,6 +62,15 @@ describe("Memoree MCP VFS tools", () => {
       expect(SANDBOXED_COMMAND_MCP_TOOLS[command], command).toBeTruthy();
       expect(MEMOREE_MCP_TOOL_NAMES).toContain(SANDBOXED_COMMAND_MCP_TOOLS[command]);
     }
+  });
+
+  it("gives each MCP tool a distinct product job (echo/printf/tee share write)", () => {
+    expect(Object.keys(MCP_TOOL_JOBS).sort()).toEqual([...MEMOREE_MCP_TOOL_NAMES].sort());
+    const jobs = Object.values(MCP_TOOL_JOBS);
+    expect(new Set(jobs).size).toBe(jobs.length);
+    expect(SANDBOXED_COMMAND_MCP_TOOLS.echo).toBe("memoree_write");
+    expect(SANDBOXED_COMMAND_MCP_TOOLS.printf).toBe("memoree_write");
+    expect(SANDBOXED_COMMAND_MCP_TOOLS.tee).toBe("memoree_write");
   });
 
   it("lists tools over JSON-RPC", async () => {

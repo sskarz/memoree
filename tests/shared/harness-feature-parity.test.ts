@@ -26,7 +26,7 @@ import { CODEX_AGENTS_BLOCK, CODEX_SESSION_START_MATCHER } from "../../src/cli/i
 import { MEMORY_COMMAND_GUIDANCE, MEMORY_SANDBOXED_COMMANDS } from "../../src/hooks/shared/memory-command-contract.js";
 import { ANTIGRAVITY_MEMORY_CONTEXT } from "../../src/hooks/antigravity/pre-invocation.js";
 import { MEMORY_STEER } from "../../src/hooks/antigravity/payload.js";
-import { MEMOREE_MCP_TOOL_NAMES, SANDBOXED_COMMAND_MCP_TOOLS } from "../../src/mcp/vfs-tools.js";
+import { MEMOREE_MCP_TOOL_NAMES, SANDBOXED_COMMAND_MCP_TOOLS, MCP_TOOL_JOBS } from "../../src/mcp/vfs-tools.js";
 
 const ROOT = process.cwd();
 
@@ -233,6 +233,7 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
       expect(ANTIGRAVITY_MEMORY_CONTEXT).toContain(name);
       expect(MEMORY_STEER).toContain(name);
       expect(skill).toContain(name);
+      expect(MCP_TOOL_JOBS[name].length).toBeGreaterThan(20);
     }
   });
 

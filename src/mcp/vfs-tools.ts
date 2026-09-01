@@ -41,6 +41,26 @@ export const MEMOREE_MCP_TOOL_NAMES = [
   "memoree_rm",
 ] as const;
 
+/**
+ * Unique product job for each MCP tool. echo/printf/tee collapse to
+ * memoree_write: they are three shell spellings of the same lifecycle write.
+ * Dropping any other tool would break the published sandbox contract
+ * (Claude/Codex SKILL.md + MEMORY_COMMAND_GUIDANCE).
+ */
+export const MCP_TOOL_JOBS: Record<(typeof MEMOREE_MCP_TOOL_NAMES)[number], string> = {
+  memoree_ls: "Inventory a directory without opening file bodies.",
+  memoree_read: "Read a whole virtual file (identity, rules.md, summaries, graph/query, docs).",
+  memoree_grep: "Search file contents across a subtree (recall).",
+  memoree_head: "Read the start of a large file without loading all of it.",
+  memoree_tail: "Read the end of a large file (recent index/session lines).",
+  memoree_wc: "Measure line count before deciding to cat a huge transcript.",
+  memoree_find: "Locate files by name, not by content.",
+  memoree_jq: "Extract fields from real JSON (identity.json). Not session .jsonl views.",
+  memoree_write: "Create or overwrite a rule, goal, or KPI file (printf/echo/tee).",
+  memoree_mv: "Move a rule or goal between lifecycle dirs, keeping the same id.",
+  memoree_rm: "Mark a rule done or close a goal (lifecycle, not a hard delete).",
+};
+
 export const MEMOREE_MCP_TOOLS = [
   {
     name: "memoree_ls",

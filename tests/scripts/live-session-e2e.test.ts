@@ -17,6 +17,12 @@ describe("live session e2e harness", () => {
     expect(source).not.toMatch(/["']--ephemeral["']/);
   });
 
+  it("requires Antigravity to use MCP read/write/grep unaided", () => {
+    expect(source).toContain("antigravityLivePrompt");
+    expect(source).toContain("assertAntigravityLiveUsedMcp");
+    expect(source).toContain("agyLiveId");
+  });
+
   it("is wired as npm run live:e2e", () => {
     const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
     expect(pkg.scripts["live:e2e"]).toBe("node scripts/live-session-e2e.mjs");
