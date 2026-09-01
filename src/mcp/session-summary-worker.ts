@@ -19,7 +19,7 @@ import { isDirectRun } from "../utils/direct-run.js";
 import { log as _log } from "../utils/debug.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { projectNameFromCwd } from "../utils/project-name.js";
-import { writeMcpSessionSummary } from "./session-summary.js";
+import { writeMcpSessionSummary, releaseMcpSummaryLock, takeMcpSummaryDirty } from "./session-summary.js";
 
 const dlog = (msg: string) => _log("mcp-session-summary", msg);
 
@@ -58,20 +58,24 @@ export async function runMcpSessionSummaryWorker(configPath: string): Promise<vo
         const daemonEntry = join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
         return embedSummaryWithWarmup(text, "document", { daemonEntry, log: dlog });
       };
-    const result = await writeMcpSessionSummary({
-      query,
-      memoryTable: base.tableName,
-      sessionsTable: base.sessionsTableName,
-      sessionId: cfg.sessionId,
-      userName: base.userName,
-      project,
-      projectKey,
-      agent: "antigravity",
-      embedText,
-      dialect: storage.dialect,
-    });
-    dlog(`summary ${result.path} for ${cfg.sessionId}`);
+    do {
+      takeMcpSummaryDirty(cfg.sessionId);
+      const result = await writeMcpSessionSummary({
+        query,
+        memoryTable: base.tableName,
+        sessionsTable: base.sessionsTableName,
+        sessionId: cfg.sessionId,
+        userName: base.userName,
+        project,
+        projectKey,
+        agent: "antigravity",
+        embedText,
+        dialect: storage.dialect,
+      });
+      dlog(`summary ${result.path} for ${cfg.sessionId}`);
+    } while (takeMcpSummaryDirty(cfg.sessionId));
   } finally {
+    releaseMcpSummaryLock(cfg.sessionId);
     await storage.close().catch(() => undefined);
   }
 }

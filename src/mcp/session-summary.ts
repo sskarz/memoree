@@ -12,22 +12,90 @@
  * marked digest.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { uploadSummary, isFinalizedRow, isFinalizedSummaryText, type QueryFn, type UploadResult } from "../hooks/upload-summary.js";
-import { sqlIdent, sqlStr } from "../utils/sql.js";
+import { uploadSummary, isFinalizedRow, isFinalizedSummaryText, MCP_DIGEST_MARKER, type QueryFn, type UploadResult } from "../hooks/upload-summary.js";
+import { sqlIdent, sqlLike, sqlStr } from "../utils/sql.js";
 import { spawnDetachedNodeWorker } from "../utils/spawn-detached.js";
 import { projectNameFromCwd } from "../utils/project-name.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
 import { escapedStringPrefix } from "../storage/sql-dialect.js";
 import type { StorageDialect } from "../storage/schema.js";
 
-export const MCP_SUMMARY_MARKER = "<!-- memoree-mcp-summary -->";
+export const MCP_SUMMARY_MARKER = MCP_DIGEST_MARKER;
 
 const MAX_EVENTS = 40;
+const MCP_SUMMARY_LOCK_STALE_MS = 2 * 60 * 1000;
+
+function sanitizeSessionId(sessionId: string): string {
+  const safe = sessionId.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+  return safe.length > 0 ? safe : "session";
+}
+
+export function mcpSummaryLockDir(sessionId: string): string {
+  return join(tmpdir(), `memoree-mcp-summary-${sanitizeSessionId(sessionId)}.lock`);
+}
+
+export function mcpSummaryDirtyPath(sessionId: string): string {
+  return join(tmpdir(), `memoree-mcp-summary-${sanitizeSessionId(sessionId)}.dirty`);
+}
+
+export function markMcpSummaryDirty(sessionId: string): void {
+  writeFileSync(mcpSummaryDirtyPath(sessionId), "1");
+}
+
+export function takeMcpSummaryDirty(sessionId: string): boolean {
+  try {
+    unlinkSync(mcpSummaryDirtyPath(sessionId));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function tryAcquireMcpSummaryLock(sessionId: string): boolean {
+  const lockDir = mcpSummaryLockDir(sessionId);
+  try {
+    mkdirSync(lockDir);
+    return true;
+  } catch {
+    try {
+      const age = Date.now() - statSync(lockDir).mtimeMs;
+      if (age < MCP_SUMMARY_LOCK_STALE_MS) return false;
+      rmSync(lockDir, { recursive: true, force: true });
+      mkdirSync(lockDir);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export function releaseMcpSummaryLock(sessionId: string): void {
+  try {
+    rmSync(mcpSummaryLockDir(sessionId), { recursive: true, force: true });
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Match session event rows for one conversation. Requires the id as the
+ * filename (`<id>.jsonl`) or as the slug suffix (`*_ <id>.jsonl`) so
+ * `mcp-123` does not also pull `mcp-1234`.
+ */
+export function sessionEventsWhereSql(sessionId: string, dialect: StorageDialect = "sqlite"): string {
+  const stringPrefix = escapedStringPrefix(dialect);
+  const exact = `${stringPrefix}'${sqlStr(`${sessionId}.jsonl`)}'`;
+  const suffix = `${stringPrefix}'%\\_${sqlLike(sessionId)}.jsonl'`;
+  return (
+    `path LIKE ${stringPrefix}'/sessions/%' ESCAPE '\\' AND ` +
+    `(filename = ${exact} OR filename LIKE ${suffix} ESCAPE '\\')`
+  );
+}
 
 export interface WriteMcpSessionSummaryOpts {
   query: QueryFn;
@@ -96,13 +164,11 @@ export function buildMcpSessionSummaryMarkdown(opts: {
 
 export async function writeMcpSessionSummary(opts: WriteMcpSessionSummaryOpts): Promise<WriteMcpSessionSummaryResult> {
   const dialect = opts.dialect ?? "sqlite";
-  const stringPrefix = escapedStringPrefix(dialect);
   const memoryTable = sqlIdent(opts.memoryTable);
   const sessionsTable = sqlIdent(opts.sessionsTable);
-  const likePat = `/sessions/%${opts.sessionId}%`;
   const rows = await opts.query(
     `SELECT message, path FROM "${sessionsTable}" ` +
-    `WHERE path LIKE ${stringPrefix}'${sqlStr(likePat)}' ` +
+    `WHERE ${sessionEventsWhereSql(opts.sessionId, dialect)} ` +
     `ORDER BY creation_date DESC LIMIT ${MAX_EVENTS}`,
   );
   if (rows.length === 0) return { path: "empty" };
@@ -137,7 +203,7 @@ export async function writeMcpSessionSummary(opts: WriteMcpSessionSummaryOpts): 
     embedding = await opts.embedText(text);
   }
 
-  return uploadSummary(opts.query, {
+  const result = await uploadSummary(opts.query, {
     tableName: opts.memoryTable,
     vpath,
     fname: `${opts.sessionId}.md`,
@@ -150,7 +216,9 @@ export async function writeMcpSessionSummary(opts: WriteMcpSessionSummaryOpts): 
     embedding,
     dialect,
     pluginVersion: opts.pluginVersion,
+    mcpDigest: true,
   });
+  return result.path === "skip" ? { path: "skip-wiki" } : result;
 }
 
 export interface SpawnMcpSessionSummaryInput {
@@ -169,8 +237,10 @@ export function spawnMcpSessionSummaryWorker(
 ): void {
   if (process.env.VITEST && process.env.MEMOREE_TEST_SPAWN_MCP_SUMMARY !== "1" && !deps.spawn) return;
   try {
+    markMcpSummaryDirty(input.sessionId);
+    if (!tryAcquireMcpSummaryLock(input.sessionId)) return;
     const workerPath = join(dirname(fileURLToPath(import.meta.url)), "session-summary-worker.js");
-    const tmpDir = join(tmpdir(), `memoree-mcp-summary-${input.sessionId}-${Date.now()}`);
+    const tmpDir = join(tmpdir(), `memoree-mcp-summary-${sanitizeSessionId(input.sessionId)}-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     const configFile = join(tmpDir, "config.json");
     writeFileSync(configFile, JSON.stringify({
@@ -182,6 +252,6 @@ export function spawnMcpSessionSummaryWorker(
     const spawn = deps.spawn ?? spawnDetachedNodeWorker;
     spawn(workerPath, [configFile]);
   } catch {
-    // best-effort
+    releaseMcpSummaryLock(input.sessionId);
   }
 }
