@@ -43,7 +43,8 @@ const RECALL_BUDGET_MS = parsePositive(process.env.MEMOREE_RECALL_TIMEOUT_MS, 15
 
 export const ANTIGRAVITY_MEMORY_CONTEXT =
   "MEMOREE MEMORY: Use the Memoree MCP tools — memoree_read, memoree_ls, memoree_grep, " +
-  "memoree_write, memoree_mv, memoree_rm. Do not cat/ls/grep ~/.memoree/memory with " +
+  "memoree_head, memoree_tail, memoree_wc, memoree_find, memoree_jq, memoree_write, " +
+  "memoree_mv, memoree_rm. Do not cat/ls/grep ~/.memoree/memory with " +
   "run_command or view_file; that path is virtual.\n" +
   "Start with memoree_read path=\"identity.json\", then rules.md and goals.md. " +
   "Past sessions: memoree_read path=\"index.md\", then summaries/<user>/<session>.md.\n" +

@@ -20,6 +20,8 @@ import {
   skipLiveCodexRequested,
   skipLiveAntigravityRequested,
   writeIsolatedAntigravityGeminiSettings,
+  parseMcpFramedMessages,
+  antigravityLivePrompt,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
 import { redactSecrets } from "../../src/hooks/shared/redact.js";
@@ -236,6 +238,9 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("skipLiveAntigravity");
     expect(source).toContain("pre-invocation.js");
     expect(source).toContain("mcp-server.js");
+    expect(source).toContain("callMemoreeMcpTool");
+    expect(source).toContain("antigravityLivePrompt");
+    expect(source).toContain("memoree_head");
     expect(source).toContain("graph/query/store");
     expect(source).toContain("graph/show/persistGraph");
     expect(source).toContain("graph/impact/writeSnapshot");
@@ -279,6 +284,14 @@ describe("runtime validation skip-live-antigravity", () => {
     writeIsolatedAntigravityGeminiSettings(root);
     const settings = JSON.parse(readFileSync(join(root, ".gemini", "antigravity-cli", "settings.json"), "utf8"));
     expect(settings).toEqual({ modelProvider: "gemini" });
+  });
+
+  it("parses Content-Length MCP frames and builds the live MCP prompt", () => {
+    const body = JSON.stringify({ jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: "ok" }] } });
+    const framed = `noise\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+    expect(parseMcpFramedMessages(framed)).toEqual([{ jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: "ok" }] } }]);
+    expect(antigravityLivePrompt("abc")).toContain("memoree_read");
+    expect(antigravityLivePrompt("abc")).toContain("abc");
   });
 });
 

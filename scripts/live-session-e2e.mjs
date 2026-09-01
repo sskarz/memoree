@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Live Claude Code + Codex session harness.
+ * Live Claude Code + Codex + Antigravity session harness.
  *
  * Unlike runtime-validate's `--bare` capture turn, this runs `claude -p` and
  * `codex exec` WITH plugin/hooks enabled so SessionStart, capture, recall,
  * PreToolUse VFS, Stop, SubagentStop, and SessionEnd fire on their own.
- * Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
+ * Antigravity uses installed `~/.gemini` hooks + MCP (`agy -p` without a
+ * `--bare` equivalent). Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -26,6 +27,10 @@ import {
   runCodex,
   status,
   waitForCapture,
+  skipLiveAntigravityRequested,
+  writeIsolatedAntigravityGeminiSettings,
+  antigravityCliAvailable,
+  antigravityLivePrompt,
 } from "./runtime-validate.mjs";
 
 function claudeLivePrompt(harborId, ruleId) {
@@ -222,6 +227,34 @@ export async function runLiveSessionE2E() {
 
     status("waiting for Codex capture/summary");
     await waitForCapture(databasePath, lanternId, { requireSummary: true, timeoutMs: 180_000 });
+
+    const geminiKey = typeof process.env.GEMINI_API_KEY === "string" ? process.env.GEMINI_API_KEY.trim() : "";
+    const runLiveAntigravity = !skipLiveAntigravityRequested()
+      && antigravityCliAvailable()
+      && geminiKey.length > 0;
+    if (runLiveAntigravity) {
+      status("installing Antigravity hooks into the isolated profile");
+      run(process.execPath, [cli, "antigravity", "install"], { cwd: repository, env });
+      writeIsolatedAntigravityGeminiSettings(isolatedHome);
+      const agyId = crypto.randomUUID();
+      status("running a live Antigravity session (hooks + MCP enabled)");
+      const agyOut = run("agy", [
+        "-p",
+        antigravityLivePrompt(agyId),
+        "--dangerously-skip-permissions",
+      ], {
+        cwd: repository,
+        env: {
+          ...env,
+          PATH: `${join(realHome, ".local", "bin")}:/tmp/agy-bin:${process.env.PATH ?? ""}`,
+        },
+        timeout: 180_000,
+      });
+      assertAgentResponseContainsIdentifier(agyOut, agyId, "live Antigravity session");
+      await waitForCapture(databasePath, agyId, { requireSummary: false, timeoutMs: 60_000 });
+    } else {
+      status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
+    }
 
     const counts = inspectCaptureDatabase(databasePath, {
       requireInEventsOrSummaries: [harborId, lanternId],

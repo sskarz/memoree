@@ -192,6 +192,65 @@ export function writeIsolatedAntigravityGeminiSettings(isolatedHome) {
   writeFileSync(join(dir, "settings.json"), `${JSON.stringify({ modelProvider: "gemini" }, null, 2)}\n`);
 }
 
+export function antigravityLivePrompt(identifier) {
+  return [
+    "You have Memoree MCP tools. You MUST call memoree_read with path identity.json.",
+    "Then call memoree_ls with path \"\" (the memory root).",
+    `Repeat this exact lexical fallback marker identifier: ${identifier}`,
+    "Include that UUID in your final answer. Do not invent a different UUID.",
+  ].join(" ");
+}
+
+export function parseMcpFramedMessages(stdout) {
+  const messages = [];
+  let rest = String(stdout ?? "");
+  while (true) {
+    const idx = rest.search(/Content-Length:\s*\d+/i);
+    if (idx < 0) break;
+    rest = rest.slice(idx);
+    const header = /^(Content-Length:\s*(\d+)\r\n\r\n)/i.exec(rest);
+    if (!header) break;
+    const length = Number(header[2]);
+    const start = header[1].length;
+    const json = rest.slice(start, start + length);
+    rest = rest.slice(start + length);
+    try {
+      messages.push(JSON.parse(json));
+    } catch {
+      /* ignore a truncated frame */
+    }
+  }
+  return messages;
+}
+
+export function callMemoreeMcpTool(serverPath, name, args, options) {
+  const frames = [
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } },
+  ].map(msg => {
+    const body = JSON.stringify(msg);
+    return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+  }).join("");
+  const result = spawnSync(process.execPath, [serverPath], {
+    cwd: options.cwd,
+    env: options.env,
+    encoding: "utf8",
+    input: frames,
+    timeout: options.timeout ?? 20_000,
+  });
+  const messages = parseMcpFramedMessages(result.stdout ?? "");
+  const reply = [...messages].reverse().find(msg => msg && msg.id === 2);
+  const text = String(reply?.result?.content?.[0]?.text ?? "");
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    ok: result.status === 0 && reply?.result?.isError !== true,
+    text,
+    isError: reply?.result?.isError === true,
+  };
+}
+
 export function hookUpdatedInput(stdout) {
   try {
     return JSON.parse(stdout)?.hookSpecificOutput?.updatedInput ?? {};
@@ -829,7 +888,8 @@ export async function validateRuntime(options = {}) {
       workspacePaths: [repository],
     }, { cwd: repository, env: { ...env, MEMOREE_WIKI_WORKER: "1" }, hookArgs: ["PreInvocation"] });
     assertHookExitZero(agyPre, "Antigravity PreInvocation wiki-worker short-circuit");
-    const mcpInit = spawnSync(process.execPath, [join(antigravityBundle, "mcp-server.js")], {
+    const mcpServer = join(antigravityBundle, "mcp-server.js");
+    const mcpInit = spawnSync(process.execPath, [mcpServer], {
       cwd: repository,
       env,
       encoding: "utf8",
@@ -841,6 +901,60 @@ export async function validateRuntime(options = {}) {
     });
     assert(mcpInit.status === 0 || (mcpInit.stdout ?? "").includes("memoree"),
       `Antigravity MCP initialize failed: status=${mcpInit.status} stdout=${(mcpInit.stdout ?? "").slice(0, 400)} stderr=${(mcpInit.stderr ?? "").slice(0, 400)}`);
+    status("checking Antigravity MCP VFS (same commands as Claude/Codex intercept)");
+    const mcpOpts = { cwd: repository, env };
+    const mcpIdentity = callMemoreeMcpTool(mcpServer, "memoree_read", { path: "identity.json" }, mcpOpts);
+    assert(mcpIdentity.ok && mcpIdentity.text.includes("runtime-validation"),
+      `Antigravity MCP memoree_read identity failed: ${mcpIdentity.text.slice(0, 400)}`);
+    const mcpGraph = callMemoreeMcpTool(mcpServer, "memoree_read", { path: "graph/query/store" }, mcpOpts);
+    assert(mcpGraph.ok && mcpGraph.text.includes("persistGraph"),
+      `Antigravity MCP graph/query/store missed persistGraph: ${mcpGraph.text.slice(0, 400)}`);
+    const mcpLs = callMemoreeMcpTool(mcpServer, "memoree_ls", { path: "" }, mcpOpts);
+    assert(mcpLs.ok && /identity\.json|rules\.md/.test(mcpLs.text),
+      `Antigravity MCP ls missed inventory: ${mcpLs.text.slice(0, 400)}`);
+    const mcpHead = callMemoreeMcpTool(mcpServer, "memoree_head", { path: "identity.json", lines: 8 }, mcpOpts);
+    assert(mcpHead.ok, `Antigravity MCP head failed: ${mcpHead.text.slice(0, 400)}`);
+    const mcpFind = callMemoreeMcpTool(mcpServer, "memoree_find", { path: "", name: "identity.json" }, mcpOpts);
+    assert(mcpFind.ok && mcpFind.text.includes("identity.json"),
+      `Antigravity MCP find missed identity.json: ${mcpFind.text.slice(0, 400)}`);
+    const mcpRuleId = crypto.randomUUID();
+    const mcpRuleText = `antigravity mcp rule ${crypto.randomUUID()}`;
+    const mcpWrite = callMemoreeMcpTool(mcpServer, "memoree_write", {
+      path: `rules/active/${mcpRuleId}.md`,
+      content: mcpRuleText,
+    }, mcpOpts);
+    assert(mcpWrite.ok, `Antigravity MCP write failed: ${mcpWrite.text.slice(0, 400)}`);
+    const mcpReadRule = callMemoreeMcpTool(mcpServer, "memoree_read", { path: `rules/active/${mcpRuleId}.md` }, mcpOpts);
+    assert(mcpReadRule.ok && mcpReadRule.text.includes(mcpRuleText),
+      `Antigravity MCP read-after-write missed rule: ${mcpReadRule.text.slice(0, 400)}`);
+    const mcpGrep = callMemoreeMcpTool(mcpServer, "memoree_grep", { pattern: "antigravity mcp rule", path: "rules" }, mcpOpts);
+    assert(mcpGrep.ok && mcpGrep.text.includes(mcpRuleText),
+      `Antigravity MCP grep missed rule: ${mcpGrep.text.slice(0, 400)}`);
+
+    status("checking Antigravity PreInvocation capture + inject");
+    const agyCaptureId = crypto.randomUUID();
+    const agyTranscript = join(state, "agy-transcript.jsonl");
+    writeFileSync(agyTranscript, `${JSON.stringify({ role: "user", text: `remember marker ${agyCaptureId}` })}\n`);
+    const agyPreLive = runHookResult(join(antigravityBundle, "pre-invocation.js"), {
+      conversationId: agyCaptureId,
+      invocationNum: 0,
+      workspacePaths: [repository],
+      transcriptPath: agyTranscript,
+    }, { cwd: repository, env, hookArgs: ["PreInvocation"] });
+    assertHookExitZero(agyPreLive, "Antigravity PreInvocation capture");
+    const agyPreBody = JSON.parse(agyPreLive.stdout.trim() || "{}");
+    assert(Array.isArray(agyPreBody.injectSteps) && agyPreBody.injectSteps.length > 0,
+      `Antigravity PreInvocation must inject memory context; stdout=${agyPreLive.stdout.slice(0, 400)}`);
+    assertHookExitZero(runHookResult(join(antigravityBundle, "capture.js"), {
+      conversationId: agyCaptureId,
+      workspacePaths: [repository],
+      toolCall: { name: "run_command", args: { CommandLine: "echo hi" } },
+    }, { cwd: repository, env, hookArgs: ["PostToolUse"] }), "Antigravity PostToolUse capture");
+    {
+      const captured = isolatedCounts(databasePath, agyCaptureId);
+      assert(captured.matchingEvents > 0,
+        `Antigravity PreInvocation did not persist the user marker; events=${captured.matchingEvents}`);
+    }
     const docsIndex = runHookResult(codexPreTool, {
       ...hookBase,
       tool_input: { command: "cat ~/.memoree/memory/docs/index.md" },
@@ -870,6 +984,10 @@ export async function validateRuntime(options = {}) {
       cwd: repository,
       hook_event_name: "Stop",
     }, { cwd: repository, env: { ...env, MEMOREE_GRAPH_TICK_INTERVAL_MS: "0" } }), "Codex graph-on-stop");
+    assertHookExitZero(runHookResult(join(antigravityBundle, "graph-on-stop.js"), {
+      cwd: repository,
+      hook_event_name: "Stop",
+    }, { cwd: repository, env: { ...env, MEMOREE_GRAPH_TICK_INTERVAL_MS: "0" } }), "Antigravity graph-on-stop");
 
     const claudeSession = crypto.randomUUID();
     const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
@@ -1216,19 +1334,40 @@ export async function validateRuntime(options = {}) {
       && antigravityCliAvailable()
       && geminiKey.length > 0;
     if (runLiveAntigravity) {
+      status("installing Antigravity hooks into the isolated profile");
+      run(process.execPath, [cli, "antigravity", "install"], { cwd: repository, env });
       status("running an authenticated Antigravity capture turn (isolated HOME + GEMINI_API_KEY)");
       writeIsolatedAntigravityGeminiSettings(isolatedHome);
       const agyIdentifier = crypto.randomUUID();
+      const agyPath = `${join(realHome, ".local", "bin")}:/tmp/agy-bin:${process.env.PATH ?? ""}`;
       const agyResponse = run("agy", [
         "-p",
-        lexicalValidationPrompt(agyIdentifier),
+        antigravityLivePrompt(agyIdentifier),
         "--dangerously-skip-permissions",
-      ], { cwd: repository, env, timeout: 180_000 });
+      ], { cwd: repository, env: { ...env, PATH: agyPath }, timeout: 180_000 });
       assertAgentResponseContainsIdentifier(
         agyResponse,
         agyIdentifier,
         "Antigravity capture turn",
       );
+      const agyHomeText = (() => {
+        const roots = [
+          join(isolatedHome, ".gemini", "antigravity-cli", "brain"),
+          join(isolatedHome, ".gemini", "antigravity-cli", "log"),
+          join(isolatedHome, ".gemini", "antigravity-cli", "conversations"),
+        ].filter(existsSync);
+        if (roots.length === 0) return "";
+        try {
+          return execFileSync("grep", ["-R", "--include=*.jsonl", "--include=*.log", "--include=*.txt", "memoree_read", ...roots], {
+            encoding: "utf8",
+            timeout: 10_000,
+          });
+        } catch {
+          return "";
+        }
+      })();
+      assert(agyHomeText.trim().length > 0,
+        "Live Antigravity did not call memoree_read; MCP tools were not used");
     } else {
       status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
     }

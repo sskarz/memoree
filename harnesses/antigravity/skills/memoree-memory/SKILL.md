@@ -7,12 +7,16 @@ description: Global team and org memory powered by sskarz. ALWAYS check BOTH bui
 
 You have persistent memory shared across sessions, users, and agents in the org.
 
-**Antigravity:** `~/.memoree/memory` is virtual. Use MCP tools:
+**Antigravity:** `~/.memoree/memory` is virtual. Use MCP tools (same VFS as Claude/Codex `cat`/`ls`/`grep`/`head`/`tail`/`wc`/`find`/`jq`/`printf`/`mv`/`rm`):
 
-- `memoree_read` path=`identity.json` | `rules.md` | `goals.md` | `index.md` | `summaries/<user>/<session>.md`
-- `memoree_ls` path=`summaries` or `rules/active`
-- `memoree_grep` pattern=`keyword` path=`summaries`
-- `memoree_write` / `memoree_mv` / `memoree_rm` for rule and goal lifecycle
+- `memoree_read` — cat a virtual file (`identity.json`, `rules.md`, `graph/query/<q>`, `docs/...`)
+- `memoree_ls` — list a directory
+- `memoree_grep` — search (`pattern`, optional `path`)
+- `memoree_head` / `memoree_tail` — first/last N lines (`path`, optional `lines`)
+- `memoree_wc` — line count (`path`)
+- `memoree_find` — `find <path> -name <pattern>`
+- `memoree_jq` — jq filter on known JSON (`path`, optional `filter`)
+- `memoree_write` / `memoree_mv` / `memoree_rm` — rule and goal lifecycle
 
 Do not `cat` / `ls` / `grep` `~/.memoree/memory` with `run_command` or `view_file`.
 

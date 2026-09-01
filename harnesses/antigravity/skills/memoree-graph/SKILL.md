@@ -5,7 +5,7 @@ description: Query the local code graph through Memoree MCP (memoree_read path=g
 
 # Memoree Code Graph
 
-A deterministic, AST-derived map of the current repository. In Antigravity, query it with `memoree_read` — there are no real files on disk.
+A deterministic, AST-derived map of the current repository. In Antigravity, query it with Memoree MCP tools — there are no real files on disk.
 
 The graph **builds and refreshes automatically** on Stop. You never run a build command — just read it.
 
@@ -21,6 +21,8 @@ memoree_read path="graph/impact/<pattern>"
 memoree_read path="graph/path/<from>/<to>"
 memoree_read path="graph/layers"
 memoree_read path="graph/tour"
+memoree_ls path="graph"
+memoree_head path="graph/query/<pattern>" lines=20
 ```
 
 Multi-token AND: `graph/query/<a>+<b>`.

@@ -10,6 +10,37 @@
 import { processCodexPreToolUse } from "../hooks/codex/pre-tool-use.js";
 import { TILDE_PATH, touchesMemory } from "../hooks/memory-path-utils.js";
 
+/** Sandboxed VFS command → MCP tool. echo/printf/tee all write. */
+export const SANDBOXED_COMMAND_MCP_TOOLS: Record<string, string> = {
+  cat: "memoree_read",
+  ls: "memoree_ls",
+  grep: "memoree_grep",
+  head: "memoree_head",
+  tail: "memoree_tail",
+  wc: "memoree_wc",
+  find: "memoree_find",
+  jq: "memoree_jq",
+  echo: "memoree_write",
+  printf: "memoree_write",
+  tee: "memoree_write",
+  mv: "memoree_mv",
+  rm: "memoree_rm",
+};
+
+export const MEMOREE_MCP_TOOL_NAMES = [
+  "memoree_ls",
+  "memoree_read",
+  "memoree_grep",
+  "memoree_head",
+  "memoree_tail",
+  "memoree_wc",
+  "memoree_find",
+  "memoree_jq",
+  "memoree_write",
+  "memoree_mv",
+  "memoree_rm",
+] as const;
+
 export const MEMOREE_MCP_TOOLS = [
   {
     name: "memoree_ls",
@@ -38,6 +69,62 @@ export const MEMOREE_MCP_TOOLS = [
         path: { type: "string", description: "Subtree to search; default is the memory root" },
       },
       required: ["pattern"],
+    },
+  },
+  {
+    name: "memoree_head",
+    description: "Read the first N lines of a Memoree memory file (same as sandboxed head).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        lines: { type: "number", description: "Line count; default 10" },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "memoree_tail",
+    description: "Read the last N lines of a Memoree memory file (same as sandboxed tail).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        lines: { type: "number", description: "Line count; default 10" },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "memoree_wc",
+    description: "Count lines in a Memoree memory file (wc -l).",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    },
+  },
+  {
+    name: "memoree_find",
+    description: "Find names under a Memoree memory directory (find <path> -name <pattern>).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Directory to search; default is the memory root" },
+        name: { type: "string", description: "find -name pattern; default *" },
+      },
+    },
+  },
+  {
+    name: "memoree_jq",
+    description: "Run jq on a JSON file in Memoree memory. Do not use on rendered session .jsonl views.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        filter: { type: "string", description: "jq filter; default ." },
+      },
+      required: ["path"],
     },
   },
   {
@@ -76,6 +163,11 @@ export function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+export function positiveLineCount(value: unknown, fallback = 10): number {
+  const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
 /** Map a tool path onto ~/.memoree/memory/... so the VFS intercept fires. */
 export function normalizeMemoryPath(path: string): string {
   let p = (path ?? "").trim();
@@ -99,6 +191,16 @@ export function buildMemoryCommand(name: string, args: Record<string, unknown>):
       return `cat ${normalizeMemoryPath(String(args.path ?? ""))}`;
     case "memoree_grep":
       return `grep -ri ${shellSingleQuote(String(args.pattern ?? ""))} ${normalizeMemoryPath(String(args.path ?? ""))}`;
+    case "memoree_head":
+      return `head -n ${positiveLineCount(args.lines)} ${normalizeMemoryPath(String(args.path ?? ""))}`;
+    case "memoree_tail":
+      return `tail -n ${positiveLineCount(args.lines)} ${normalizeMemoryPath(String(args.path ?? ""))}`;
+    case "memoree_wc":
+      return `wc -l ${normalizeMemoryPath(String(args.path ?? ""))}`;
+    case "memoree_find":
+      return `find ${normalizeMemoryPath(String(args.path ?? ""))} -name ${shellSingleQuote(String(args.name ?? "*"))}`;
+    case "memoree_jq":
+      return `jq ${shellSingleQuote(String(args.filter ?? "."))} ${normalizeMemoryPath(String(args.path ?? ""))}`;
     case "memoree_write":
       return `printf '%s' ${shellSingleQuote(String(args.content ?? ""))} > ${normalizeMemoryPath(String(args.path ?? ""))}`;
     case "memoree_mv":

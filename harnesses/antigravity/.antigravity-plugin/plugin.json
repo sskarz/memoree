@@ -1,5 +1,5 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "memoree",
-  "description": "Local-first persistent memory for Antigravity. Use Memoree MCP tools (memoree_read, memoree_ls, memoree_grep, memoree_write, memoree_mv, memoree_rm); do not cat ~/.memoree/memory."
+  "description": "Local-first persistent memory for Antigravity. Use Memoree MCP tools (memoree_read, memoree_ls, memoree_grep, memoree_head, memoree_tail, memoree_wc, memoree_find, memoree_jq, memoree_write, memoree_mv, memoree_rm); do not cat ~/.memoree/memory."
 }

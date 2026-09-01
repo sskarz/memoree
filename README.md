@@ -110,8 +110,10 @@ plugin-cache-gc is Claude-plugin-cache specific.
 **Antigravity:** PreInvocation (first-call inject + recall + setup), PreToolUse
 (steer off the virtual mount; never auto-`allow`), PostToolUse capture, Stop
 (capture + wiki + graph). Memory is MCP (`memoree_read`, `memoree_ls`,
-`memoree_grep`, `memoree_write`, `memoree_mv`, `memoree_rm`). Wiki workers
-spawn `agy -p` and inherit the user's Google login.
+`memoree_grep`, `memoree_head`, `memoree_tail`, `memoree_wc`, `memoree_find`,
+`memoree_jq`, `memoree_write`, `memoree_mv`, `memoree_rm`) — the same VFS
+commands Claude and Codex intercept. Wiki workers spawn `agy -p` and inherit
+the user's Google login.
 
 Claude Code, Codex, and Antigravity are the supported harnesses.
 

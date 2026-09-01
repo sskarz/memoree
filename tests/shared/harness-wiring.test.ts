@@ -196,4 +196,18 @@ describe("harness wiring: graph query/", () => {
     expect(result.ok).toBe(true);
     expect(result.text).toContain(PERSIST);
   });
+
+  it("Antigravity MCP memoree_ls of graph/ lists query/", async () => {
+    const { runMemoreeTool } = await import("../../src/mcp/vfs-tools.js");
+    const result = await runMemoreeTool("memoree_ls", { path: "graph" }, cwd, async (input) => {
+      return processCodexPreToolUse(input, {
+        config: dummyConfig,
+        createApi: vi.fn(() => ({ query: vi.fn() })) as any,
+        tryGraphReadFn: (cmd, graphCwd) => tryGraphRead(cmd, graphCwd, vfsDeps),
+        logFn: vi.fn(),
+      });
+    });
+    expect(result.ok).toBe(true);
+    expect(result.text).toContain("query/");
+  });
 });

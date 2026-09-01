@@ -275,7 +275,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Antigravity PreInvocation inject + recall | S | V | — | First `invocationNum` 0/1 claims wake lock; `injectSteps` |
 | Antigravity PreToolUse steer (never `allow`) | S | V | — | `{ decision: "deny", reason }` on the mount; unrelated tools `{}` |
 | Antigravity capture + Stop wiki (`agy -p`) | S | V | — | Live `agy` skipped when missing or not signed in |
-| Antigravity MCP VFS tools | S | V | — | `memoree_read`/`ls`/`grep`/`write`/`mv`/`rm` wrap Codex VFS |
+| Antigravity MCP VFS tools | S | V | — | `memoree_read`/`ls`/`grep`/`head`/`tail`/`wc`/`find`/`jq`/`write`/`mv`/`rm` wrap the same sandbox as Claude/Codex |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |

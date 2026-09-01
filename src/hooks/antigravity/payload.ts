@@ -37,7 +37,8 @@ export function sessionIdOf(input: AntigravityHookInput): string {
 
 export const MEMORY_STEER =
   "~/.memoree/memory is a virtual filesystem. Use the Memoree MCP tools: " +
-  "memoree_read, memoree_ls, memoree_grep, memoree_write, memoree_mv, memoree_rm. " +
+  "memoree_read, memoree_ls, memoree_grep, memoree_head, memoree_tail, memoree_wc, " +
+  "memoree_find, memoree_jq, memoree_write, memoree_mv, memoree_rm. " +
   "Do not cat/ls/grep that path with run_command or view_file.";
 
 const PATH_KEYS = [

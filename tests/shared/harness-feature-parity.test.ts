@@ -1,5 +1,5 @@
 /**
- * Claude Code vs Codex product-capability lock.
+ * Claude Code vs Codex vs Antigravity product-capability lock.
  *
  * Platform differences that are not gaps:
  *   - Claude PreToolUse has no matcher (Bash/Read/Grep/Glob). Codex matches
@@ -9,18 +9,24 @@
  *     on Stop (30s). Wiki spawn is a fast detach and runs on SessionEnd too.
  *   - Codex keeps a silent AGENTS.md block because SessionStart
  *     additionalContext has historically rendered in the TUI.
+ *   - Antigravity has no SessionStart / UserPromptSubmit / SessionEnd /
+ *     SubagentStop. PreInvocation covers inject+recall+user capture; Stop
+ *     covers wiki; PostToolUse covers tool capture; MCP covers the VFS.
  *
- * Shared product events both harnesses must wire: SessionStart, UserPromptSubmit
+ * Shared product events Claude and Codex must wire: SessionStart, UserPromptSubmit
  * (capture + recall), PreToolUse VFS, PostToolUse capture, Stop, SubagentStop
  * capture, SessionEnd wiki.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { CODEX_AGENTS_BLOCK, CODEX_SESSION_START_MATCHER } from "../../src/cli/install-codex.js";
-import { MEMORY_COMMAND_GUIDANCE } from "../../src/hooks/shared/memory-command-contract.js";
+import { MEMORY_COMMAND_GUIDANCE, MEMORY_SANDBOXED_COMMANDS } from "../../src/hooks/shared/memory-command-contract.js";
+import { ANTIGRAVITY_MEMORY_CONTEXT } from "../../src/hooks/antigravity/pre-invocation.js";
+import { MEMORY_STEER } from "../../src/hooks/antigravity/payload.js";
+import { MEMOREE_MCP_TOOL_NAMES, SANDBOXED_COMMAND_MCP_TOOLS } from "../../src/mcp/vfs-tools.js";
 
 const ROOT = process.cwd();
 
@@ -176,3 +182,92 @@ describe("Claude Code and Codex hook feature parity", () => {
     expect(installSrc).toContain("SubagentStop");
   });
 });
+
+interface AntigravityHooksFile {
+  memoree: Record<string, Array<{ command?: string; timeout?: number; matcher?: string; hooks?: Array<{ command?: string; timeout?: number }> }>>;
+}
+
+function antigravityBundleFiles(hooks: AntigravityHooksFile, event: string): string[] {
+  const blocks = hooks.memoree[event] ?? [];
+  return blocks.flatMap(block => {
+    const commands = block.hooks?.map(hook => hook.command) ?? (block.command ? [block.command] : []);
+    return commands
+      .map(command => bundleFile(command ?? ""))
+      .filter((name): name is string => Boolean(name));
+  });
+}
+
+describe("Antigravity product-capability parity with Claude Code and Codex", () => {
+  const agy = JSON.parse(
+    readFileSync(join(ROOT, "harnesses/antigravity/hooks/hooks.json"), "utf-8"),
+  ) as AntigravityHooksFile;
+  const esbuild = readFileSync(join(ROOT, "esbuild.config.mjs"), "utf-8");
+  const wikiSpawn = readFileSync(join(ROOT, "src/hooks/wiki-worker-spawn.ts"), "utf-8");
+  const skill = readFileSync(join(ROOT, "harnesses/antigravity/skills/memoree-memory/SKILL.md"), "utf-8");
+  const graphSkill = readFileSync(join(ROOT, "harnesses/antigravity/skills/memoree-graph/SKILL.md"), "utf-8");
+  const goalsSkill = readFileSync(join(ROOT, "harnesses/antigravity/skills/memoree-goals/SKILL.md"), "utf-8");
+
+  const documented = ["PreInvocation", "PreToolUse", "PostToolUse", "PostInvocation", "Stop"] as const;
+
+  it("only uses Antigravity events the CLI hook docs name", () => {
+    for (const event of Object.keys(agy.memoree)) {
+      expect(documented, event).toContain(event);
+    }
+  });
+
+  it("maps every Claude/Codex product job onto an Antigravity event or MCP tool", () => {
+    expect(Object.keys(agy.memoree).sort()).toEqual(["PostToolUse", "PreInvocation", "PreToolUse", "Stop"]);
+    expect(antigravityBundleFiles(agy, "PreInvocation")).toContain("pre-invocation.js");
+    expect(antigravityBundleFiles(agy, "PreToolUse")).toContain("pre-tool-use.js");
+    expect(antigravityBundleFiles(agy, "PostToolUse")).toContain("capture.js");
+    expect(antigravityBundleFiles(agy, "Stop")).toEqual(
+      expect.arrayContaining(["stop.js", "graph-on-stop.js"]),
+    );
+  });
+
+  it("covers the full sandboxed VFS command set through MCP tools", () => {
+    for (const command of MEMORY_SANDBOXED_COMMANDS) {
+      expect(SANDBOXED_COMMAND_MCP_TOOLS[command], command).toMatch(/^memoree_/);
+    }
+    for (const name of MEMOREE_MCP_TOOL_NAMES) {
+      expect(ANTIGRAVITY_MEMORY_CONTEXT).toContain(name);
+      expect(MEMORY_STEER).toContain(name);
+      expect(skill).toContain(name);
+    }
+  });
+
+  it("injects memory context and recall from PreInvocation instead of SessionStart/UserPromptSubmit", () => {
+    expect(ANTIGRAVITY_MEMORY_CONTEXT).toContain(MEMORY_COMMAND_GUIDANCE);
+    const preSrc = readFileSync(join(ROOT, "src/hooks/antigravity/pre-invocation.ts"), "utf-8");
+    expect(preSrc).toContain("session-start-setup.js");
+    expect(preSrc).toContain("captureAntigravityEvent");
+    expect(preSrc).toContain("recallTopHit");
+    expect(preSrc).toContain("injectSteps");
+    expect(preSrc).toContain("autoPullSkills");
+    expect(preSrc).toContain("maybeAutoMineLocal");
+    expect(preSrc).toContain("maybeAutoBackfillMemory");
+    expect(preSrc).toContain("spawnGraphPullWorker");
+  });
+
+  it("runs wiki and skillify end-of-session work on Stop (no SessionEnd event)", () => {
+    const stopSrc = readFileSync(join(ROOT, "src/hooks/antigravity/stop.ts"), "utf-8");
+    expect(stopSrc).toContain("forceSessionEndTrigger");
+    expect(stopSrc).toContain("spawnAntigravityWikiWorker");
+    expect(stopSrc).toContain("captureAntigravityEvent");
+    expect(wikiSpawn).toContain("buildAgyInvocation");
+    expect(wikiSpawn).toContain("--dangerously-skip-permissions");
+    expect(agy.memoree.SessionEnd).toBeUndefined();
+    expect(agy.memoree.SubagentStop).toBeUndefined();
+  });
+
+  it("ships memory, graph, and goals skills plus MCP/wiki/setup bundles", () => {
+    expect(existsSync(join(ROOT, "harnesses/antigravity/skills/memoree-memory/SKILL.md"))).toBe(true);
+    expect(graphSkill).toContain("memoree_read path=\"graph/query/");
+    expect(goalsSkill).toContain("memoree_write");
+    expect(esbuild).toContain('["src/mcp/server", "mcp-server"]');
+    expect(esbuild).toContain('["src/hooks/antigravity/wiki-worker", "wiki-worker"]');
+    expect(esbuild).toContain('["src/hooks/antigravity/session-start-setup", "session-start-setup"]');
+    expect(esbuild).toContain("buildGraphOnStop(\"harnesses/antigravity/bundle\")");
+  });
+});
+

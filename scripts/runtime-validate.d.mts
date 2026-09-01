@@ -36,6 +36,14 @@ export function skipLiveCodexRequested(argv?: string[], env?: NodeJS.ProcessEnv)
 export function skipLiveAntigravityRequested(argv?: string[], env?: NodeJS.ProcessEnv): boolean;
 export function antigravityCliAvailable(): boolean;
 export function writeIsolatedAntigravityGeminiSettings(isolatedHome: string): void;
+export function antigravityLivePrompt(identifier: string): string;
+export function parseMcpFramedMessages(stdout: string): Array<Record<string, any>>;
+export function callMemoreeMcpTool(
+  serverPath: string,
+  name: string,
+  args: Record<string, unknown>,
+  options: { cwd: string; env?: NodeJS.ProcessEnv; timeout?: number },
+): { status: number | null; stdout: string; stderr: string; ok: boolean; text: string; isError: boolean };
 export function hookUpdatedInput(stdout: string): Record<string, unknown>;
 export function linkSharedEmbeddingRuntime(realHome: string, isolatedHome: string): void;
 export function hookBodyContains(stdout: string, needle: string): boolean;
