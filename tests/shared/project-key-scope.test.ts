@@ -7,7 +7,8 @@ import { SqliteBackend } from "../../src/storage/sqlite.js";
 import { buildDirectSessionInsertSql } from "../../src/hooks/shared/session-insert-sql.js";
 import { searchMemoreeTables } from "../../src/shell/grep-core.js";
 import { recallTopHit } from "../../src/hooks/shared/recall-query.js";
-import { readVirtualPathContents } from "../../src/hooks/virtual-table-query.js";
+import { readVirtualPathContents, listVirtualPathRows, findVirtualPaths } from "../../src/hooks/virtual-table-query.js";
+import { MemoreeFs } from "../../src/shell/memoree-fs.js";
 import { deriveProjectKey } from "../../src/utils/repo-identity.js";
 import { embeddingSqlLiteral } from "../../src/embeddings/sql.js";
 
@@ -33,7 +34,7 @@ function initGitRepo(dir: string, origin: string): void {
   execSync('git commit -q -m "init"', { cwd: dir });
 }
 
-describe("project_key scopes session grep, recall, and index.md", () => {
+describe("project_key scopes session grep, recall, index.md, ls, and find", () => {
   const dirs: string[] = [];
 
   afterEach(() => {
@@ -162,6 +163,27 @@ describe("project_key scopes session grep, recall, and index.md", () => {
     expect(indexText).toContain("alpha.md");
     expect(indexText).not.toContain("beta.md");
     expect(indexText).toContain("legacy.jsonl");
+
+    const listedA = await listVirtualPathRows(api, "memory", "sessions", "/summaries/alice", keyA);
+    const listedPathsA = listedA.map(r => String(r.path));
+    expect(listedPathsA).toContain("/summaries/alice/alpha.md");
+    expect(listedPathsA).not.toContain("/summaries/alice/beta.md");
+
+    const foundA = await findVirtualPaths(api, "memory", "sessions", "/summaries", "%.md", keyA);
+    expect(foundA).toContain("/summaries/alice/alpha.md");
+    expect(foundA).not.toContain("/summaries/alice/beta.md");
+
+    const readA = await readVirtualPathContents(api, "memory", "sessions", [
+      "/summaries/alice/alpha.md",
+      "/summaries/alice/beta.md",
+    ], keyA);
+    expect(readA.get("/summaries/alice/alpha.md")).toContain("alpha-secret-uuid");
+    expect(readA.get("/summaries/alice/beta.md")).toBeNull();
+
+    const fsA = await MemoreeFs.create(api, "memory", "/", "sessions", { projectKey: keyA });
+    const names = await fsA.readdir("/summaries/alice");
+    expect(names).toContain("alpha.md");
+    expect(names).not.toContain("beta.md");
 
     await api.close();
   });

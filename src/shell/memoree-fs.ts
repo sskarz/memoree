@@ -232,7 +232,7 @@ export class MemoreeFs implements IFileSystem {
 
   /** Number of files loaded from the server during bootstrap. */
   get fileCount(): number { return this.files.size; }
-  /** Stable project key used to scope session/summary grep and index.md. */
+  /** Stable project key used to scope session/summary listings, grep, and index.md. */
   get sessionProjectKey(): string | null { return this.projectKey; }
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   // serialize flushes
@@ -254,7 +254,7 @@ export class MemoreeFs implements IFileSystem {
   private docsTable: string | null = null;
   /** Project scope for docs reads on shared tables (legacy '' rows included). */
   private docsProject: string | null = null;
-  /** Stable git-remote (or abs-cwd) key for session/summary listings and grep. */
+  /** Stable git-remote (or abs-cwd) key for session/summary listings, grep, and index.md. */
   private projectKey: string | null = null;
 
   // Embedding client lazily created on first flush. Lives as long as the process.
@@ -314,8 +314,10 @@ export class MemoreeFs implements IFileSystem {
 
     // Bootstrap memory + sessions metadata in parallel.
     let sessionSyncOk = true;
+    const keyScope = projectKeyScopeSql(fs.projectKey);
+    const keyFilter = keyScope ? ` WHERE ${keyScope}` : "";
     const memoryBootstrap = (async () => {
-      const sql = `SELECT path, size_bytes, mime_type FROM "${table}" ORDER BY path`;
+      const sql = `SELECT path, size_bytes, mime_type FROM "${table}"${keyFilter} ORDER BY path`;
       try {
         const rows = await client.query(sql);
         for (const row of rows) {
@@ -358,7 +360,7 @@ export class MemoreeFs implements IFileSystem {
           // works and — for the single-row-per-file layout — is equal to SUM. For
           // multi-row-per-turn layouts MAX under-reports total size but stays >0
           // so files don't look like empty placeholders in ls/stat.
-          `SELECT path, MAX(size_bytes) as total_size FROM "${sessionsTable}" GROUP BY path ORDER BY path`
+          `SELECT path, MAX(size_bytes) as total_size FROM "${sessionsTable}"${keyFilter} GROUP BY path ORDER BY path`
         );
         for (const row of sessionRows) {
           const p = row["path"] as string;

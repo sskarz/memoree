@@ -122,6 +122,14 @@ function buildDirFilter(dirs: string[]): string {
   return ` WHERE ${clauses.join(" OR ")}`;
 }
 
+/** Append `project_key = current OR ''` without breaking a missing WHERE. */
+function withProjectKeyFilter(sqlWhere: string, projectKey?: string): string {
+  const scope = projectKeyScopeSql(projectKey);
+  if (!scope) return sqlWhere;
+  if (!sqlWhere) return ` WHERE ${scope}`;
+  return `${sqlWhere} AND ${scope}`;
+}
+
 async function queryUnionRows(
   api: StorageBackend,
   memoryQuery: string,
@@ -163,10 +171,11 @@ export async function readVirtualPathContents(
   const textSummary = textExpression("summary", api.dialect);
   const textMessage = textExpression("message", api.dialect);
   const nullBigint = nullExpression("bigint", api.dialect);
+  const pathFilter = withProjectKeyFilter(` WHERE path IN (${inList})`, projectKey);
   const rows = await queryUnionRows(
     api,
-    `SELECT path, ${textSummary} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}" WHERE path IN (${inList})`,
-    `SELECT path, ${textMessage} AS content, ${nullBigint} AS size_bytes, COALESCE(${textExpression("creation_date", api.dialect)}, '') AS creation_date, 1 AS source_order FROM "${sessionsTable}" WHERE path IN (${inList})`,
+    `SELECT path, ${textSummary} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}"${pathFilter}`,
+    `SELECT path, ${textMessage} AS content, ${nullBigint} AS size_bytes, COALESCE(${textExpression("creation_date", api.dialect)}, '') AS creation_date, 1 AS source_order FROM "${sessionsTable}"${pathFilter}`,
   );
 
   const memoryHits = new Map<string, string>();
@@ -258,9 +267,10 @@ export async function listVirtualPathRowsForDirs(
   memoryTable: string,
   sessionsTable: string,
   dirs: string[],
+  projectKey?: string,
 ): Promise<Map<string, Row[]>> {
   const uniqueDirs = [...new Set(dirs.map(dir => dir.replace(/\/+$/, "") || "/"))];
-  const filter = buildDirFilter(uniqueDirs);
+  const filter = withProjectKeyFilter(buildDirFilter(uniqueDirs), projectKey);
   const nullText = nullExpression("text", api.dialect);
   const rows = await queryUnionRows(
     api,
@@ -303,8 +313,9 @@ export async function listVirtualPathRows(
   memoryTable: string,
   sessionsTable: string,
   dir: string,
+  projectKey?: string,
 ): Promise<Row[]> {
-  return (await listVirtualPathRowsForDirs(api, memoryTable, sessionsTable, [dir])).get(dir.replace(/\/+$/, "") || "/") ?? [];
+  return (await listVirtualPathRowsForDirs(api, memoryTable, sessionsTable, [dir], projectKey)).get(dir.replace(/\/+$/, "") || "/") ?? [];
 }
 
 export async function findVirtualPaths(
@@ -313,15 +324,20 @@ export async function findVirtualPaths(
   sessionsTable: string,
   dir: string,
   filenamePattern: string,
+  projectKey?: string,
 ): Promise<string[]> {
   const normalizedDir = dir.replace(/\/+$/, "") || "/";
   const likePath = `${sqlLike(normalizedDir === "/" ? "" : normalizedDir)}/%`;
   const nullText = nullExpression("text", api.dialect);
   const nullBigint = nullExpression("bigint", api.dialect);
+  const nameFilter = withProjectKeyFilter(
+    ` WHERE path LIKE '${likePath}' ESCAPE '\\' AND filename LIKE '${filenamePattern}' ESCAPE '\\'`,
+    projectKey,
+  );
   const rows = await queryUnionRows(
     api,
-    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}" WHERE path LIKE '${likePath}' ESCAPE '\\' AND filename LIKE '${filenamePattern}' ESCAPE '\\'`,
-    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 1 AS source_order FROM "${sessionsTable}" WHERE path LIKE '${likePath}' ESCAPE '\\' AND filename LIKE '${filenamePattern}' ESCAPE '\\'`,
+    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}"${nameFilter}`,
+    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 1 AS source_order FROM "${sessionsTable}"${nameFilter}`,
   );
 
   return [...new Set(

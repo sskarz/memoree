@@ -423,7 +423,7 @@ export async function processCodexPreToolUse(
         const dir = (lsMatch[1] ?? "/").replace(/\/+$/, "") || "/";
         const isLong = /\s-[a-zA-Z]*l/.test(rewritten);
         logFn(`direct ls: ${dir}`);
-        const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir);
+        const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir, projectKey);
         const entries = new Map<string, { isDir: boolean; size: number }>();
         const prefix = dir === "/" ? "/" : `${dir}/`;
         for (const row of rows) {
@@ -470,7 +470,7 @@ export async function processCodexPreToolUse(
         const rawPattern = findMatch[2] ?? findMatch[3] ?? findMatch[4] ?? "";
         const namePattern = sqlLike(rawPattern).replace(/\*/g, "%").replace(/\?/g, "_");
         logFn(`direct find: ${dir} -name '${rawPattern}'`);
-        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern);
+        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern, projectKey);
         let result = paths.join("\n") || "";
         if (/\|\s*wc\s+-l\s*$/.test(rewritten)) result = String(paths.length);
         return buildHandledSuccess(result || "(no matches)", rewritten, "find");

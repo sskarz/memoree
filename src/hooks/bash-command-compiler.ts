@@ -436,7 +436,7 @@ export async function executeCompiledBashCommand(
     ? await readVirtualPathContentsFn(api, memoryTable, sessionsTable, readPaths, projectKey)
     : new Map<string, string | null>();
   const dirRowsMap = listDirs.length > 0
-    ? await listVirtualPathRowsForDirsFn(api, memoryTable, sessionsTable, listDirs)
+    ? await listVirtualPathRowsForDirsFn(api, memoryTable, sessionsTable, listDirs, projectKey)
     : new Map<string, VirtualRow[]>();
 
   const outputs: string[] = [];
@@ -474,7 +474,7 @@ export async function executeCompiledBashCommand(
 
     if (segment.kind === "find") {
       const filenamePattern = sqlLike(segment.pattern).replace(/\*/g, "%").replace(/\?/g, "_");
-      const paths = await findVirtualPathsFn(api, memoryTable, sessionsTable, segment.dir.replace(/\/+$/, "") || "/", filenamePattern);
+      const paths = await findVirtualPathsFn(api, memoryTable, sessionsTable, segment.dir.replace(/\/+$/, "") || "/", filenamePattern, projectKey);
       outputs.push(segment.countOnly ? String(paths.length) : (paths.join("\n") || "(no matches)"));
       continue;
     }
@@ -489,6 +489,7 @@ export async function executeCompiledBashCommand(
             sessionsTable,
             dir,
             sqlLike(pattern).replace(/\*/g, "%").replace(/\?/g, "_"),
+            projectKey,
           ),
         ),
       );

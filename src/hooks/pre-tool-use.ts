@@ -586,7 +586,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
       logFn(`direct ls: ${dir}`);
       // A backend failure throws here; like the read path, we let it propagate
       // to the outer catch → VFS shell fallback rather than masking it.
-      const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir);
+      const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir, projectKey);
       const entries = new Map<string, { isDir: boolean; size: number }>();
       const prefix = dir === "/" ? "/" : dir + "/";
       for (const row of rows) {
@@ -641,7 +641,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         const rawPattern = findMatch[2] ?? findMatch[3] ?? findMatch[4] ?? "";
         const namePattern = sqlLike(rawPattern).replace(/\*/g, "%").replace(/\?/g, "_");
         logFn(`direct find: ${dir} -name '${rawPattern}'`);
-        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern);
+        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern, projectKey);
         let result = paths.join("\n") || "";
         if (/\|\s*wc\s+-l\s*$/.test(shellCmd)) result = String(paths.length);
         const capped = capOutputForClaude(result || "(no matches)", { kind: "find" });

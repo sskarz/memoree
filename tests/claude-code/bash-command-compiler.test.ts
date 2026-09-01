@@ -289,7 +289,7 @@ describe("bash-command-compiler execution", () => {
     );
 
     expect(readVirtualPathContentsFn).toHaveBeenCalledWith(expect.anything(), "memory", "sessions", ["/a.md", "/b.md"], undefined);
-    expect(listVirtualPathRowsForDirsFn).toHaveBeenCalledWith(expect.anything(), "memory", "sessions", ["/summaries/a", "/summaries/b"]);
+    expect(listVirtualPathRowsForDirsFn).toHaveBeenCalledWith(expect.anything(), "memory", "sessions", ["/summaries/a", "/summaries/b"], undefined);
     expect(handleGrepDirectFn).toHaveBeenCalledTimes(1);
     expect(output).toContain("line1\nline2\nline3");
     expect(output).toContain("---");
