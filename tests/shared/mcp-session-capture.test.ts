@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -90,12 +90,64 @@ describe("Antigravity MCP session capture", () => {
   it("swallows capture errors so MCP tools still return", async () => {
     process.env.MEMOREE_CAPTURE = "true";
     process.env.MEMOREE_BACKEND = "not-a-backend";
-    await expect(captureMcpToolCall("memoree_ls", {}, { ok: true, text: "x" })).resolves.toBeUndefined();
+    const spawnSummary = vi.fn();
+    await expect(captureMcpToolCall("memoree_ls", {}, { ok: true, text: "x" }, process.env, { spawnSummary })).resolves.toBeUndefined();
+    expect(spawnSummary).not.toHaveBeenCalled();
   });
 
   it("does not wait on the embed daemon for MCP tools/call rows", () => {
     const source = readFileSync(new URL("../../src/mcp/session-capture.ts", import.meta.url), "utf8");
     expect(source).toContain("{ embed: false }");
+  });
+
+  it("spawns a detached summary job after capture without awaiting embed", async () => {
+    home = mkdtempSync(join(tmpdir(), "mcp-capture-spawn-"));
+    setFakeHome(home);
+    const databasePath = join(home, "memoree.sqlite3");
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = databasePath;
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    process.env.MEMOREE_CAPTURE = "true";
+    process.env.MEMOREE_USER_NAME = "mcp-capture";
+    process.env.ANTIGRAVITY_CONVERSATION_ID = "agy-spawn-uuid";
+    const spawnSummary = vi.fn();
+    await captureMcpToolCall(
+      "memoree_ls",
+      { path: "" },
+      { ok: true, text: "ok" },
+      process.env,
+      { spawnSummary },
+    );
+    expect(spawnSummary).toHaveBeenCalledTimes(1);
+    expect(spawnSummary.mock.calls[0]![0]).toEqual({
+      sessionId: "agy-spawn-uuid",
+      cwd: process.cwd(),
+    });
+  });
+
+  it("does not spawn a summary job when capture is disabled", async () => {
+    process.env.MEMOREE_CAPTURE = "false";
+    const spawnSummary = vi.fn();
+    await captureMcpToolCall("memoree_ls", {}, { ok: true, text: "x" }, process.env, { spawnSummary });
+    expect(spawnSummary).not.toHaveBeenCalled();
+  });
+
+  it("swallows spawn errors so MCP tools still return", async () => {
+    home = mkdtempSync(join(tmpdir(), "mcp-capture-spawn-err-"));
+    setFakeHome(home);
+    const databasePath = join(home, "memoree.sqlite3");
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = databasePath;
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    process.env.MEMOREE_CAPTURE = "true";
+    process.env.MEMOREE_USER_NAME = "mcp-capture";
+    await expect(captureMcpToolCall(
+      "memoree_ls",
+      {},
+      { ok: true, text: "ok" },
+      process.env,
+      { spawnSummary: () => { throw new Error("spawn failed"); } },
+    )).resolves.toBeUndefined();
   });
 
   it("skips PostToolUse capture for memoree MCP tools so interactive sessions are not duplicated", async () => {

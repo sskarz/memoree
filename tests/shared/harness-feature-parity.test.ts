@@ -269,6 +269,7 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(graphSkill).toContain("memoree_read path=\"graph/query/");
     expect(goalsSkill).toContain("memoree_write");
     expect(esbuild).toContain('["src/mcp/server", "mcp-server"]');
+    expect(esbuild).toContain('["src/mcp/session-summary-worker", "session-summary-worker"]');
     expect(esbuild).toContain('["src/hooks/antigravity/wiki-worker", "wiki-worker"]');
     expect(esbuild).toContain('["src/hooks/antigravity/session-start-setup", "session-start-setup"]');
     expect(esbuild).toContain("buildGraphOnStop(\"harnesses/antigravity/bundle\")");

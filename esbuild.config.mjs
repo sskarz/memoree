@@ -107,6 +107,7 @@ const antigravityEntries = [
   ["src/hooks/antigravity/stop", "stop"],
   ["src/hooks/antigravity/wiki-worker", "wiki-worker"],
   ["src/mcp/server", "mcp-server"],
+  ["src/mcp/session-summary-worker", "session-summary-worker"],
   ["src/cli/index", "command/memoree"],
   ["src/hooks/graph-pull-worker", "graph-pull-worker"],
   ["src/hooks/graph-deps-worker", "graph-deps-worker"],
