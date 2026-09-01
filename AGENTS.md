@@ -198,7 +198,7 @@ specific. Standing memory instructions also live in a managed block in
 ### Antigravity hooks
 
 PreInvocation (first-call inject + recall + setup spawn), PreToolUse (steer
-off the virtual mount; never `allow`), PostToolUse capture, Stop (capture +
+off the virtual mount; never `allow`; unrelated tools `ask`), PostToolUse capture, Stop (capture +
 wiki + graph). Hook commands parse JSON as soon as a complete object arrives
 and unref stdin — `agy -p` writes the payload then keeps the pipe open, so
 waiting for EOF hangs until the hooks.json timeout and drops inject/capture.

@@ -6,6 +6,7 @@ import { clearFakeHome, setFakeHome } from "./fake-home.js";
 import { decidePreToolUse } from "../../src/hooks/antigravity/pre-tool-use.js";
 import {
   MEMORY_STEER,
+  PRE_TOOL_PASS,
   eventNameFromArgv,
   isMemoreeMcpToolCall,
   normalizeAntigravityInput,
@@ -35,15 +36,39 @@ describe("Antigravity hook adapters", () => {
     else process.env.MEMOREE_WIKI_WORKER = priorWiki;
   });
 
-  it("steers memory-touching tools and leaves others alone", () => {
+  it("steers memory-touching tools and asks (does not auto-allow) for others", () => {
     expect(decidePreToolUse({
       toolCall: { name: "run_command", args: { CommandLine: "ls /tmp" } },
-    })).toEqual({});
+    })).toEqual(PRE_TOOL_PASS);
+    expect(decidePreToolUse({
+      toolCall: { name: "view_file", args: { AbsolutePath: "/repo/package.json" } },
+    })).toEqual(PRE_TOOL_PASS);
+    expect(decidePreToolUse({
+      toolCall: { name: "list_dir", args: { DirectoryPath: "/repo/src" } },
+    })).toEqual(PRE_TOOL_PASS);
+    expect(decidePreToolUse({
+      toolCall: { name: "find_by_name", args: { SearchDirectory: "/repo/src/graph", Pattern: "*" } },
+    })).toEqual(PRE_TOOL_PASS);
+    expect(decidePreToolUse({
+      toolCall: { name: "invoke_subagent", args: { Prompt: "find graph nodes" } },
+    })).toEqual(PRE_TOOL_PASS);
+    expect(decidePreToolUse({
+      toolCall: { name: "call_mcp_tool", args: { ToolName: "memoree_read" } },
+    })).toEqual(PRE_TOOL_PASS);
+    expect(decidePreToolUse({
+      toolCall: { name: "memoree_read", args: { path: "~/.memoree/memory/identity.json" } },
+    })).toEqual(PRE_TOOL_PASS);
     const denied = decidePreToolUse({
       toolCall: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
     });
     expect(denied).toEqual({ decision: "deny", reason: MEMORY_STEER });
     expect(denied).not.toHaveProperty("allow");
+    expect(denied.decision).not.toBe("allow");
+    expect(decidePreToolUse({
+      toolCall: { name: "list_dir", args: { DirectoryPath: "~/.memoree/memory" } },
+    })).toEqual({ decision: "deny", reason: MEMORY_STEER });
+    expect(PRE_TOOL_PASS.decision).toBe("ask");
+    expect(PRE_TOOL_PASS).not.toEqual({});
     expect(toolPayloadTouchesMemory(
       { toolCall: { name: "view_file", args: { AbsolutePath: "/home/x/.memoree/memory/rules.md" } } },
       (value) => value.includes(".memoree/memory"),

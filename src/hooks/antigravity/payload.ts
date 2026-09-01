@@ -125,6 +125,14 @@ export const MEMORY_STEER =
   "memoree_find, memoree_jq, memoree_write, memoree_mv, memoree_rm. " +
   "Do not cat/ls/grep that path with run_command or view_file.";
 
+/**
+ * Antigravity PreToolUse stdout requires `decision`. An empty `{}` is parsed as
+ * invalid_args and denied (every tool fails with "tool call denied by pre-tool
+ * hook"). `"allow"` auto-approves and skips user grants. `"ask"` is the
+ * pass-through: prompt if needed, honor Always Allow.
+ */
+export const PRE_TOOL_PASS = { decision: "ask" } as const;
+
 const PATH_KEYS = [
   "CommandLine", "command", "AbsolutePath", "TargetFile", "SearchPath",
   "SearchDirectory", "DirectoryPath", "path",

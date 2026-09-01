@@ -289,6 +289,8 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(captureSrc).toContain('isDirectRun(import.meta.url, "capture")');
     const preToolSrc = readFileSync(join(ROOT, "src/hooks/antigravity/pre-tool-use.ts"), "utf-8");
     expect(preToolSrc).toContain('isDirectRun(import.meta.url, "pre-tool-use")');
+    expect(preToolSrc).toContain("PRE_TOOL_PASS");
+    expect(preToolSrc).toContain("isMemoreeMcpToolCall");
     expect(installSrc).toContain('"config", "plugins", "memoree"');
     expect(installSrc).toContain("antigravity-cli");
     expect(installSrc).toContain('{"type":"module"}');

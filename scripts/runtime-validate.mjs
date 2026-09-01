@@ -982,8 +982,16 @@ export async function validateRuntime(options = {}) {
       toolCall: { name: "run_command", args: { CommandLine: "ls /tmp" } },
     }, { cwd: repository, env, hookArgs: ["PreToolUse"] });
     assertHookExitZero(agyPass, "Antigravity PreToolUse unrelated");
-    assert(JSON.parse(agyPass.stdout.trim() || "{}").decision === undefined,
-      `Antigravity PreToolUse must leave unrelated tools alone; stdout=${agyPass.stdout.slice(0, 400)}`);
+    const agyPassBody = JSON.parse(agyPass.stdout.trim() || "{}");
+    assert(agyPassBody.decision === "ask",
+      `Antigravity PreToolUse must ask (not empty/{}) for unrelated tools; stdout=${agyPass.stdout.slice(0, 400)}`);
+    assert(agyPassBody.decision !== "allow", "Antigravity PreToolUse must never return allow");
+    const agyMcp = runHookResult(join(antigravityBundle, "pre-tool-use.js"), {
+      toolCall: { name: "memoree_read", args: { path: "~/.memoree/memory/identity.json" } },
+    }, { cwd: repository, env, hookArgs: ["PreToolUse"] });
+    assertHookExitZero(agyMcp, "Antigravity PreToolUse MCP pass");
+    assert(JSON.parse(agyMcp.stdout.trim() || "{}").decision === "ask",
+      `Antigravity PreToolUse must not steer Memoree MCP; stdout=${agyMcp.stdout.slice(0, 400)}`);
     const agyStop = runHookResult(join(antigravityBundle, "stop.js"), {}, {
       cwd: repository, env, hookArgs: ["Stop"],
     });

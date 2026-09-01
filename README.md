@@ -108,7 +108,7 @@ instructions also live in a managed block in `~/.codex/AGENTS.md`.
 plugin-cache-gc is Claude-plugin-cache specific.
 
 **Antigravity:** PreInvocation (first-call inject + recall + setup), PreToolUse
-(steer off the virtual mount; never auto-`allow`), PostToolUse capture, Stop
+(steer off the virtual mount; never auto-`allow`; unrelated tools `ask`), PostToolUse capture, Stop
 (capture + wiki + graph). Memory is MCP (`memoree_read`, `memoree_ls`,
 `memoree_grep`, `memoree_head`, `memoree_tail`, `memoree_wc`, `memoree_find`,
 `memoree_jq`, `memoree_write`, `memoree_mv`, `memoree_rm`) — the same VFS
