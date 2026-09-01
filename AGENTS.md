@@ -196,7 +196,10 @@ specific. Standing memory instructions also live in a managed block in
 
 PreInvocation (first-call inject + recall + setup spawn), PreToolUse (steer
 off the virtual mount; never `allow`), PostToolUse capture, Stop (capture +
-wiki + graph). Memory is MCP (`memoree_ls` / `memoree_read` / `memoree_grep`
+wiki + graph). Hook commands parse JSON as soon as a complete object arrives
+and unref stdin — `agy -p` writes the payload then keeps the pipe open, so
+waiting for EOF hangs until the hooks.json timeout and drops inject/capture.
+Memory is MCP (`memoree_ls` / `memoree_read` / `memoree_grep`
 / `memoree_head` / `memoree_tail` / `memoree_wc` / `memoree_find` /
 `memoree_jq` / `memoree_write` / `memoree_mv` / `memoree_rm`) wrapping the
 existing VFS — the same sandboxed commands Claude Code and Codex intercept.

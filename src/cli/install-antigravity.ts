@@ -13,6 +13,9 @@ export const ANTIGRAVITY_PLUGIN_DIR = join(GEMINI_HOME, "config", "plugins", "me
 /** Pre-migration layout; still scanned by doctor/embeddings. */
 export const ANTIGRAVITY_LEGACY_PLUGIN_DIR = join(GEMINI_HOME, "antigravity-cli", "plugins", "memoree");
 export const ANTIGRAVITY_HOOKS_PATH = join(GEMINI_HOME, "config", "hooks.json");
+/** Pre-migration CLI still loads this path (antigravity-cli#49). */
+export const ANTIGRAVITY_LEGACY_HOOKS_PATH = join(GEMINI_HOME, "antigravity-cli", "hooks.json");
+export const ANTIGRAVITY_HOOK_JSON_PATHS = [ANTIGRAVITY_HOOKS_PATH, ANTIGRAVITY_LEGACY_HOOKS_PATH] as const;
 export const ANTIGRAVITY_MCP_PATH = join(GEMINI_HOME, "config", "mcp_config.json");
 
 function hookCommand(bundleFile: string, event: string, timeout: number): Record<string, unknown> {
@@ -154,8 +157,10 @@ export function installAntigravity(options: { packageRoot?: string } = {}): void
   writeJson(join(ANTIGRAVITY_PLUGIN_DIR, "hooks.json"), { memoree: hookBlock });
   writeJson(join(ANTIGRAVITY_PLUGIN_DIR, "mcp_config.json"), { mcpServers: { memoree: mcpServerEntry() } });
 
-  if (!writeJsonIfChanged(ANTIGRAVITY_HOOKS_PATH, mergeNamedHooks(readJsonObject(ANTIGRAVITY_HOOKS_PATH), hookBlock))) {
-    log("  Antigravity    hooks.json unchanged — skipped rewrite");
+  for (const hooksPath of ANTIGRAVITY_HOOK_JSON_PATHS) {
+    if (!writeJsonIfChanged(hooksPath, mergeNamedHooks(readJsonObject(hooksPath), hookBlock))) {
+      log(`  Antigravity    ${hooksPath} unchanged — skipped rewrite`);
+    }
   }
   if (!writeJsonIfChanged(ANTIGRAVITY_MCP_PATH, mergeMcpServers(readJsonObject(ANTIGRAVITY_MCP_PATH), mcpServerEntry()))) {
     log("  Antigravity    mcp_config.json unchanged — skipped rewrite");
@@ -176,19 +181,22 @@ export function installAntigravity(options: { packageRoot?: string } = {}): void
   log(`  Antigravity    installed -> ${ANTIGRAVITY_PLUGIN_DIR}`);
 }
 
-export function uninstallAntigravity(): void {
-  if (existsSync(ANTIGRAVITY_HOOKS_PATH)) {
-    const existing = readJsonObject(ANTIGRAVITY_HOOKS_PATH);
-    const next = { ...existing };
-    delete next.memoree;
-    if (Object.keys(next).length === 0) {
-      unlinkSync(ANTIGRAVITY_HOOKS_PATH);
-      log(`  Antigravity    removed ${ANTIGRAVITY_HOOKS_PATH}`);
-    } else {
-      writeJson(ANTIGRAVITY_HOOKS_PATH, next);
-      log("  Antigravity    stripped memoree from hooks.json");
-    }
+function stripNamedHookFile(hooksPath: string): void {
+  if (!existsSync(hooksPath)) return;
+  const existing = readJsonObject(hooksPath);
+  const next = { ...existing };
+  delete next.memoree;
+  if (Object.keys(next).length === 0) {
+    unlinkSync(hooksPath);
+    log(`  Antigravity    removed ${hooksPath}`);
+  } else {
+    writeJson(hooksPath, next);
+    log(`  Antigravity    stripped memoree from ${hooksPath}`);
   }
+}
+
+export function uninstallAntigravity(): void {
+  for (const hooksPath of ANTIGRAVITY_HOOK_JSON_PATHS) stripNamedHookFile(hooksPath);
   if (existsSync(ANTIGRAVITY_MCP_PATH)) {
     const stripped = stripMcpServer(readJsonObject(ANTIGRAVITY_MCP_PATH));
     if (!stripped.mcpServers && Object.keys(stripped).length === 0) {

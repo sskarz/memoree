@@ -21,6 +21,7 @@ describe("live session e2e harness", () => {
     expect(source).toContain("antigravityLivePrompt");
     expect(source).toContain("assertAntigravityLiveUsedMcp");
     expect(source).toContain("agyLiveId");
+    expect(source).toContain("waitForCapture(databasePath, agyId");
   });
 
   it("is wired as npm run live:e2e", () => {

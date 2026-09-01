@@ -7,6 +7,7 @@ import { decidePreToolUse } from "../../src/hooks/antigravity/pre-tool-use.js";
 import {
   MEMORY_STEER,
   eventNameFromArgv,
+  normalizeAntigravityInput,
   sessionIdOf,
   toolPayloadTouchesMemory,
   workspaceCwd,
@@ -17,6 +18,7 @@ import {
   parseTranscriptJsonl,
   readTranscriptTurns,
   takeNewUserPrompt,
+  unwrapUserRequest,
 } from "../../src/hooks/antigravity/transcript.js";
 import { isFirstModelCall, processPreInvocation } from "../../src/hooks/antigravity/pre-invocation.js";
 import { processStop, stopDecision } from "../../src/hooks/antigravity/stop.js";
@@ -121,5 +123,47 @@ describe("Antigravity hook adapters", () => {
       transcriptPath: transcript,
     });
     expect(later).toEqual({});
+  });
+
+  it("normalizes snake_case hook fields and unwraps USER_REQUEST transcripts", () => {
+    expect(unwrapUserRequest("<USER_REQUEST>\nhello uuid\n</USER_REQUEST>")).toBe("hello uuid");
+    expect(unwrapUserRequest("plain")).toBe("plain");
+    const turns = parseTranscriptJsonl(JSON.stringify({
+      type: "USER_INPUT",
+      content: "<USER_REQUEST>\nremember harbor-kite\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nnow\n</ADDITIONAL_METADATA>",
+    }));
+    expect(lastTurn(turns, "user")).toBe("remember harbor-kite");
+    const normalized = normalizeAntigravityInput({
+      conversation_id: " conv-snake ",
+      invocation_num: "0",
+      transcript_path: "/tmp/t.jsonl",
+      workspace_paths: [" /repo "],
+      tool_call: { name: "run_command", args: { CommandLine: "ls" } },
+      fully_idle: true,
+    });
+    expect(normalized.conversationId).toBe("conv-snake");
+    expect(normalized.invocationNum).toBe(0);
+    expect(normalized.transcriptPath).toBe("/tmp/t.jsonl");
+    expect(normalized.workspacePaths).toEqual(["/repo"]);
+    expect(normalized.toolCall).toEqual({ name: "run_command", args: { CommandLine: "ls" } });
+    expect(normalized.fullyIdle).toBe(true);
+    expect(sessionIdOf(normalized)).toBe("conv-snake");
+    expect(normalizeAntigravityInput(null)).toEqual({});
+    expect(normalizeAntigravityInput([])).toEqual({});
+    expect(normalizeAntigravityInput({
+      conversationId: "camel",
+      invocationNum: 1,
+      fullyIdle: false,
+      toolCall: {},
+    }).conversationId).toBe("camel");
+    expect(normalizeAntigravityInput({ invocation_num: "nope" }).invocationNum).toBeUndefined();
+    expect(normalizeAntigravityInput({ workspace_paths: [] }).workspacePaths).toBeUndefined();
+    expect(normalizeAntigravityInput({ tool_call: { args: { x: 1 } } }).toolCall).toEqual({
+      name: undefined,
+      args: { x: 1 },
+    });
+    expect(decidePreToolUse({
+      tool_call: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
+    })).toEqual({ decision: "deny", reason: MEMORY_STEER });
   });
 });

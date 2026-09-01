@@ -52,7 +52,7 @@ async function importInstaller() {
 
 describe("installAntigravity", () => {
   it("stages the plugin, merges named hooks, and rewrites MCP to an absolute node path", async () => {
-    const { installAntigravity, ANTIGRAVITY_HOOKS_PATH, ANTIGRAVITY_MCP_PATH, ANTIGRAVITY_PLUGIN_DIR } = await importInstaller();
+    const { installAntigravity, ANTIGRAVITY_HOOKS_PATH, ANTIGRAVITY_LEGACY_HOOKS_PATH, ANTIGRAVITY_MCP_PATH, ANTIGRAVITY_PLUGIN_DIR } = await importInstaller();
     const otherHooks = join(tmpHome, ".gemini", "config", "hooks.json");
     mkdirSync(join(tmpHome, ".gemini", "config"), { recursive: true });
     writeFileSync(otherHooks, JSON.stringify({ "user-linter": { PostToolUse: [] } }));
@@ -69,6 +69,10 @@ describe("installAntigravity", () => {
     expect(Object.keys(hooks.memoree).sort()).toEqual(["PostToolUse", "PreInvocation", "PreToolUse", "Stop"]);
     expect(hooks.memoree.PreInvocation[0].command).toContain("pre-invocation.js");
     expect(hooks.memoree.PreToolUse[0].matcher).toBe("*");
+    expect(existsSync(ANTIGRAVITY_LEGACY_HOOKS_PATH)).toBe(true);
+    expect(JSON.parse(readFileSync(ANTIGRAVITY_LEGACY_HOOKS_PATH, "utf-8")).memoree.PreInvocation).toEqual(
+      hooks.memoree.PreInvocation,
+    );
 
     const mcp = JSON.parse(readFileSync(ANTIGRAVITY_MCP_PATH, "utf-8"));
     expect(mcp.mcpServers.memoree.command).toBe("node");
@@ -94,7 +98,7 @@ describe("installAntigravity", () => {
   });
 
   it("uninstall strips only the memoree named hook and MCP server", async () => {
-    const { installAntigravity, uninstallAntigravity, ANTIGRAVITY_HOOKS_PATH, ANTIGRAVITY_MCP_PATH } = await importInstaller();
+    const { installAntigravity, uninstallAntigravity, ANTIGRAVITY_HOOKS_PATH, ANTIGRAVITY_LEGACY_HOOKS_PATH, ANTIGRAVITY_MCP_PATH } = await importInstaller();
     mkdirSync(join(tmpHome, ".gemini", "config"), { recursive: true });
     writeFileSync(ANTIGRAVITY_HOOKS_PATH, JSON.stringify({ keep: { Stop: [] } }));
     writeFileSync(ANTIGRAVITY_MCP_PATH, JSON.stringify({
@@ -105,6 +109,7 @@ describe("installAntigravity", () => {
     const hooks = JSON.parse(readFileSync(ANTIGRAVITY_HOOKS_PATH, "utf-8"));
     expect(hooks.keep).toBeDefined();
     expect(hooks.memoree).toBeUndefined();
+    expect(existsSync(ANTIGRAVITY_LEGACY_HOOKS_PATH)).toBe(false);
     const mcp = JSON.parse(readFileSync(ANTIGRAVITY_MCP_PATH, "utf-8"));
     expect(mcp.mcpServers.keep).toBeDefined();
     expect(mcp.mcpServers.memoree).toBeUndefined();

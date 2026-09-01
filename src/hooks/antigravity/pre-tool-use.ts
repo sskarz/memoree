@@ -10,15 +10,17 @@ import { log as _log } from "../../utils/debug.js";
 import { touchesMemory } from "../memory-path-utils.js";
 import {
   MEMORY_STEER,
+  normalizeAntigravityInput,
   toolPayloadTouchesMemory,
   type AntigravityHookInput,
 } from "./payload.js";
 
 const log = (msg: string) => _log("agy-pre", msg);
 
-export function decidePreToolUse(input: AntigravityHookInput): Record<string, unknown> {
-  if (!toolPayloadTouchesMemory(input, touchesMemory)) return {};
-  log(`steer off mount tool=${input.toolCall?.name ?? "?"}`);
+export function decidePreToolUse(input: unknown): Record<string, unknown> {
+  const normalized = normalizeAntigravityInput(input);
+  if (!toolPayloadTouchesMemory(normalized, touchesMemory)) return {};
+  log(`steer off mount tool=${normalized.toolCall?.name ?? "?"}`);
   return { decision: "deny", reason: MEMORY_STEER };
 }
 

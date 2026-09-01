@@ -1445,6 +1445,8 @@ export async function validateRuntime(options = {}) {
         "Antigravity capture turn",
       );
       assertAntigravityLiveUsedMcp(isolatedHome, agyResponse);
+      status("waiting for the Antigravity unaided capture");
+      await waitForCapture(databasePath, agyIdentifier, { requireSummary: false, timeoutMs: 60_000 });
     } else {
       status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
     }

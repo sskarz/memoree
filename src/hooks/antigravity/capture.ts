@@ -30,7 +30,7 @@ import {
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 import { reactSkillOpt } from "../shared/skillopt-hook.js";
-import { eventNameFromArgv, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
+import { eventNameFromArgv, normalizeAntigravityInput, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
 import { bundleDirFromImportMeta, spawnAntigravityWikiWorker, wikiLog } from "./spawn-wiki-worker.js";
 
 const log = (msg: string) => _log("agy-capture", msg);
@@ -61,6 +61,7 @@ export async function captureAntigravityEvent(
 ): Promise<void> {
   if (process.env.MEMOREE_CAPTURE === "false") return;
   if (!isMemoreePluginEnabled()) return;
+  input = normalizeAntigravityInput(input);
   const cwd = workspaceCwd(input);
   const config = resolveCaptureConfig(cwd, log);
   if (!config) return;
@@ -138,17 +139,18 @@ function maybeTriggerPeriodicSummary(sessionId: string, cwd: string, config: Con
   }
 }
 
-export async function captureFromHook(input: AntigravityHookInput, eventName: string): Promise<void> {
-  if (eventName === "PostToolUse" && input.toolCall?.name) {
-    await captureAntigravityEvent(input, eventName, {
+export async function captureFromHook(input: unknown, eventName: string): Promise<void> {
+  const normalized = normalizeAntigravityInput(input);
+  if (eventName === "PostToolUse" && normalized.toolCall?.name) {
+    await captureAntigravityEvent(normalized, eventName, {
       type: "tool_call",
-      tool_name: input.toolCall.name,
-      tool_input: input.toolCall.args,
-      tool_response: input.error ? { error: input.error } : {},
+      tool_name: normalized.toolCall.name,
+      tool_input: normalized.toolCall.args,
+      tool_response: normalized.error ? { error: normalized.error } : {},
     });
     return;
   }
-  if (eventName === "UserPromptSubmit" && input) {
+  if (eventName === "UserPromptSubmit" && normalized) {
     /* user capture is driven from PreInvocation with transcript text */
   }
 }

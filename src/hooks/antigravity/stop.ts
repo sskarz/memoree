@@ -14,7 +14,7 @@ import { log as _log } from "../../utils/debug.js";
 import { forceSessionEndTrigger } from "../../skillify/triggers.js";
 import { tryAcquireLock, releaseLock } from "../summary-state.js";
 import { getInstalledVersion } from "../../utils/version-check.js";
-import { type AntigravityHookInput } from "./payload.js";
+import { normalizeAntigravityInput, type AntigravityHookInput } from "./payload.js";
 import { lastTurn, readTranscriptTurns } from "./transcript.js";
 import { captureAntigravityEvent } from "./capture.js";
 import { bundleDirFromImportMeta, spawnAntigravityWikiWorker, wikiLog } from "./spawn-wiki-worker.js";
@@ -28,12 +28,13 @@ export function stopDecision(): Record<string, unknown> {
   return { decision: "stop" };
 }
 
-export async function processStop(input: AntigravityHookInput): Promise<Record<string, unknown>> {
+export async function processStop(input: unknown): Promise<Record<string, unknown>> {
   if (process.env.MEMOREE_WIKI_WORKER === "1") return stopDecision();
-  const sessionId = input.conversationId?.trim();
+  const normalized = normalizeAntigravityInput(input);
+  const sessionId = normalized.conversationId?.trim();
   if (!sessionId) return stopDecision();
 
-  const cwd = input.workspacePaths?.[0]?.trim() || process.cwd();
+  const cwd = normalized.workspacePaths?.[0]?.trim() || process.cwd();
   const base = loadConfig();
   if (!base) { log("no config"); return stopDecision(); }
   const dirRes = resolveDirConfig(base, cwd);
@@ -41,9 +42,9 @@ export async function processStop(input: AntigravityHookInput): Promise<Record<s
   const config = dirRes.config;
 
   if (process.env.MEMOREE_CAPTURE !== "false") {
-    const assistant = lastTurn(readTranscriptTurns(input.transcriptPath), "assistant");
+    const assistant = lastTurn(readTranscriptTurns(normalized.transcriptPath), "assistant");
     try {
-      await captureAntigravityEvent(input, "Stop", {
+      await captureAntigravityEvent(normalized, "Stop", {
         type: "assistant_message",
         content: assistant.slice(0, 4000),
       });

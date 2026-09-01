@@ -7,6 +7,12 @@ export interface TranscriptTurn {
   text: string;
 }
 
+/** agy transcripts wrap the prompt in <USER_REQUEST>…</USER_REQUEST>. */
+export function unwrapUserRequest(text: string): string {
+  const match = text.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/i);
+  return match?.[1]?.trim() ? match[1].trim() : text;
+}
+
 function asText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -38,7 +44,9 @@ export function parseTranscriptJsonl(raw: string): TranscriptTurn[] {
     catch { continue; }
     const role = roleOf(obj);
     if (!role) continue;
-    const text = asText(obj.text ?? obj.content ?? obj.message ?? obj.userMessage ?? obj.prompt).trim();
+    const text = unwrapUserRequest(
+      asText(obj.text ?? obj.content ?? obj.message ?? obj.userMessage ?? obj.prompt).trim(),
+    );
     if (!text) continue;
     turns.push({ role, text });
   }

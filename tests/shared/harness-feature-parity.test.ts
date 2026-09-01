@@ -280,6 +280,8 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(installSrc).toContain('"config", "plugins", "memoree"');
     expect(installSrc).toContain("antigravity-cli");
     expect(installSrc).toContain('{"type":"module"}');
+    expect(installSrc).toContain("ANTIGRAVITY_LEGACY_HOOKS_PATH");
+    expect(installSrc).toContain("ANTIGRAVITY_HOOK_JSON_PATHS");
     expect(installSrc).not.toContain('plugin", "install", ANTIGRAVITY_PLUGIN_DIR');
   });
 });

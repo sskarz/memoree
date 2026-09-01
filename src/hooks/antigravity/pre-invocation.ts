@@ -33,7 +33,7 @@ import { formatRecallContext } from "../shared/recall-format.js";
 import { withDeadline } from "../shared/with-deadline.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
 import { projectNameFromCwd } from "../../utils/project-name.js";
-import { sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
+import { normalizeAntigravityInput, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
 import { claimFirstInvocation, lastTurn, readTranscriptTurns, takeNewUserPrompt } from "./transcript.js";
 import { captureAntigravityEvent } from "./capture.js";
 
@@ -79,23 +79,24 @@ async function recallSnippet(prompt: string, cwd: string): Promise<string> {
   }
 }
 
-export async function processPreInvocation(input: AntigravityHookInput): Promise<Record<string, unknown>> {
+export async function processPreInvocation(input: unknown): Promise<Record<string, unknown>> {
   if (process.env.MEMOREE_WIKI_WORKER === "1") return {};
-  const sessionId = sessionIdOf(input);
-  const cwd = workspaceCwd(input);
-  const turns = readTranscriptTurns(input.transcriptPath);
+  const normalized = normalizeAntigravityInput(input);
+  const sessionId = sessionIdOf(normalized);
+  const cwd = workspaceCwd(normalized);
+  const turns = readTranscriptTurns(normalized.transcriptPath);
   const userText = lastTurn(turns, "user");
   const freshUser = takeNewUserPrompt(sessionId, userText);
   if (freshUser) {
     try {
-      await captureAntigravityEvent(input, "UserPromptSubmit", { type: "user_message", content: freshUser });
+      await captureAntigravityEvent(normalized, "UserPromptSubmit", { type: "user_message", content: freshUser });
     } catch (error: any) {
       log(`capture user failed: ${error.message}`);
     }
   }
 
   const inject: string[] = [];
-  const first = isFirstModelCall(input.invocationNum) && claimFirstInvocation(sessionId);
+  const first = isFirstModelCall(normalized.invocationNum) && claimFirstInvocation(sessionId);
   if (first) {
     const config = loadConfig();
     const version = getInstalledVersion(__bundleDir, ".antigravity-plugin");
@@ -114,7 +115,7 @@ export async function processPreInvocation(input: AntigravityHookInput): Promise
       child.stdin?.write(JSON.stringify({
         session_id: sessionId,
         cwd,
-        transcript_path: input.transcriptPath,
+        transcript_path: normalized.transcriptPath,
         hook_event_name: "SessionStart",
       }));
       child.stdin?.end();
