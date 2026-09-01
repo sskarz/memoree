@@ -102,6 +102,7 @@ export default defineConfig({
         "src/skillify/spawn-hygiene-worker.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/vfs-tools.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/server.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/mcp/session-capture.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/payload.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/pre-tool-use.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/transcript.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

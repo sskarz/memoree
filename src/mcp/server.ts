@@ -8,6 +8,7 @@
  */
 
 import { MEMOREE_MCP_TOOLS, runMemoreeTool } from "./vfs-tools.js";
+import { captureMcpToolCall } from "./session-capture.js";
 import { isDirectRun } from "../utils/direct-run.js";
 import { log as _log } from "../utils/debug.js";
 
@@ -74,6 +75,9 @@ export async function handleMcpRequest(msg: JsonRpcRequest): Promise<Record<stri
       : {};
     try {
       const result = await runMemoreeTool(name, args);
+      if (!process.env.VITEST) {
+        await captureMcpToolCall(name, args, result);
+      }
       return {
         jsonrpc: "2.0",
         id,

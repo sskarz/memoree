@@ -17,6 +17,7 @@ import { embeddingSqlLiteral } from "../../embeddings/sql.js";
 import { embeddingsDisabled } from "../../embeddings/disable.js";
 import { ensurePluginNodeModulesLink } from "../../embeddings/self-heal.js";
 import { buildDirectSessionInsertSql } from "../shared/session-insert-sql.js";
+import { isMissingTableError } from "../../storage/schema.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
@@ -101,8 +102,9 @@ export async function captureAntigravityEvent(
   }, api.dialect);
   try {
     await api.query(insertSql);
-  } catch (error: any) {
-    if (error.message?.includes("permission denied") || error.message?.includes("does not exist")) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isMissingTableError(message) || /permission denied/i.test(message)) {
       await api.ensureSessionsTable(config.sessionsTableName);
       await api.query(insertSql);
     } else {

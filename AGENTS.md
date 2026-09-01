@@ -199,6 +199,9 @@ off the virtual mount; never `allow`), PostToolUse capture, Stop (capture +
 wiki + graph). Hook commands parse JSON as soon as a complete object arrives
 and unref stdin — `agy -p` writes the payload then keeps the pipe open, so
 waiting for EOF hangs until the hooks.json timeout and drops inject/capture.
+`agy -p` currently loads named hooks but does not execute them; unaided
+session rows come from MCP tool-call capture (`ANTIGRAVITY_CONVERSATION_ID`
+when present, otherwise `mcp-<pid>`).
 Memory is MCP (`memoree_ls` / `memoree_read` / `memoree_grep`
 / `memoree_head` / `memoree_tail` / `memoree_wc` / `memoree_find` /
 `memoree_jq` / `memoree_write` / `memoree_mv` / `memoree_rm`) wrapping the

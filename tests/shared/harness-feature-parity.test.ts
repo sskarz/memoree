@@ -277,6 +277,8 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     const installSrc = readFileSync(join(ROOT, "src/cli/install-antigravity.ts"), "utf-8");
     expect(mcpSrc).toContain('framing === "ndjson"');
     expect(mcpSrc).toContain("content-length");
+    expect(mcpSrc).toContain("await captureMcpToolCall");
+    expect(mcpSrc).toContain("if (!process.env.VITEST)");
     expect(installSrc).toContain('"config", "plugins", "memoree"');
     expect(installSrc).toContain("antigravity-cli");
     expect(installSrc).toContain('{"type":"module"}');

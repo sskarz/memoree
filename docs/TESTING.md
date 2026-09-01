@@ -274,7 +274,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Antigravity install/uninstall + named hooks + MCP | S | V | — | Plugin at `~/.gemini/config/plugins/memoree`; merges `memoree` into `~/.gemini/config/hooks.json` and the legacy `~/.gemini/antigravity-cli/hooks.json` (CLI#49) |
 | Antigravity PreInvocation inject + recall | S | V | L | First `invocationNum` 0/1 claims wake lock; `injectSteps`. Hook JSON is parsed without waiting for stdin EOF (`agy -p` keeps the pipe open) |
 | Antigravity PreToolUse steer (never `allow`) | S | V | — | `{ decision: "deny", reason }` on the mount; unrelated tools `{}` |
-| Antigravity capture + Stop wiki (`agy -p`) | S | V | L | Live requires the `agy` UUID in events (`waitForCapture`); wiki summary is still best-effort (`requireSummary: false`) because Stop wiki is another `agy -p` |
+| Antigravity capture + Stop wiki (`agy -p`) | S | V | L | `agy -p` loads hooks.json but does not execute command hooks. Unaided capture is MCP tool-call rows (`captureMcpToolCall`); `waitForCapture` requires the UUID in `sessions`. Wiki summary stays best-effort (`requireSummary: false`) |
 | Antigravity MCP VFS tools | S | V | L | Same sandbox as Claude/Codex. Stdio is official NDJSON (agy). `runtime:validate` drives all 11 MCP tools; unaided `agy` must `call_mcp_tool` read + write + grep |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |

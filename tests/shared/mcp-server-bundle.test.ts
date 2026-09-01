@@ -27,6 +27,12 @@ describe("shipped mcp-server.js — Codex PreToolUse main must not steal stdin",
     expect(pre).toMatch(/isDirectRun\([^,]+,\s*"pre-tool-use"\)/);
   });
 
+  it("persists unaided agy -p sessions from MCP tool calls", () => {
+    const mcp = readFileSync(mcpServer, "utf-8");
+    expect(mcp).toContain("captureMcpToolCall");
+    expect(mcp).toContain("mcp-");
+  });
+
   it("answers initialize over Content-Length stdio", () => {
     const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
     const framed = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;

@@ -1,0 +1,99 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { clearFakeHome, setFakeHome } from "./fake-home.js";
+import { captureMcpToolCall, mcpSessionId } from "../../src/mcp/session-capture.js";
+import { _resetForTesting, _setEnabledReaderForTesting } from "../../src/embeddings/disable.js";
+import { _resetUserConfigForTesting } from "../../src/user-config.js";
+
+describe("Antigravity MCP session capture", () => {
+  let home: string;
+  const prior = {
+    backend: process.env.MEMOREE_BACKEND,
+    sqlite: process.env.MEMOREE_SQLITE_PATH,
+    embeddings: process.env.MEMOREE_EMBEDDINGS,
+    capture: process.env.MEMOREE_CAPTURE,
+    user: process.env.MEMOREE_USER_NAME,
+    conv: process.env.ANTIGRAVITY_CONVERSATION_ID,
+  };
+
+  beforeEach(() => {
+    _setEnabledReaderForTesting(() => false);
+    _resetUserConfigForTesting();
+  });
+
+  afterEach(() => {
+    clearFakeHome();
+    _resetForTesting();
+    _resetUserConfigForTesting();
+    if (home) rmSync(home, { recursive: true, force: true });
+    restore("MEMOREE_BACKEND", prior.backend);
+    restore("MEMOREE_SQLITE_PATH", prior.sqlite);
+    restore("MEMOREE_EMBEDDINGS", prior.embeddings);
+    restore("MEMOREE_CAPTURE", prior.capture);
+    restore("MEMOREE_USER_NAME", prior.user);
+    restore("ANTIGRAVITY_CONVERSATION_ID", prior.conv);
+  });
+
+  it("uses the Antigravity conversation id when the CLI exports it", () => {
+    expect(mcpSessionId({ ANTIGRAVITY_CONVERSATION_ID: "  conv-1  " })).toBe("conv-1");
+    expect(mcpSessionId({})).toBe(`mcp-${process.pid}`);
+  });
+
+  it("persists MCP tool arguments so unaided agy -p can be observed", async () => {
+    home = mkdtempSync(join(tmpdir(), "mcp-capture-"));
+    setFakeHome(home);
+    const databasePath = join(home, "memoree.sqlite3");
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = databasePath;
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    process.env.MEMOREE_CAPTURE = "true";
+    process.env.MEMOREE_USER_NAME = "mcp-capture";
+    process.env.ANTIGRAVITY_CONVERSATION_ID = "agy-conv-uuid";
+    const marker = "c2fe48dd-6363-4e25-acbc-74a9d833a00e";
+    await captureMcpToolCall(
+      "memoree_write",
+      { path: `rules/active/${marker}.md`, content: marker },
+      { ok: true, text: "ok" },
+    );
+    const db = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const row = db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE CAST(message AS TEXT) LIKE ?").get(`%${marker}%`) as { n: number };
+      expect(row.n).toBeGreaterThan(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("skips capture when MEMOREE_CAPTURE is false", async () => {
+    home = mkdtempSync(join(tmpdir(), "mcp-capture-off-"));
+    setFakeHome(home);
+    const databasePath = join(home, "memoree.sqlite3");
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = databasePath;
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    process.env.MEMOREE_CAPTURE = "false";
+    process.env.MEMOREE_USER_NAME = "mcp-capture";
+    await captureMcpToolCall("memoree_ls", { path: "" }, { ok: true, text: "rules.md" });
+    const db = new DatabaseSync(databasePath);
+    try {
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE name = 'sessions'").get();
+      expect(tables).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("swallows capture errors so MCP tools still return", async () => {
+    process.env.MEMOREE_CAPTURE = "true";
+    process.env.MEMOREE_BACKEND = "not-a-backend";
+    await expect(captureMcpToolCall("memoree_ls", {}, { ok: true, text: "x" })).resolves.toBeUndefined();
+  });
+});
+
+function restore(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
