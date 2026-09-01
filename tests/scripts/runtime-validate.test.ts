@@ -17,6 +17,7 @@ import {
   lexicalValidationPrompt,
   claudeLexicalRecallPrompt,
   CLAUDE_LEXICAL_RECALL_ATTEMPTS,
+  CODEX_SEMANTIC_RECALL_ATTEMPTS,
   DEFAULT_LIVE_CLAUDE_MODEL,
   DEFAULT_LIVE_CODEX_MODEL,
   DEFAULT_LIVE_CODEX_REASONING_EFFORT,
@@ -181,7 +182,17 @@ describe("runtime validation Codex semantic recall prompt", () => {
     expect(prompt).toContain("grep -ri");
     expect(prompt).toContain("~/.memoree/memory/summaries/");
     expect(prompt).toContain("observatory lantern");
+    expect(prompt).toContain("NONE");
+    expect(prompt).toMatch(/do not generate a uuid/i);
+    expect(prompt).not.toMatch(/do not say none/i);
     expect(prompt).not.toMatch(/do not (read files|use tools)/i);
+  });
+
+  it("retries cheap-model Codex semantic recall", () => {
+    expect(CODEX_SEMANTIC_RECALL_ATTEMPTS).toBe(5);
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    expect(source).toContain("CODEX_SEMANTIC_RECALL_ATTEMPTS");
+    expect(source).toContain("codexSemanticRecallPrompt(");
   });
 });
 

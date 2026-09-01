@@ -20,6 +20,7 @@ import {
   claudeLiveCliArgs,
   copyCodexAuthentication,
   createValidationWorkspace,
+  grepRecallPrompt,
   inspectCaptureDatabase,
   lexicalValidationPrompt,
   linkSharedEmbeddingRuntime,
@@ -51,19 +52,11 @@ function claudeLivePrompt(harborId, ruleId) {
 }
 
 function claudeRecallPrompt() {
-  return [
-    "Search Memoree memory for the harbor kite code from earlier work.",
-    "Use the Bash tool: grep -ri \"harbor kite\" ~/.memoree/memory/",
-    "Answer with only the matching UUID. Do not invent an identifier.",
-  ].join("\n");
+  return grepRecallPrompt("harbor kite", "~/.memoree/memory/");
 }
 
 function codexLivePrompt() {
-  return [
-    "Search Memoree memory for the harbor kite code from earlier work.",
-    "Use the shell: grep -ri \"harbor kite\" ~/.memoree/memory/summaries/",
-    "Answer with only the matching UUID. Do not invent an identifier. Do not say none was provided.",
-  ].join("\n");
+  return grepRecallPrompt("harbor kite");
 }
 
 export async function runLiveSessionE2E() {

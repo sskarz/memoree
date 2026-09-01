@@ -23,6 +23,8 @@ describe("live session e2e harness", () => {
     expect(source).not.toMatch(/run\("claude",\s*\[/);
     expect(source).not.toMatch(/runCodex\(\[/);
     expect(source).toContain("live models:");
+    expect(source).toContain("grepRecallPrompt(");
+    expect(source).not.toMatch(/do not say none/i);
   });
 
   it("is wired as npm run live:e2e", () => {

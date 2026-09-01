@@ -92,12 +92,21 @@ export function claudeLexicalRecallPrompt(identifier) {
   ].join(" ");
 }
 
-export function codexSemanticRecallPrompt() {
+/**
+ * Cheap-model recall: copy a UUID from grep stdout. Do not forbid "none" —
+ * that pushed gpt-5.6-luna to invent an identifier when grep was empty.
+ */
+export function grepRecallPrompt(needle, path = "~/.memoree/memory/summaries/") {
   return [
-    "Search Memoree memory for the unusual observatory lantern and its exact identifier.",
-    "Use the shell: grep -ri \"observatory lantern\" ~/.memoree/memory/summaries/",
-    "Answer with only the matching UUID. Do not invent an identifier. Do not say none was provided.",
+    `Run this exact shell command: grep -ri ${JSON.stringify(needle)} ${path}`,
+    "Copy the UUID from that command's stdout into your final answer.",
+    "If stdout has no UUID, reply NONE.",
+    "Do not generate a UUID. Do not guess.",
   ].join("\n");
+}
+
+export function codexSemanticRecallPrompt() {
+  return grepRecallPrompt("observatory lantern");
 }
 
 export function copyCodexAuthentication(realHome, isolatedCodexHome) {
@@ -171,9 +180,13 @@ export function skipLiveCodexRequested(argv = process.argv, env = process.env) {
 
 /** Claude Code alias for live gates. Wiki workers already use this. */
 export const DEFAULT_LIVE_CLAUDE_MODEL = "haiku";
-/** Cheap Codex CLI model (GPT-5.6 Luna). Override if the slug moves. */
+/**
+ * OpenAI Codex CLI slug for GPT-5.6 Luna (cheap tier). Same id as the API
+ * model; not a Cursor-only name. Override if the slug moves.
+ */
 export const DEFAULT_LIVE_CODEX_MODEL = "gpt-5.6-luna";
 export const DEFAULT_LIVE_CODEX_REASONING_EFFORT = "low";
+export const CODEX_SEMANTIC_RECALL_ATTEMPTS = 5;
 
 export function liveClaudeModel(env = process.env) {
   return env.MEMOREE_LIVE_CLAUDE_MODEL?.trim() || DEFAULT_LIVE_CLAUDE_MODEL;
@@ -1116,7 +1129,7 @@ export async function validateRuntime(options = {}) {
       let semanticRecall = "";
       /** @type {unknown} */
       let semanticRecallError = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < CODEX_SEMANTIC_RECALL_ATTEMPTS; attempt++) {
         semanticRecall = runCodex(codexExecLiveArgs([
           "--skip-git-repo-check",
           "--ephemeral",
