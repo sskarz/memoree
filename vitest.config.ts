@@ -99,6 +99,7 @@ export default defineConfig({
         "src/graph/node-embeddings.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/skillify/hygiene-parser.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/skillify/hygiene.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/skillify/agent-roots.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/skillify/spawn-hygiene-worker.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/vfs-tools.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/server.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

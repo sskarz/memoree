@@ -28,6 +28,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fanOutWrittenSkill } from "./agent-roots.js";
 
 export interface SkillFrontmatter {
   name: string;
@@ -319,6 +320,7 @@ export function writeNewSkill(args: WriteSkillArgs): SkillWriteResult {
   };
   const text = `${renderFrontmatter(fm)}\n\n${args.body.trim()}\n`;
   writeFileSync(path, text);
+  fanOutWrittenSkill(args.skillsRoot, name);
   return {
     path, name, action: "created", version: 1,
     createdAt: now, updatedAt: now,
@@ -370,6 +372,7 @@ export function mergeSkill(args: MergeSkillArgs): SkillWriteResult {
   };
   const text = `${renderFrontmatter(fm)}\n\n${args.body.trim()}\n`;
   writeFileSync(path, text);
+  fanOutWrittenSkill(args.skillsRoot, args.name);
   return {
     path, name: args.name, action: "merged", version: fm.version,
     createdAt: fm.created_at, updatedAt: fm.updated_at,

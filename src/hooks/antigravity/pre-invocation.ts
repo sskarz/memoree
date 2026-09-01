@@ -48,6 +48,8 @@ export const ANTIGRAVITY_MEMORY_CONTEXT =
   "run_command or view_file; that path is virtual.\n" +
   "Start with memoree_read path=\"identity.json\", then rules.md and goals.md. " +
   "Past sessions: memoree_read path=\"index.md\", then summaries/<user>/<session>.md.\n" +
+  "Project skills also live under .agents/skills (and .gemini/skills); Memoree " +
+  "writes the canonical copy under .claude/skills and symlinks it there.\n" +
   MEMORY_COMMAND_GUIDANCE;
 
 export function isFirstModelCall(invocationNum: number | undefined): boolean {

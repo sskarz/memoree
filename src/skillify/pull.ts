@@ -19,14 +19,15 @@
 
 import {
   existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, rmSync,
-  lstatSync, readlinkSync, symlinkSync, unlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { assertValidSkillName, capSkillName, composeDescription, parseFrontmatter, type SkillFrontmatter } from "./skill-writer.js";
 import type { InstallLocation } from "./scope-config.js";
 import { entriesForRoot, loadManifest, pruneOrphanedEntries, recordPull, removePullEntry, unlinkSymlinks } from "./manifest.js";
-import { detectAgentSkillsRoots } from "./agent-roots.js";
+import { detectAgentSkillsRoots, fanOutSymlinks } from "./agent-roots.js";
+
+export { fanOutSymlinks } from "./agent-roots.js";
 
 /**
  * Tighter-than-skill-name validator for the author segment that becomes a
@@ -193,61 +194,8 @@ export function resolvePullDestination(install: InstallLocation, cwd?: string): 
   return join(cwd, ".claude", "skills");
 }
 
-/**
- * Make `<root>/<dirName>` point at `canonicalDir` for each detected
- * non-Claude agent root. Returns the absolute paths of every symlink
- * that ended up pointing correctly (existing or newly created), in the
- * order of `agentRoots`. Caller stores this in the manifest entry so
- * unpull can reverse the fan-out without rescanning the disk.
- *
- * Refusal cases (path NOT in the returned list, no exception thrown):
- *  - A non-symlink file or directory already sits at the link path. We
- *    never clobber user data; the user gets the canonical copy under
- *    `~/.claude/skills/` and is responsible for the conflicting entry.
- *  - symlink() raises (Windows non-developer mode, read-only fs,
- *    permission denied). The skill is still on disk under the canonical
- *    location; auto-pull retries on the next session.
- *
- * Idempotency: re-running the same pull with the same agentRoots is a
- * no-op for links that already point at the right target. Stale links
- * (pointing at a different canonical path — e.g. after a HOME move) are
- * unlinked and recreated.
- */
-export function fanOutSymlinks(
-  canonicalDir: string,
-  dirName: string,
-  agentRoots: string[],
-): string[] {
-  const out: string[] = [];
-  for (const root of agentRoots) {
-    const link = join(root, dirName);
-    let existing;
-    try { existing = lstatSync(link); } catch { existing = null; }
-    if (existing) {
-      if (!existing.isSymbolicLink()) {
-        // Real file/directory at the target — never clobber. Skip silently;
-        // the user can resolve the conflict by removing it and re-running pull.
-        continue;
-      }
-      // Already a symlink. Replace only if it points elsewhere.
-      let current: string | null;
-      try { current = readlinkSync(link); } catch { current = null; }
-      if (current === canonicalDir) {
-        out.push(link);
-        continue;
-      }
-      try { unlinkSync(link); } catch { continue; }
-    }
-    try {
-      mkdirSync(dirname(link), { recursive: true });
-      // "dir" type matters on Windows (junction vs file symlink); ignored on POSIX.
-      symlinkSync(canonicalDir, link, "dir");
-      out.push(link);
-    } catch {
-      // Best-effort. The canonical dir exists either way; skip this agent root.
-    }
-  }
-  return out;
+function detectRootsForPull(installRoot: string, opts: Pick<PullOptions, "install" | "cwd">): string[] {
+  return detectAgentSkillsRoots(installRoot, { install: opts.install, cwd: opts.cwd });
 }
 
 /**
@@ -279,11 +227,12 @@ export function fanOutSymlinks(
  * `pruneOrphanedEntries()` at the start of `runPull`, so by the time
  * this runs the survivors all have a real canonical dir on disk.
  */
-export function backfillSymlinks(installRoot: string): void {
+export function backfillSymlinks(installRoot: string, opts: { install?: InstallLocation; cwd?: string } = {}): void {
+  const install = opts.install ?? "global";
   const manifest = loadManifest();
-  const entries = entriesForRoot(manifest, "global", installRoot);
+  const entries = entriesForRoot(manifest, install, installRoot);
   if (entries.length === 0) return;
-  const detected = detectAgentSkillsRoots(installRoot);
+  const detected = detectAgentSkillsRoots(installRoot, { install, cwd: opts.cwd });
   for (const entry of entries) {
     const canonical = join(entry.installRoot, entry.dirName);
     if (!existsSync(canonical)) continue; // pruned/orphan, leave alone
@@ -660,9 +609,7 @@ export async function runPull(opts: PullOptions): Promise<PullSummary> {
       // root, but only for global pulls. Project-local pulls live under
       // <cwd>/.claude/skills and shouldn't leak into user-global agent
       // dirs — that would defeat the project-scoping intent.
-      const symlinks = opts.install === "global"
-        ? fanOutSymlinks(skillDir, dirName, detectAgentSkillsRoots(root))
-        : [];
+      const symlinks = fanOutSymlinks(skillDir, dirName, detectRootsForPull(root, opts));
       // Record in manifest so `unpull` can identify this entry as
       // pull-managed without relying on the `--<author>` dirname heuristic
       // and so the symlinks created above can be reversed by a single
@@ -714,9 +661,7 @@ export async function runPull(opts: PullOptions): Promise<PullSummary> {
         // set) so we don't retry a still-broken manifest write.
         if (!canonicalRecorded && staleEntry && !manifestError) {
           try {
-            const symlinks = opts.install === "global"
-              ? fanOutSymlinks(skillDir, dirName, detectAgentSkillsRoots(root))
-              : [];
+            const symlinks = fanOutSymlinks(skillDir, dirName, detectRootsForPull(root, opts));
             recordPull({
               dirName, name, rawName, author,
               projectKey: String(row.project_key ?? ""),
@@ -764,10 +709,10 @@ export async function runPull(opts: PullOptions): Promise<PullSummary> {
   // the new agent root are missing — and they'd stay missing forever
   // because the next pull just sees `localVersion >= remoteVersion`
   // and skips. The backfill closes this gap idempotently.
-  // Skip on dry-run (no disk mutations) and on project installs (no
-  // fan-out for them by design).
-  if (!opts.dryRun && opts.install === "global") {
-    backfillSymlinks(root);
+  // Skip on dry-run (no disk mutations). Project installs fan out into
+  // <cwd>/.agents/skills and <cwd>/.gemini/skills, not the user-global tree.
+  if (!opts.dryRun) {
+    backfillSymlinks(root, { install: opts.install, cwd: opts.cwd });
   }
 
   return summary;

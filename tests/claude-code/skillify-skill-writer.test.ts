@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import {
@@ -44,6 +44,8 @@ describe("writeNewSkill", () => {
     expect(result.version).toBe(1);
     expect(result.path).toBe(join(skillsRoot, "my-skill", "SKILL.md"));
     expect(existsSync(result.path)).toBe(true);
+    expect(readlinkSync(join(projectRoot, ".agents", "skills", "my-skill"))).toBe(join(skillsRoot, "my-skill"));
+    expect(readlinkSync(join(projectRoot, ".gemini", "skills", "my-skill"))).toBe(join(skillsRoot, "my-skill"));
     // Caller (the worker → Memoree INSERT) needs createdAt/updatedAt back.
     expect(result.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(result.updatedAt).toBe(result.createdAt);

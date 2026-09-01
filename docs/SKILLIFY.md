@@ -86,7 +86,12 @@ Claude Code, Codex, and Antigravity auto-run the equivalent of `memoree skillify
 
 There is no throttle window. File writes inside `runPull` are idempotent (skipped when the local SKILL.md version is at-or-newer than remote), symlink fan-out is `lstat`-checked, and manifest writes are dedup'd — so the per-call cost is one SQL round-trip plus a handful of `existsSync` syscalls when nothing has changed. Bounded by a 5-second timeout so a slow Memoree never blocks SessionStart. All failures (network, missing table, auth) are swallowed silently and the session starts regardless.
 
-The pull writes canonically to `~/.claude/skills/<name>--<author>/SKILL.md` and fans out a symlink to Codex's `~/.agents/skills/` root when Codex is installed. Symlink targets are recorded per entry so `unpull` reverses the fan-out without rescanning the filesystem.
+The pull writes canonically to `~/.claude/skills/<name>--<author>/SKILL.md` (or `<cwd>/.claude/skills/` for `--to project`) and fans out **symlinks** — not copies — so Codex, Antigravity/Gemini, and other agents load the same files:
+
+- Global: `~/.agents/skills/` when Codex or `~/.agents` exists, and `~/.gemini/skills/` when `~/.gemini` exists.
+- Project: `<cwd>/.agents/skills/` and `<cwd>/.gemini/skills/`. Project skills are never linked into `~/.agents/skills`.
+
+Local mine and `writeNewSkill` / `mergeSkill` use the same fan-out. Symlink targets are recorded per pull entry so `unpull` reverses them without rescanning the filesystem.
 
 | Env var                            | Default | Effect                                  |
 |------------------------------------|---------|-----------------------------------------|

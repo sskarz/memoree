@@ -1048,10 +1048,20 @@ describe("runPull — symlink fan-out (global install only)", () => {
     expect(m.entries[0].symlinks).toEqual([join(agentsRoot, "deploy--alice")]);
   });
 
-  it("does NOT fan out for project-install pulls (project scope shouldn't leak globally)", async () => {
-    // Even with agent roots detected, a project install should not symlink
-    // into ~/.agents/skills — that would expose project-local skills to
-    // every project on the machine.
+  it("fans out global pulls to ~/.gemini/skills when Gemini home exists", async () => {
+    mkdirSync(join(fakeHome, ".gemini"), { recursive: true });
+    const { fn } = makeMockQuery([sampleRow()]);
+    await runPull({
+      query: fn, tableName: "skills", install: "global",
+      users: [], dryRun: false, force: false,
+    });
+    const canonical = join(fakeHome, ".claude", "skills", "deploy--alice");
+    expect(readlinkSync(join(fakeHome, ".gemini", "skills", "deploy--alice"))).toBe(canonical);
+    const m = loadManifest();
+    expect(m.entries[0].symlinks).toEqual([join(fakeHome, ".gemini", "skills", "deploy--alice")]);
+  });
+
+  it("fans out project pulls into <cwd>/.agents and .gemini, not ~/.agents", async () => {
     mkdirSync(join(fakeHome, ".codex"), { recursive: true });
     const agentsRoot = join(fakeHome, ".agents", "skills");
 
@@ -1061,11 +1071,17 @@ describe("runPull — symlink fan-out (global install only)", () => {
       users: [], dryRun: false, force: false,
     });
 
-    expect(existsSync(join(projectSkillsRoot, "deploy--alice", "SKILL.md"))).toBe(true);
+    const canonical = join(projectSkillsRoot, "deploy--alice");
+    expect(existsSync(join(canonical, "SKILL.md"))).toBe(true);
     expect(existsSync(join(agentsRoot, "deploy--alice"))).toBe(false);
+    expect(readlinkSync(join(projectRoot, ".agents", "skills", "deploy--alice"))).toBe(canonical);
+    expect(readlinkSync(join(projectRoot, ".gemini", "skills", "deploy--alice"))).toBe(canonical);
 
     const m = loadManifest();
-    expect(m.entries[0].symlinks).toEqual([]);
+    expect(m.entries[0].symlinks.sort()).toEqual([
+      join(projectRoot, ".agents", "skills", "deploy--alice"),
+      join(projectRoot, ".gemini", "skills", "deploy--alice"),
+    ].sort());
   });
 
   it("records empty symlinks[] when no agent roots are detected", async () => {
