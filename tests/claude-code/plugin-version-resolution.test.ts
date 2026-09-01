@@ -75,7 +75,7 @@ describe("plugin_version is wired into every agent's capture INSERT", () => {
     // so a typo or column-list drift fails here, not silently in prod.
     const expectedColumns =
       'INSERT INTO "${table}" (id, path, filename, message, message_embedding, ' +
-      "author, size_bytes, project, description, agent, plugin_version, " +
+      "author, size_bytes, project, project_key, description, agent, plugin_version, " +
       "creation_date, last_update_date)";
     expect(src).toContain(expectedColumns);
   });

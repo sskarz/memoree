@@ -12,6 +12,7 @@ import { makeWikiLogger } from "../utils/wiki-log.js";
 import { getInstalledVersion } from "../utils/version-check.js";
 import { spawnDetachedNodeWorker } from "../utils/spawn-detached.js";
 import { projectNameFromCwd } from "../utils/project-name.js";
+import { deriveProjectKey } from "../utils/repo-identity.js";
 import { resolveCliBin } from "../utils/resolve-cli-bin.js";
 
 const HOME = homedir();
@@ -96,6 +97,7 @@ export interface SpawnOptions {
 export function spawnWikiWorker(opts: SpawnOptions): void {
   const { config, sessionId, cwd, bundleDir, reason } = opts;
   const projectName = projectNameFromCwd(cwd);
+  const projectKey = deriveProjectKey(cwd || process.cwd()).key;
 
   const tmpDir = join(tmpdir(), `memoree-wiki-${sessionId}-${Date.now()}`);
   mkdirSync(tmpDir, { recursive: true });
@@ -113,6 +115,7 @@ export function spawnWikiWorker(opts: SpawnOptions): void {
     userName: config.userName,
     orgName: config.orgName,
     project: projectName,
+    projectKey,
     agent: opts.agent ?? "claude_code",
     pluginVersion,
     tmpDir,

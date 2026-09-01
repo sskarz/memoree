@@ -50,6 +50,7 @@ function parentOf(p: string): string {
 }
 
 import { sqlStr as esc } from "../utils/sql.js";
+import { projectKeyScopeSql } from "../utils/repo-identity.js";
 
 export function guessMime(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
@@ -231,6 +232,8 @@ export class MemoreeFs implements IFileSystem {
 
   /** Number of files loaded from the server during bootstrap. */
   get fileCount(): number { return this.files.size; }
+  /** Stable project key used to scope session/summary listings, grep, and index.md. */
+  get sessionProjectKey(): string | null { return this.projectKey; }
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   // serialize flushes
   private flushChain: Promise<void> = Promise.resolve();
@@ -251,6 +254,8 @@ export class MemoreeFs implements IFileSystem {
   private docsTable: string | null = null;
   /** Project scope for docs reads on shared tables (legacy '' rows included). */
   private docsProject: string | null = null;
+  /** Stable git-remote (or abs-cwd) key for session/summary listings, grep, and index.md. */
+  private projectKey: string | null = null;
 
   // Embedding client lazily created on first flush. Lives as long as the process.
   private embedClient: EmbedClient | null = null;
@@ -275,6 +280,7 @@ export class MemoreeFs implements IFileSystem {
       kpisTable?: string;
       docsTable?: string;
       docsProject?: string;
+      projectKey?: string;
       identity?: StructuredIdentity;
     },
   ): Promise<MemoreeFs> {
@@ -286,6 +292,7 @@ export class MemoreeFs implements IFileSystem {
     fs.identity = extra?.identity ?? null;
     fs.docsTable = extra?.docsTable ?? null;
     fs.docsProject = extra?.docsProject ?? null;
+    fs.projectKey = extra?.projectKey ?? extra?.docsProject ?? null;
     // Ensure the memory table + goal/kpi tables exist before
     // bootstrapping. Each ensure call is idempotent and lazy-heals
     // any column drift from prior schema versions. Failures bubble
@@ -307,8 +314,10 @@ export class MemoreeFs implements IFileSystem {
 
     // Bootstrap memory + sessions metadata in parallel.
     let sessionSyncOk = true;
+    const keyScope = projectKeyScopeSql(fs.projectKey);
+    const keyFilter = keyScope ? ` WHERE ${keyScope}` : "";
     const memoryBootstrap = (async () => {
-      const sql = `SELECT path, size_bytes, mime_type FROM "${table}" ORDER BY path`;
+      const sql = `SELECT path, size_bytes, mime_type FROM "${table}"${keyFilter} ORDER BY path`;
       try {
         const rows = await client.query(sql);
         for (const row of rows) {
@@ -351,7 +360,7 @@ export class MemoreeFs implements IFileSystem {
           // works and — for the single-row-per-file layout — is equal to SUM. For
           // multi-row-per-turn layouts MAX under-reports total size but stays >0
           // so files don't look like empty placeholders in ls/stat.
-          `SELECT path, MAX(size_bytes) as total_size FROM "${sessionsTable}" GROUP BY path ORDER BY path`
+          `SELECT path, MAX(size_bytes) as total_size FROM "${sessionsTable}"${keyFilter} GROUP BY path ORDER BY path`
         );
         for (const row of sessionRows) {
           const p = row["path"] as string;
@@ -804,9 +813,11 @@ export class MemoreeFs implements IFileSystem {
     // one extra row beyond the cap so the renderer can emit the "showing N
     // most-recent of many" notice.
     const fetchLimit = INDEX_LIMIT_PER_SECTION + 1;
+    const keyScope = projectKeyScopeSql(this.projectKey);
+    const keyFilter = keyScope ? ` AND ${keyScope}` : "";
     const summaryRows = await this.client.query(
       `SELECT path, project, description, creation_date, last_update_date FROM "${this.table}" ` +
-      `WHERE path LIKE '${esc("/summaries/")}%' ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
+      `WHERE path LIKE '${esc("/summaries/")}%'${keyFilter} ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
     );
 
     // Sessions section — raw session records (dialogue / events). Pulled
@@ -818,7 +829,7 @@ export class MemoreeFs implements IFileSystem {
       try {
         sessionRows = await this.client.query(
           `SELECT path, MAX(description) AS description, MIN(creation_date) AS creation_date, MAX(last_update_date) AS last_update_date ` +
-          `FROM "${this.sessionsTable}" WHERE path LIKE '${esc("/sessions/")}%' ` +
+          `FROM "${this.sessionsTable}" WHERE path LIKE '${esc("/sessions/")}%'${keyFilter} ` +
           `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${fetchLimit}`
         );
       } catch {

@@ -246,6 +246,7 @@ describe("processCodexPreToolUse: compiled bash fast-path", () => {
     expect(readVirtualPathContentsFn).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), expect.anything(),
       ["/sessions/x.json"],
+      expect.anything(),
     );
   });
 });

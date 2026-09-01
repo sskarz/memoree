@@ -22,6 +22,8 @@ export interface UploadParams {
   fname: string;
   userName: string;
   project: string;
+  /** Stable git-remote (or abs-cwd) key. Written on INSERT; left untouched on UPDATE. */
+  projectKey?: string;
   agent: string;
   sessionId: string;
   text: string;
@@ -44,6 +46,11 @@ export interface UploadParams {
    *   string when you genuinely want to clear it.
    */
   pluginVersion?: string;
+  /**
+   * Antigravity MCP digest: never UPDATE a finalized wiki row, and INSERT
+   * only when no row exists at `vpath` (avoids duplicate summary paths).
+   */
+  mcpDigest?: boolean;
 }
 
 export interface UploadResult {
@@ -123,6 +130,26 @@ export function isFinalizedSummaryText(text: unknown): boolean {
 }
 
 /**
+ * Marker MCP digest rows carry so a later wiki write stays distinguishable.
+ * Keep in sync with `MCP_SUMMARY_MARKER` in src/mcp/session-summary.ts.
+ */
+export const MCP_DIGEST_MARKER = "<!-- memoree-mcp-summary -->";
+
+function isMcpDigestSummary(summary: unknown): boolean {
+  return typeof summary === "string" && summary.includes(MCP_DIGEST_MARKER);
+}
+
+/** SQL: row is an MCP digest or is not yet a finalized wiki write-up. */
+function mcpDigestReplaceableSql(): string {
+  return (
+    `(summary LIKE '%${MCP_DIGEST_MARKER}%' ` +
+    `OR summary NOT LIKE '%## What Happened%' ` +
+    `OR description = '${PLACEHOLDER_DESCRIPTION}' ` +
+    `OR description = '')`
+  );
+}
+
+/**
  * Upload or refresh a wiki summary row.
  *
  * IMPORTANT: summary and description must stay in the SAME SQL statement.
@@ -130,6 +157,7 @@ export function isFinalizedSummaryText(text: unknown): boolean {
  */
 export async function uploadSummary(query: QueryFn, params: UploadParams): Promise<UploadResult> {
   const { tableName, vpath, fname, userName, project, agent } = params;
+  const projectKey = params.projectKey ?? "";
   // Mask any secret a summary may have quoted before it's stored/indexed.
   const text = redactSecrets(params.text);
   const ts = params.ts ?? new Date().toISOString();
@@ -144,6 +172,45 @@ export async function uploadSummary(query: QueryFn, params: UploadParams): Promi
   const existing = await query(
     `SELECT path, summary, description FROM "${tableName}" WHERE path = '${esc(vpath)}' LIMIT 1`
   );
+
+  if (params.mcpDigest) {
+    const pluginVersionSet = pluginVersion === undefined
+      ? ""
+      : `plugin_version = '${esc(pluginVersion)}', `;
+    const updateSql =
+      `UPDATE "${tableName}" SET ` +
+      `summary = ${stringPrefix}'${esc(text)}', ` +
+      `summary_embedding = ${embSql}, ` +
+      `size_bytes = ${sizeBytes}, ` +
+      `description = ${stringPrefix}'${esc(desc)}', ` +
+      pluginVersionSet +
+      `last_update_date = '${ts}' ` +
+      `WHERE path = '${esc(vpath)}' AND ${mcpDigestReplaceableSql()}`;
+    await query(updateSql);
+    const afterUpdate = await query(
+      `SELECT summary, description FROM "${tableName}" WHERE path = '${esc(vpath)}' LIMIT 1`,
+    );
+    if (afterUpdate.length > 0) {
+      if (isMcpDigestSummary(afterUpdate[0]?.["summary"])) {
+        return { path: "update", sql: updateSql, descLength: desc.length, summaryLength: text.length };
+      }
+      return { path: "skip", sql: updateSql, descLength: desc.length, summaryLength: text.length };
+    }
+    const pluginVersionForInsert = pluginVersion ?? "";
+    const insertSql =
+      `INSERT INTO "${tableName}" (id, path, filename, summary, summary_embedding, author, mime_type, size_bytes, project, project_key, description, agent, plugin_version, creation_date, last_update_date) ` +
+      `SELECT '${randomUUID()}', '${esc(vpath)}', '${esc(fname)}', ${stringPrefix}'${esc(text)}', ${embSql}, '${esc(userName)}', 'text/markdown', ` +
+      `${sizeBytes}, '${esc(project)}', '${esc(projectKey)}', ${stringPrefix}'${esc(desc)}', '${esc(agent)}', '${esc(pluginVersionForInsert)}', '${ts}', '${ts}' ` +
+      `WHERE NOT EXISTS (SELECT 1 FROM "${tableName}" WHERE path = '${esc(vpath)}')`;
+    await query(insertSql);
+    const afterInsert = await query(
+      `SELECT summary FROM "${tableName}" WHERE path = '${esc(vpath)}' LIMIT 1`,
+    );
+    if (isMcpDigestSummary(afterInsert[0]?.["summary"])) {
+      return { path: "insert", sql: insertSql, descLength: desc.length, summaryLength: text.length };
+    }
+    return { path: "skip", sql: insertSql, descLength: desc.length, summaryLength: text.length };
+  }
 
   if (existing.length > 0) {
     // FINALIZE-WINS: a finalized row (real summary + non-placeholder
@@ -186,9 +253,9 @@ export async function uploadSummary(query: QueryFn, params: UploadParams): Promi
   // INSERT path: new row, no previous value to preserve — default to ''.
   const pluginVersionForInsert = pluginVersion ?? "";
   const sql =
-    `INSERT INTO "${tableName}" (id, path, filename, summary, summary_embedding, author, mime_type, size_bytes, project, description, agent, plugin_version, creation_date, last_update_date) ` +
+    `INSERT INTO "${tableName}" (id, path, filename, summary, summary_embedding, author, mime_type, size_bytes, project, project_key, description, agent, plugin_version, creation_date, last_update_date) ` +
     `VALUES ('${randomUUID()}', '${esc(vpath)}', '${esc(fname)}', ${stringPrefix}'${esc(text)}', ${embSql}, '${esc(userName)}', 'text/markdown', ` +
-    `${sizeBytes}, '${esc(project)}', ${stringPrefix}'${esc(desc)}', '${esc(agent)}', '${esc(pluginVersionForInsert)}', '${ts}', '${ts}')`;
+    `${sizeBytes}, '${esc(project)}', '${esc(projectKey)}', ${stringPrefix}'${esc(desc)}', '${esc(agent)}', '${esc(pluginVersionForInsert)}', '${ts}', '${ts}')`;
   await query(sql);
   return { path: "insert", sql, descLength: desc.length, summaryLength: text.length };
 }

@@ -480,7 +480,15 @@ describe("recallTopHit — focused semantic query", () => {
     let captured = "";
     await recallTopHit(async (sql) => { captured = sql; return []; }, "t", vec, {});
     expect(captured).not.toContain("project =");
+    expect(captured).not.toContain("project_key");
     expect(captured).not.toContain("path <>");
+  });
+
+  it("scopes to project_key (plus legacy empty keys) when projectKey is set", async () => {
+    let captured = "";
+    await recallTopHit(async (sql) => { captured = sql; return []; }, "t", vec, { projectKey: "abc123def4567890" });
+    expect(captured).toContain("(project_key = 'abc123def4567890' OR project_key = '')");
+    expect(captured).not.toContain("project =");
   });
 
   it("coerces a non-numeric score to 0", async () => {

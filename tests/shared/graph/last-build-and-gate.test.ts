@@ -182,6 +182,15 @@ describe("decideGate — Stop hook auto-build gates", () => {
     expect(d.reason).toMatch(/not in a git repo/);
   });
 
+  it("empty git repo (no HEAD yet) → first build still fires", () => {
+    execSync("git init -q -b main", { cwd: workDir });
+    execSync('git config user.email "test@example.com"', { cwd: workDir });
+    execSync('git config user.name "Test"', { cwd: workDir });
+    const d = decideGate(ctx());
+    expect(d.fire).toBe(true);
+    expect(d.reason).toMatch(/first build/);
+  });
+
   it("new commit with source-file change → fire", async () => {
     const head1 = initGitRepo();
     const baseDir = await repoBaseDir();

@@ -339,6 +339,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
   // not the global one. `collect` is a capture switch and deliberately does not
   // gate reads (see src/dir-config.ts).
   const config = resolveDirConfig(baseConfig, input.cwd ?? process.cwd()).config;
+  const projectKey = deriveProjectKey(input.cwd ?? process.cwd()).key;
 
   const table = process.env["MEMOREE_TABLE"] ?? "memory";
   const sessionsTable = process.env["MEMOREE_SESSIONS_TABLE"] ?? "sessions";
@@ -362,7 +363,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     }
 
     if (remainingPaths.length > 0) {
-      const fetched = await readVirtualPathContentsFn(api, table, sessionsTable, remainingPaths);
+      const fetched = await readVirtualPathContentsFn(api, table, sessionsTable, remainingPaths, projectKey);
       for (const [path, content] of fetched) result.set(path, content);
     }
 
@@ -398,6 +399,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     if (input.tool_name === "Bash") {
       const compiled = await executeCompiledBashCommandFn(api, table, sessionsTable, shellCmd, {
         readVirtualPathContentsFn: async (_api, _memoryTable, _sessionsTable, cachePaths) => readVirtualPathContentsWithCache(cachePaths),
+        projectKey,
       });
       if (compiled !== null) {
         return buildAllowDecision(safeEchoCommand(compiled), `[Memoree compiled] ${shellCmd}`);
@@ -407,7 +409,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
     const grepParams = extractGrepParams(input.tool_name, input.tool_input, shellCmd);
     if (grepParams) {
       logFn(`direct grep: pattern=${grepParams.pattern} path=${grepParams.targetPath}`);
-      const result = await handleGrepDirectFn(api, table, sessionsTable, grepParams);
+      const result = await handleGrepDirectFn(api, table, sessionsTable, grepParams, projectKey);
       if (result !== null) return buildAllowDecision(safeEchoCommand(result), `[Memoree direct] grep ${grepParams.pattern}`);
     }
 
@@ -526,7 +528,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         // falls through to the sandboxed VFS shell (memoree-shell.js) whose
         // readFileBuffer re-attempts and surfaces a real error — preserving
         // the retry instead of short-circuiting it here.
-        content = await readVirtualPathContentFn(api, table, sessionsTable, virtualPath);
+        content = await readVirtualPathContentFn(api, table, sessionsTable, virtualPath, projectKey);
       }
       if (content !== null) {
         if (virtualPath === "/index.md") {
@@ -584,7 +586,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
       logFn(`direct ls: ${dir}`);
       // A backend failure throws here; like the read path, we let it propagate
       // to the outer catch → VFS shell fallback rather than masking it.
-      const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir);
+      const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir, projectKey);
       const entries = new Map<string, { isDir: boolean; size: number }>();
       const prefix = dir === "/" ? "/" : dir + "/";
       for (const row of rows) {
@@ -639,7 +641,7 @@ export async function processPreToolUse(input: PreToolUseInput, deps: ClaudePreT
         const rawPattern = findMatch[2] ?? findMatch[3] ?? findMatch[4] ?? "";
         const namePattern = sqlLike(rawPattern).replace(/\*/g, "%").replace(/\?/g, "_");
         logFn(`direct find: ${dir} -name '${rawPattern}'`);
-        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern);
+        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern, projectKey);
         let result = paths.join("\n") || "";
         if (/\|\s*wc\s+-l\s*$/.test(shellCmd)) result = String(paths.length);
         const capped = capOutputForClaude(result || "(no matches)", { kind: "find" });

@@ -11,6 +11,7 @@
 
 import { serializeFloat4Array } from "../../shell/grep-core.js";
 import { sqlStr } from "../../utils/sql.js";
+import { projectKeyScopeSql } from "../../utils/repo-identity.js";
 import type { RecallHit } from "./recall-format.js";
 import { scoreVectorRows, vectorScanLimit } from "../../storage/vector-search.js";
 
@@ -28,8 +29,13 @@ const SELECT_COLS = "path, author, project, summary, description, last_update_da
 const TIE_BREAK = "last_update_date DESC, path ASC";
 
 export interface RecallQueryOptions {
-  /** Restrict to this project when set (most relevant); omit for org-wide. */
+  /** Restrict to this project basename when set. Prefer `projectKey`. */
   project?: string;
+  /**
+   * Stable git-remote (or abs-cwd) key. When set, recall only sees this
+   * project's summaries plus legacy rows whose `project_key` is empty.
+   */
+  projectKey?: string;
   /** Exclude this exact summary path (e.g. the current session's own row). */
   excludePath?: string;
   /** Top-K rows to fetch before taking the best. */
@@ -56,7 +62,8 @@ export async function recallTopHit(
   // Only session SUMMARIES — the memory table also holds notes/goals/files;
   // a non-summary row must never be injected as "prior work".
   const filters = [`path LIKE '/summaries/%'`, `ARRAY_LENGTH(summary_embedding, 1) > 0`];
-  if (opts.project) filters.push(`project = '${sqlStr(opts.project)}'`);
+  if (opts.projectKey) filters.push(projectKeyScopeSql(opts.projectKey));
+  else if (opts.project) filters.push(`project = '${sqlStr(opts.project)}'`);
   if (opts.excludePath) filters.push(`path <> '${sqlStr(opts.excludePath)}'`);
 
   const sql =
@@ -72,7 +79,8 @@ export async function recallTopHit(
     // Preserve Memoree's server path, but fall back to a bounded candidate
     // scan when the provider rejects `<#>`.
     const localFilters = [`path LIKE '/summaries/%'`, `summary_embedding IS NOT NULL`];
-    if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);
+    if (opts.projectKey) localFilters.push(projectKeyScopeSql(opts.projectKey));
+    else if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);
     if (opts.excludePath) localFilters.push(`path <> '${sqlStr(opts.excludePath)}'`);
     const rows = await query(
       `SELECT ${SELECT_COLS}, summary_embedding FROM "${memoryTable}" ` +

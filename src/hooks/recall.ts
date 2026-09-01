@@ -48,6 +48,7 @@ import {
 } from "./shared/recall-gate.js";
 import { recallTopHit } from "./shared/recall-query.js";
 import { entrypointPassesOnlyCliGate } from "./shared/capture-gate.js";
+import { deriveProjectKey } from "../utils/repo-identity.js";
 import { formatRecallContext, type RecallHit } from "./shared/recall-format.js";
 import { withDeadline } from "./shared/with-deadline.js";
 import { recordRecallEvent } from "./shared/recall-events.js";
@@ -122,13 +123,7 @@ async function findHit(
   // query rather than leaving the socket/retry loop running.
   const q = (sql: string) => api.query(sql, signal) as Promise<Array<Record<string, unknown>>>;
   const opts = {
-    // No project filter: summaries are tagged with the cwd BASENAME at capture
-    // time, so a basename filter both collides (…/foo/api vs …/bar/api) and —
-    // worse — silently drops valid history when the user prompts from a
-    // subdirectory (session tagged `repo`, prompt from `repo/src` → `src`).
-    // Precision instead comes from the `/summaries/%` row filter + the
-    // relevance threshold. Robust project-aware scoping needs a stable project
-    // key on summary rows (capture/schema change) — tracked as a follow-up.
+    projectKey: deriveProjectKey(input.cwd ?? process.cwd()).key,
     excludePath: input.session_id ? `/summaries/${config.userName}/${input.session_id}.md` : undefined,
     limit: 3,
   };

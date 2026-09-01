@@ -32,7 +32,7 @@ import { recallTopHit } from "../shared/recall-query.js";
 import { formatRecallContext } from "../shared/recall-format.js";
 import { withDeadline } from "../shared/with-deadline.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
-import { projectNameFromCwd } from "../../utils/project-name.js";
+import { deriveProjectKey } from "../../utils/repo-identity.js";
 import { normalizeAntigravityInput, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
 import { claimFirstInvocation, lastTurn, readTranscriptTurns, takeNewUserPrompt } from "./transcript.js";
 import { captureAntigravityEvent } from "./capture.js";
@@ -48,6 +48,8 @@ export const ANTIGRAVITY_MEMORY_CONTEXT =
   "run_command or view_file; that path is virtual.\n" +
   "Start with memoree_read path=\"identity.json\", then rules.md and goals.md. " +
   "Past sessions: memoree_read path=\"index.md\", then summaries/<user>/<session>.md.\n" +
+  "Project skills also live under .agents/skills (and .gemini/skills); Memoree " +
+  "writes the canonical copy under .claude/skills and symlinks it there.\n" +
   MEMORY_COMMAND_GUIDANCE;
 
 export function isFirstModelCall(invocationNum: number | undefined): boolean {
@@ -69,7 +71,9 @@ async function recallSnippet(prompt: string, cwd: string): Promise<string> {
         log,
       });
       if (!vec) return null;
-      return recallTopHit(q, config.tableName, vec, { project: projectNameFromCwd(cwd) });
+      return recallTopHit(q, config.tableName, vec, {
+        projectKey: deriveProjectKey(cwd).key,
+      });
     })(), RECALL_BUDGET_MS, null);
     if (!hit || !passesThreshold(hit.score, RECALL_THRESHOLD)) return "";
     return formatRecallContext({ hit, currentUser: config.userName, memoryRoot: config.memoryPath, now: Date.now() });

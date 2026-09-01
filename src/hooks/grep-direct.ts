@@ -312,6 +312,7 @@ export async function handleGrepDirect(
   table: string,
   sessionsTable: string,
   params: GrepParams,
+  projectKey?: string,
 ): Promise<string | null> {
   if (!params.pattern) return null;
 
@@ -344,7 +345,7 @@ export async function handleGrepDirect(
   // grep exit-code 2 + stderr (never a silent "(no matches)"). Swallowing the
   // error here would pre-empt that retry and the honest signal.
   const output = await grepBothTables(
-    api, table, sessionsTable, matchParams, params.targetPath, queryEmbedding,
+    api, table, sessionsTable, matchParams, params.targetPath, queryEmbedding, projectKey,
   );
   const joined = output.join("\n") || "(no matches)";
   return capOutputForClaude(joined, { kind: "grep" });

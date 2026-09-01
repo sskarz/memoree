@@ -21,7 +21,7 @@
  */
 
 import { join, dirname } from "node:path";
-import { deriveProjectKey } from "../../utils/repo-identity.js";
+import { deriveProjectKey, projectKeyScopeSql } from "../../utils/repo-identity.js";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { readStdin } from "../../utils/stdin.js";
@@ -248,6 +248,7 @@ export async function processCodexPreToolUse(
   if (config) {
     const table = process.env["MEMOREE_TABLE"] ?? "memory";
     const sessionsTable = process.env["MEMOREE_SESSIONS_TABLE"] ?? "sessions";
+    const projectKey = deriveProjectKey(input.cwd ?? process.cwd()).key;
     let api: StorageBackend;
     try {
       api = createApi(table, config);
@@ -274,7 +275,7 @@ export async function processCodexPreToolUse(
       }
 
       if (remainingPaths.length > 0) {
-        const fetched = await readVirtualPathContentsFn(api, table, sessionsTable, remainingPaths);
+        const fetched = await readVirtualPathContentsFn(api, table, sessionsTable, remainingPaths, projectKey);
         for (const [path, content] of fetched) result.set(path, content);
       }
 
@@ -310,6 +311,7 @@ export async function processCodexPreToolUse(
 
       const compiled = await executeCompiledBashCommandFn(api, table, sessionsTable, rewritten, {
         readVirtualPathContentsFn: async (_api, _memoryTable, _sessionsTable, cachePaths) => readVirtualPathContentsWithCache(cachePaths),
+        projectKey,
       });
       if (compiled !== null) {
         return buildHandledSuccess(compiled, rewritten, "bash");
@@ -383,11 +385,13 @@ export async function processCodexPreToolUse(
           ? readCachedIndexContentFn(input.session_id)
           : null;
         if (content === null) {
-          content = await readVirtualPathContentFn(api, table, sessionsTable, virtualPath);
+          content = await readVirtualPathContentFn(api, table, sessionsTable, virtualPath, projectKey);
         }
         if (content === null && virtualPath === "/index.md") {
+          const keyScope = projectKeyScopeSql(projectKey);
+          const keyFilter = keyScope ? ` AND ${keyScope}` : "";
           const idxRows = await api.query(
-            `SELECT path, project, description, creation_date FROM "${table}" WHERE path LIKE '/summaries/%' ORDER BY creation_date DESC`
+            `SELECT path, project, description, creation_date FROM "${table}" WHERE path LIKE '/summaries/%'${keyFilter} ORDER BY creation_date DESC`
           );
           content = buildIndexContent(idxRows);
         }
@@ -419,7 +423,7 @@ export async function processCodexPreToolUse(
         const dir = (lsMatch[1] ?? "/").replace(/\/+$/, "") || "/";
         const isLong = /\s-[a-zA-Z]*l/.test(rewritten);
         logFn(`direct ls: ${dir}`);
-        const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir);
+        const rows = await listVirtualPathRowsFn(api, table, sessionsTable, dir, projectKey);
         const entries = new Map<string, { isDir: boolean; size: number }>();
         const prefix = dir === "/" ? "/" : `${dir}/`;
         for (const row of rows) {
@@ -466,7 +470,7 @@ export async function processCodexPreToolUse(
         const rawPattern = findMatch[2] ?? findMatch[3] ?? findMatch[4] ?? "";
         const namePattern = sqlLike(rawPattern).replace(/\*/g, "%").replace(/\?/g, "_");
         logFn(`direct find: ${dir} -name '${rawPattern}'`);
-        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern);
+        const paths = await findVirtualPathsFn(api, table, sessionsTable, dir, namePattern, projectKey);
         let result = paths.join("\n") || "";
         if (/\|\s*wc\s+-l\s*$/.test(rewritten)) result = String(paths.length);
         return buildHandledSuccess(result || "(no matches)", rewritten, "find");
@@ -475,7 +479,7 @@ export async function processCodexPreToolUse(
       const grepParams = parseBashGrep(rewritten);
       if (grepParams) {
         logFn(`direct grep: pattern=${grepParams.pattern} path=${grepParams.targetPath}`);
-        const result = await handleGrepDirectFn(api, table, sessionsTable, grepParams);
+        const result = await handleGrepDirectFn(api, table, sessionsTable, grepParams, projectKey);
         if (result !== null) {
           return buildHandledSuccess(result, rewritten, "grep");
         }

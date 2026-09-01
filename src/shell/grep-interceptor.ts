@@ -132,6 +132,7 @@ export function createGrepCommand(
         pathFilter: buildPathFilterForTargets(targets),
         limit: 100,
         queryEmbedding,
+        projectKey: fs.sessionProjectKey ?? undefined,
       };
       const queryRows = await Promise.race([
         searchMemoreeTables(client, table, sessionsTable ?? "sessions", searchOptions, meta),
@@ -152,6 +153,7 @@ export function createGrepCommand(
           ...buildGrepSearchOptions(matchParams, targets[0] ?? ctx.cwd),
           pathFilter: buildPathFilterForTargets(targets),
           limit: 100,
+          projectKey: fs.sessionProjectKey ?? undefined,
         };
         const lexicalRows = await Promise.race([
           searchMemoreeTables(client, table, sessionsTable ?? "sessions", lexicalOptions, meta),

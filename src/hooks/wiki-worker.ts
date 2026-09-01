@@ -35,6 +35,7 @@ interface WorkerConfig {
   userName: string;
   orgName: string;
   project: string;
+  projectKey?: string;
   agent?: string;
   pluginVersion?: string;
   tmpDir: string;
@@ -340,6 +341,7 @@ async function main(): Promise<void> {
           vpath, fname,
           userName: cfg.userName,
           project: cfg.project,
+          projectKey: cfg.projectKey,
           agent: cfg.agent ?? "claude_code",
           sessionId: cfg.sessionId,
           text,

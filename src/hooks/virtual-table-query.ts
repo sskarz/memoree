@@ -2,6 +2,7 @@ import type { StorageBackend } from "../storage/backend.js";
 import { sqlLike, sqlStr } from "../utils/sql.js";
 import { normalizeContent, emptySessionBodyNotice } from "../shell/grep-core.js";
 import { nullExpression, textExpression } from "../storage/sql-dialect.js";
+import { projectKeyScopeSql } from "../utils/repo-identity.js";
 
 type Row = Record<string, unknown>;
 
@@ -121,6 +122,14 @@ function buildDirFilter(dirs: string[]): string {
   return ` WHERE ${clauses.join(" OR ")}`;
 }
 
+/** Append `project_key = current OR ''` without breaking a missing WHERE. */
+function withProjectKeyFilter(sqlWhere: string, projectKey?: string): string {
+  const scope = projectKeyScopeSql(projectKey);
+  if (!scope) return sqlWhere;
+  if (!sqlWhere) return ` WHERE ${scope}`;
+  return `${sqlWhere} AND ${scope}`;
+}
+
 async function queryUnionRows(
   api: StorageBackend,
   memoryQuery: string,
@@ -152,6 +161,7 @@ export async function readVirtualPathContents(
   memoryTable: string,
   sessionsTable: string,
   virtualPaths: string[],
+  projectKey?: string,
 ): Promise<Map<string, string | null>> {
   const uniquePaths = [...new Set(virtualPaths)];
   const result = new Map<string, string | null>(uniquePaths.map(path => [path, null]));
@@ -161,10 +171,11 @@ export async function readVirtualPathContents(
   const textSummary = textExpression("summary", api.dialect);
   const textMessage = textExpression("message", api.dialect);
   const nullBigint = nullExpression("bigint", api.dialect);
+  const pathFilter = withProjectKeyFilter(` WHERE path IN (${inList})`, projectKey);
   const rows = await queryUnionRows(
     api,
-    `SELECT path, ${textSummary} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}" WHERE path IN (${inList})`,
-    `SELECT path, ${textMessage} AS content, ${nullBigint} AS size_bytes, COALESCE(${textExpression("creation_date", api.dialect)}, '') AS creation_date, 1 AS source_order FROM "${sessionsTable}" WHERE path IN (${inList})`,
+    `SELECT path, ${textSummary} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}"${pathFilter}`,
+    `SELECT path, ${textMessage} AS content, ${nullBigint} AS size_bytes, COALESCE(${textExpression("creation_date", api.dialect)}, '') AS creation_date, 1 AS source_order FROM "${sessionsTable}"${pathFilter}`,
   );
 
   const memoryHits = new Map<string, string>();
@@ -223,14 +234,16 @@ export async function readVirtualPathContents(
     // event — without GROUP BY a single conversation appeared dozens of
     // times in the index.
     const fetchLimit = INDEX_LIMIT_PER_SECTION + 1;
+    const keyScope = projectKeyScopeSql(projectKey);
+    const keyFilter = keyScope ? ` AND ${keyScope}` : "";
     const [summaryRows, sessionRows] = await Promise.all([
       api.query(
         `SELECT path, project, description, creation_date, last_update_date FROM "${memoryTable}" ` +
-        `WHERE path LIKE '/summaries/%' ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
+        `WHERE path LIKE '/summaries/%'${keyFilter} ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
       ).catch(() => [] as Row[]),
       api.query(
         `SELECT path, MAX(description) AS description, MIN(creation_date) AS creation_date, MAX(last_update_date) AS last_update_date ` +
-        `FROM "${sessionsTable}" WHERE path LIKE '/sessions/%' ` +
+        `FROM "${sessionsTable}" WHERE path LIKE '/sessions/%'${keyFilter} ` +
         `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${fetchLimit}`
       ).catch(() => [] as Row[]),
     ]);
@@ -254,9 +267,10 @@ export async function listVirtualPathRowsForDirs(
   memoryTable: string,
   sessionsTable: string,
   dirs: string[],
+  projectKey?: string,
 ): Promise<Map<string, Row[]>> {
   const uniqueDirs = [...new Set(dirs.map(dir => dir.replace(/\/+$/, "") || "/"))];
-  const filter = buildDirFilter(uniqueDirs);
+  const filter = withProjectKeyFilter(buildDirFilter(uniqueDirs), projectKey);
   const nullText = nullExpression("text", api.dialect);
   const rows = await queryUnionRows(
     api,
@@ -289,8 +303,9 @@ export async function readVirtualPathContent(
   memoryTable: string,
   sessionsTable: string,
   virtualPath: string,
+  projectKey?: string,
 ): Promise<string | null> {
-  return (await readVirtualPathContents(api, memoryTable, sessionsTable, [virtualPath])).get(virtualPath) ?? null;
+  return (await readVirtualPathContents(api, memoryTable, sessionsTable, [virtualPath], projectKey)).get(virtualPath) ?? null;
 }
 
 export async function listVirtualPathRows(
@@ -298,8 +313,9 @@ export async function listVirtualPathRows(
   memoryTable: string,
   sessionsTable: string,
   dir: string,
+  projectKey?: string,
 ): Promise<Row[]> {
-  return (await listVirtualPathRowsForDirs(api, memoryTable, sessionsTable, [dir])).get(dir.replace(/\/+$/, "") || "/") ?? [];
+  return (await listVirtualPathRowsForDirs(api, memoryTable, sessionsTable, [dir], projectKey)).get(dir.replace(/\/+$/, "") || "/") ?? [];
 }
 
 export async function findVirtualPaths(
@@ -308,15 +324,20 @@ export async function findVirtualPaths(
   sessionsTable: string,
   dir: string,
   filenamePattern: string,
+  projectKey?: string,
 ): Promise<string[]> {
   const normalizedDir = dir.replace(/\/+$/, "") || "/";
   const likePath = `${sqlLike(normalizedDir === "/" ? "" : normalizedDir)}/%`;
   const nullText = nullExpression("text", api.dialect);
   const nullBigint = nullExpression("bigint", api.dialect);
+  const nameFilter = withProjectKeyFilter(
+    ` WHERE path LIKE '${likePath}' ESCAPE '\\' AND filename LIKE '${filenamePattern}' ESCAPE '\\'`,
+    projectKey,
+  );
   const rows = await queryUnionRows(
     api,
-    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}" WHERE path LIKE '${likePath}' ESCAPE '\\' AND filename LIKE '${filenamePattern}' ESCAPE '\\'`,
-    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 1 AS source_order FROM "${sessionsTable}" WHERE path LIKE '${likePath}' ESCAPE '\\' AND filename LIKE '${filenamePattern}' ESCAPE '\\'`,
+    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 0 AS source_order FROM "${memoryTable}"${nameFilter}`,
+    `SELECT path, ${nullText} AS content, ${nullBigint} AS size_bytes, '' AS creation_date, 1 AS source_order FROM "${sessionsTable}"${nameFilter}`,
   );
 
   return [...new Set(

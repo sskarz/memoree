@@ -279,14 +279,16 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Antigravity install/uninstall + named hooks + MCP | S | V | — | Plugin at `~/.gemini/config/plugins/memoree`; merges `memoree` into `~/.gemini/config/hooks.json` and the legacy `~/.gemini/antigravity-cli/hooks.json` (CLI#49). `memoree install` detects Antigravity only when `~/.gemini/antigravity-cli` or `~/.gemini/antigravity` exists — a Gemini CLI-only `~/.gemini` is skipped. |
 | Antigravity PreInvocation inject + recall | S | V | L | First `invocationNum` 0/1 claims wake lock; `injectSteps`. Hook JSON is parsed without waiting for stdin EOF (`agy -p` keeps the pipe open) |
 | Antigravity PreToolUse steer (never `allow`) | S | V | — | `{ decision: "deny", reason }` on the mount; unrelated tools `{}` |
-| Antigravity capture + Stop wiki (`agy -p`) | S | V | L | `agy -p` loads hooks.json but does not execute command hooks. Unaided capture is MCP tool-call rows (`captureMcpToolCall`); MCP capture skips embedding so a hung daemon cannot delay `tools/call`. PostToolUse skips `memoree_*` / `call_mcp_tool` to avoid duplicate interactive rows. `waitForCapture` requires the UUID in `sessions`. Wiki summary stays best-effort (`requireSummary: false`) |
+| Antigravity capture + Stop wiki (`agy -p`) | S | V | L | `agy -p` loads hooks.json but does not execute command hooks. Unaided capture is MCP tool-call rows (`captureMcpToolCall`); MCP capture skips embedding so a hung daemon cannot delay `tools/call`, then detaches a coalesced summary+embed worker (lock + dirty flag, one row per session path, wiki rows not overwritten) so auto-recall (summaries-only) can see the session. PostToolUse skips `memoree_*` / `call_mcp_tool` to avoid duplicate interactive rows. `waitForCapture` requires the UUID in `sessions`. Wiki summary stays best-effort (`requireSummary: false`) |
 | Antigravity MCP VFS tools | S | V | L | Same sandbox as Claude/Codex. Stdio is official NDJSON (agy). `runtime:validate` drives all 11 MCP tools; unaided `agy` must `call_mcp_tool` read + write + grep |
 | Identity / rules.md / goals.md VFS | S | V | L | |
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |
 | KPI CLI + `kpi/<goal>/<kpi>.md` | S | V | L | |
-| `index.md` / `summaries/` / `sessions/` | S | V | L | |
-| Graph `build` + `history` | S | V | L | |
+| `index.md` / `summaries/` / `sessions/` | S | V | L | Recall, VFS grep, `ls`/`find`, exact-path reads, and index listings scope to `project_key` (git remote SHA or abs path) plus legacy empty keys |
+| Session/summary `project_key` scope | S | — | — | Two remotes named `api` stay isolated; a subdirectory of the same remote shares history |
+| Graph `build` + `history` | S | V | L | `graph build` and SessionEnd `graph-on-stop` refuse a non-git cwd (no filesystem walk). Empty git repos (no HEAD) still build |
+| Graph build git-only (no disk walk) | S | — | — | Non-git temp dir errors without writing a snapshot; tiny git repo still builds. `git ls-files` failure after the worktree check also errors and does not stamp last-build |
 | Graph VFS `query/` + `layers` | S | V | L | Live e2e cats `graph/layers` and `graph/query/store` only |
 | Graph VFS `find`/`show`/`impact`/`neighborhood`/`tour`/`path` | S | V | — | Driven in `runtime:validate`, not unaided live |
 | Graph `init` / `diff` / `pull` / `uninstall` | S | — | — | CLI + git-hook unit tests; not in live harness |
@@ -294,6 +296,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Docs `wiki` / `generate` / `sync` LLM | S | — | dry-run | Live runs `docs wiki --dry-run` only |
 | Skillify status/scope/team CLI | S | V | L | |
 | Skillify mine-local / pull / push / hygiene LLM | S | — | — | Validate sets `MEMOREE_SKILLIFY_WORKER=1` and `MEMOREE_SKILLOPT_DISABLED=1` |
+| Skill fan-out (Codex / Gemini / project) | S | — | — | Canonical write stays `.claude/skills`; symlinks into `~/.agents/skills`, `~/.gemini/skills`, and project `.agents`/`.gemini`. Local write/mine fans out, not only global pull |
 | `memory backfill` | S | — | dry-run | |
 | `memory flush` | S | — | — | |
 | `sessions prune` | S | — | L | |

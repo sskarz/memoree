@@ -57,6 +57,7 @@ export const REQUIRED_ARTIFACT_FILES = [
   "harnesses/codex/bundle/session-end.js",
   "harnesses/antigravity/bundle/pre-invocation.js",
   "harnesses/antigravity/bundle/mcp-server.js",
+  "harnesses/antigravity/bundle/session-summary-worker.js",
   "embeddings/embed-daemon.js",
 ];
 

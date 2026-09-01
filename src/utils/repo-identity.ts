@@ -13,6 +13,7 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { basename, resolve } from "node:path";
 import { realpathSync } from "node:fs";
+import { sqlStr } from "./sql.js";
 
 /**
  * Default port per scheme. If the URL carries `:<defaultPort>` explicitly,
@@ -104,4 +105,15 @@ export function deriveProjectKey(cwd: string): { key: string; project: string } 
 export function canonicalPath(path: string): string {
   const resolvedPath = resolve(path);
   try { return realpathSync.native(resolvedPath); } catch { return resolvedPath; }
+}
+
+/**
+ * SQL fragment that keeps session/summary reads inside the current project
+ * while still showing legacy rows whose `project_key` was never backfilled
+ * (`''`). Returns "" when `projectKey` is omitted so callers can leave
+ * unscoped queries unchanged.
+ */
+export function projectKeyScopeSql(projectKey: string | undefined | null): string {
+  if (!projectKey) return "";
+  return `(project_key = '${sqlStr(projectKey)}' OR project_key = '')`;
 }

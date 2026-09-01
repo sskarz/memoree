@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, chmodSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -181,6 +181,69 @@ describe("runGraphCommand build — end-to-end against a tiny git repo", () => {
     expect(s2.nodes).toEqual(s1.nodes);
     expect(s2.links).toEqual(s1.links);
     expect(s2.graph).toEqual(s1.graph);
+  });
+
+  it("refuses to build from a non-git directory and does not write a snapshot", async () => {
+    writeFileSync(join(workDir, "decoy.ts"), "export const leak = 1;");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit(${code})`);
+    }) as never);
+    try {
+      const { err } = await captureOutput(async () => {
+        try { await runGraphCommand(["build", "--cwd", workDir]); } catch { /* swallow forced exit */ }
+      });
+      expect(err).toMatch(/not a git repository/);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(readdirSync(graphsHome)).toEqual([]);
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it("fails when git ls-files errors and does not write a snapshot", async () => {
+    initTinyGitRepo(workDir, { "src/a.ts": "export const x = 1;" });
+    const bin = join(workDir, "bin");
+    mkdirSync(bin);
+    const realGit = execSync("command -v git", { encoding: "utf8" }).trim();
+    const wrapper = join(bin, "git");
+    writeFileSync(wrapper, `#!/bin/sh
+for a in "$@"; do
+  if [ "$a" = "ls-files" ]; then
+    echo "fatal: Unable to read current index" >&2
+    exit 128
+  fi
+done
+exec ${JSON.stringify(realGit)} "$@"
+`);
+    chmodSync(wrapper, 0o755);
+    const prevPath = process.env.PATH;
+    process.env.PATH = `${bin}:${prevPath ?? ""}`;
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit(${code})`);
+    }) as never);
+    try {
+      const { err } = await captureOutput(async () => {
+        try { await runGraphCommand(["build", "--cwd", workDir]); } catch { /* swallow forced exit */ }
+      });
+      expect(err).toMatch(/git ls-files failed/);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(readdirSync(graphsHome)).toEqual([]);
+    } finally {
+      process.env.PATH = prevPath;
+      exitSpy.mockRestore();
+    }
+  });
+
+  it("builds inside a git worktree that has no commits yet", async () => {
+    execSync("git init -q -b main", { cwd: workDir });
+    mkdirSync(join(workDir, "src"));
+    writeFileSync(join(workDir, "src", "a.ts"), "export function foo() { return 1; }");
+    await captureOutput(() => runGraphCommand(["build", "--cwd", workDir]));
+    expect(readdirSync(graphsHome)).toHaveLength(1);
+    const repoOutDir = join(graphsHome, readdirSync(graphsHome)[0]!);
+    expect(existsSync(join(repoOutDir, "snapshots"))).toBe(true);
+    const snaps = readdirSync(join(repoOutDir, "snapshots"));
+    expect(snaps.length).toBeGreaterThan(0);
   });
 });
 

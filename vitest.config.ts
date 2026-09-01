@@ -65,6 +65,7 @@ export default defineConfig({
         "src/skillify/skillify-worker.ts",
         "src/skillify/spawn-skillify-worker.ts",
         "src/skillify/hygiene-worker.ts",
+        "src/mcp/session-summary-worker.ts",
       ],
       // Per-file thresholds. Each PR that ships new files should append
       // its paths here with 80 / 80 / 80 / 80, so we prevent regressions
@@ -99,10 +100,12 @@ export default defineConfig({
         "src/graph/node-embeddings.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/skillify/hygiene-parser.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/skillify/hygiene.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/skillify/agent-roots.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/skillify/spawn-hygiene-worker.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/vfs-tools.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/server.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/mcp/session-capture.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/mcp/session-summary.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/payload.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/pre-tool-use.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/antigravity/transcript.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

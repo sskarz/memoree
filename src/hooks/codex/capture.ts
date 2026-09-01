@@ -19,6 +19,7 @@ import { resolveCaptureConfig } from "../shared/dir-gate.js";
 import { redactSecrets } from "../shared/redact.js";
 import { createStorageBackend } from "../../storage/factory.js";
 import { projectNameFromCwd } from "../../utils/project-name.js";
+import { deriveProjectKey } from "../../utils/repo-identity.js";
 import { log as _log } from "../../utils/debug.js";
 import { buildSessionPath } from "../../utils/session-path.js";
 import { parseCodexTurnMeta } from "../../notifications/model-usage.js";
@@ -154,6 +155,7 @@ async function main(): Promise<void> {
   log(`writing to ${sessionPath}`);
 
   const projectName = projectNameFromCwd(input.cwd);
+  const projectKey = deriveProjectKey(input.cwd || process.cwd()).key;
   const filename = sessionPath.split("/").pop() ?? "";
   // For JSONB: only escape single quotes for the SQL literal, keep JSON structure intact.
   // sqlStr() would also escape backslashes and strip control chars, corrupting the JSON.
@@ -177,6 +179,7 @@ async function main(): Promise<void> {
     userName: config.userName,
     sizeBytes: Buffer.byteLength(line, "utf-8"),
     projectName,
+    projectKey,
     description: input.hook_event_name ?? "",
     agent: "codex",
     pluginVersion: PLUGIN_VERSION,

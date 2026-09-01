@@ -27,6 +27,7 @@ const params = {
   userName: "u",
   sizeBytes: 42,
   projectName: "proj",
+  projectKey: "proj-key",
   description: "PostToolUse",
   agent: "claude_code",
   pluginVersion: "9.9.9",
@@ -54,6 +55,11 @@ describe("buildDirectSessionInsertSql", () => {
   it("keeps the column prefix isSessionInsertQuery() relies on for retry routing", () => {
     // memoree-api.ts isSessionInsertQuery: ^insert into "..." (id, path, filename, message,
     expect(sql).toMatch(/^INSERT INTO "sessions" \(\s*id, path, filename, message,/);
+  });
+
+  it("writes project_key alongside the human project name", () => {
+    expect(sql).toContain("project, project_key, description");
+    expect(sql).toContain("'proj-key'");
   });
 
   it("casts the JSON payload to jsonb and inlines the embedding literal", () => {

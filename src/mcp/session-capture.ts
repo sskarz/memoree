@@ -19,6 +19,7 @@
 import { captureAntigravityEvent } from "../hooks/antigravity/capture.js";
 import { log as _log } from "../utils/debug.js";
 import type { MemoreeToolResult } from "./vfs-tools.js";
+import { spawnMcpSessionSummaryWorker, type SpawnMcpSessionSummaryInput } from "./session-summary.js";
 
 const log = (msg: string) => _log("mcp-capture", msg);
 
@@ -28,17 +29,24 @@ export function mcpSessionId(env: NodeJS.ProcessEnv = process.env): string {
   return `mcp-${process.pid}`;
 }
 
+export interface CaptureMcpToolCallDeps {
+  /** Override for tests; defaults to spawnMcpSessionSummaryWorker. */
+  spawnSummary?: (input: SpawnMcpSessionSummaryInput) => void;
+}
+
 export async function captureMcpToolCall(
   name: string,
   args: Record<string, unknown>,
   result: MemoreeToolResult,
   env: NodeJS.ProcessEnv = process.env,
+  deps: CaptureMcpToolCallDeps = {},
 ): Promise<void> {
   if (env.MEMOREE_CAPTURE === "false") return;
+  const sessionId = mcpSessionId(env);
   try {
     await captureAntigravityEvent(
       {
-        conversationId: mcpSessionId(env),
+        conversationId: sessionId,
         workspacePaths: [process.cwd()],
       },
       "PostToolUse",
@@ -53,5 +61,13 @@ export async function captureMcpToolCall(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     log(`capture skipped: ${message}`);
+    return;
+  }
+  // Detached: do not await embed/summary. A hung daemon must not delay tools/call.
+  const spawn = deps.spawnSummary ?? spawnMcpSessionSummaryWorker;
+  try {
+    spawn({ sessionId, cwd: process.cwd() });
+  } catch {
+    // best-effort
   }
 }
