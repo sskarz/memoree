@@ -63,7 +63,8 @@ filesystem operation.
 
 Claude Code and Codex intercept `~/.memoree/memory` through host-command rewrite.
 Antigravity cannot rewrite tool input, so memory is an MCP server wrapping the
-same VFS. Default onboarding installs every detected harness. Graph setup,
+same VFS and there is no PreToolUse gate (a deny hook is the only option and
+makes every native tool look blocked). Default onboarding installs every detected harness. Graph setup,
 documentation ingestion, history backfill, and skill mining remain explicit.
 
 ## Repository layout

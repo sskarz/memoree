@@ -33,11 +33,10 @@ function matcherBlock(bundleFile: string, event: string, timeout: number): Recor
   };
 }
 
-/** Named-hook map entry for Memoree (Antigravity `hooks.json` schema). */
+/** Named-hook map entry for Memoree (Antigravity `hooks.json` schema). No PreToolUse: agy cannot rewrite tool input, so a gate can only deny. Memory is MCP; skills + PreInvocation teach that. Native tools stay free. */
 export function buildMemoreeHookBlock(): Record<string, unknown> {
   return {
     PreInvocation: [hookCommand("pre-invocation.js", "PreInvocation", 10)],
-    PreToolUse: [matcherBlock("pre-tool-use.js", "PreToolUse", 10)],
     PostToolUse: [matcherBlock("capture.js", "PostToolUse", 15)],
     Stop: [
       hookCommand("stop.js", "Stop", 30),

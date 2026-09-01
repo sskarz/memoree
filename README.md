@@ -107,9 +107,10 @@ Graph auto-build stays on Stop (SessionEnd is capped at 3s). Standing
 instructions also live in a managed block in `~/.codex/AGENTS.md`.
 plugin-cache-gc is Claude-plugin-cache specific.
 
-**Antigravity:** PreInvocation (first-call inject + recall + setup), PreToolUse
-(steer off the virtual mount; never auto-`allow`; unrelated tools `ask`), PostToolUse capture, Stop
-(capture + wiki + graph). Memory is MCP (`memoree_read`, `memoree_ls`,
+**Antigravity:** PreInvocation (first-call inject + recall + setup), PostToolUse
+capture, Stop (capture + wiki + graph). There is no PreToolUse gate — agy cannot
+rewrite host commands, so denying native tools is hostile UX. Memory is MCP
+(`memoree_read`, `memoree_ls`,
 `memoree_grep`, `memoree_head`, `memoree_tail`, `memoree_wc`, `memoree_find`,
 `memoree_jq`, `memoree_write`, `memoree_mv`, `memoree_rm`) — the same VFS
 commands Claude and Codex intercept. Wiki workers spawn `agy -p` and inherit

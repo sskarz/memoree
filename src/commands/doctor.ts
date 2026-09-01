@@ -101,7 +101,7 @@ export async function runDoctor(overrides: Partial<DoctorDependencies> = {}): Pr
   if (agyBundle) {
     try { deps.execFileSync("agy", ["--version"], { stdio: "ignore" }); results.push(["Antigravity", true, "available"]); }
     catch { results.push(["Antigravity", false, "agy executable not found"]); }
-    const agyHooksOk = ["pre-invocation.js", "pre-tool-use.js", "capture.js", "stop.js", "mcp-server.js", "session-summary-worker.js", "graph-on-stop.js"]
+    const agyHooksOk = ["pre-invocation.js", "capture.js", "stop.js", "mcp-server.js", "session-summary-worker.js", "graph-on-stop.js"]
       .every(file => deps.existsSync(join(agyBundle, file)));
     results.push(["Antigravity hook bundles", agyHooksOk, agyBundle]);
   }
