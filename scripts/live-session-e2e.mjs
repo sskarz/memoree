@@ -7,6 +7,7 @@
  * PreToolUse VFS, Stop, SubagentStop, and SessionEnd fire on their own.
  * Antigravity uses installed `~/.gemini` hooks + MCP (`agy -p` without a
  * `--bare` equivalent). Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
+ * Live turns default to Claude `haiku` and Codex `gpt-5.6-luna` (low effort).
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -17,11 +18,16 @@ import { runtimePaths } from "./runtime-manager.mjs";
 import {
   assert,
   assertAgentResponseContainsIdentifier,
+  claudeLiveCliArgs,
   copyCodexAuthentication,
   createValidationWorkspace,
+  grepRecallPrompt,
   inspectCaptureDatabase,
   lexicalValidationPrompt,
   linkSharedEmbeddingRuntime,
+  liveClaudeModel,
+  liveCodexModel,
+  liveCodexReasoningEffort,
   removeValidationWorkspace,
   run,
   runCodex,
@@ -32,12 +38,13 @@ import {
   antigravityCliAvailable,
   antigravityLivePrompt,
   assertAntigravityLiveUsedMcp,
+  codexExecLiveArgs,
 } from "./runtime-validate.mjs";
 
 function claudeLivePrompt(harborId, ruleId) {
   return [
     "You are in a Memoree live-harness session. Hooks are enabled. Complete EVERY step with tools.",
-    `1. Remember this private fact and include the UUID in your final answer: the harbor kite code is ${harborId}.`,
+    `1. Harbor kite identifier: ${harborId} — include that UUID in your final answer.`,
     "2. Run: cat ~/.memoree/memory/identity.json",
     "3. Run: cat ~/.memoree/memory/index.md",
     "4. Run: cat ~/.memoree/memory/rules.md",
@@ -51,19 +58,11 @@ function claudeLivePrompt(harborId, ruleId) {
 }
 
 function claudeRecallPrompt() {
-  return [
-    "Search Memoree memory for the harbor kite code from earlier work.",
-    "Use the Bash tool: grep -ri \"harbor kite\" ~/.memoree/memory/",
-    "Answer with only the matching UUID. Do not invent an identifier.",
-  ].join("\n");
+  return grepRecallPrompt("harbor kite", "~/.memoree/memory/");
 }
 
 function codexLivePrompt() {
-  return [
-    "Search Memoree memory for the harbor kite code from earlier work.",
-    "Use the shell: grep -ri \"harbor kite\" ~/.memoree/memory/summaries/",
-    "Answer with only the matching UUID. Do not invent an identifier. Do not say none was provided.",
-  ].join("\n");
+  return grepRecallPrompt("harbor kite", "~/.memoree/memory/");
 }
 
 export async function runLiveSessionE2E() {
@@ -171,23 +170,23 @@ export async function runLiveSessionE2E() {
     run(process.execPath, [cli, "memory", "backfill", "--dry-run"], { cwd: repository, env });
     run(process.execPath, [cli, "sessions", "prune"], { cwd: repository, env });
 
+    status(`live models: claude=${liveClaudeModel()} codex=${liveCodexModel()} effort=${liveCodexReasoningEffort()}`);
     status("running a live Claude Code session (hooks enabled, not --bare)");
     const claudeSession = crypto.randomUUID();
+    const claudeLiveAttempts = 3;
     let claudeOut = "";
-    for (let attempt = 0; attempt < 2; attempt++) {
-      claudeOut = run("claude", [
-        "-p",
-        claudeLivePrompt(harborId, ruleId),
+    for (let attempt = 0; attempt < claudeLiveAttempts; attempt++) {
+      claudeOut = run("claude", claudeLiveCliArgs(claudeLivePrompt(harborId, ruleId), [
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
         "--no-session-persistence",
         "--session-id", attempt === 0 ? claudeSession : crypto.randomUUID(),
-      ], { cwd: repository, env, timeout: 300_000 });
+      ]), { cwd: repository, env, timeout: 300_000 });
       try {
         assertAgentResponseContainsIdentifier(claudeOut, harborId, "live Claude Code session");
         break;
       } catch (error) {
-        if (attempt === 1) throw error;
+        if (attempt === claudeLiveAttempts - 1) throw error;
       }
     }
 
@@ -195,35 +194,31 @@ export async function runLiveSessionE2E() {
     await waitForCapture(databasePath, harborId, { requireSummary: true, timeoutMs: 180_000 });
 
     status("running a live Claude recall session");
-    const recallOut = run("claude", [
-      "-p",
-      claudeRecallPrompt(),
+    const recallOut = run("claude", claudeLiveCliArgs(claudeRecallPrompt(), [
       "--permission-mode", "bypassPermissions",
       "--output-format", "text",
       "--no-session-persistence",
-    ], { cwd: repository, env, timeout: 300_000 });
+    ]), { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(recallOut, harborId, "live Claude Code recall");
 
     status("running a live Codex capture session (hooks enabled)");
     // Do not use --ephemeral: that skips session files, so Stop cannot read the
     // transcript and UserPromptSubmit/Stop capture never persist the prompt.
-    const codexCapture = runCodex([
-      "exec",
+    const codexCapture = runCodex(codexExecLiveArgs([
       "--skip-git-repo-check",
       "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       lexicalValidationPrompt(lanternId),
-    ], { cwd: repository, env, timeout: 300_000 });
+    ]), { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(codexCapture, lanternId, "live Codex capture");
 
     status("running a live Codex recall of the Claude harbor-kite fact");
-    const codexRecall = runCodex([
-      "exec",
+    const codexRecall = runCodex(codexExecLiveArgs([
       "--skip-git-repo-check",
       "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       codexLivePrompt(),
-    ], { cwd: repository, env, timeout: 300_000 });
+    ]), { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(codexRecall, harborId, "live Codex harbor-kite recall");
 
     status("waiting for Codex capture/summary");

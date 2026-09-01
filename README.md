@@ -301,6 +301,7 @@ SQLite/config/memory paths (never the operator `~/.memoree`):
 ```sh
 npm run runtime:validate    # promoted (or MEMOREE_RUNTIME_DIR) bundles, driven as Node
 npm run live:e2e            # unaided claude -p / codex exec; no --bare, no --ephemeral
+                            # defaults: Claude haiku, Codex gpt-5.6-luna (low effort)
 ```
 
 Those two are not duplicates. `runtime:validate` is the promote-completion

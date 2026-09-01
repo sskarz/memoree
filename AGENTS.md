@@ -101,7 +101,10 @@ npm run live:e2e
 
 `live:e2e` must use `claude -p` without `--bare` and `codex exec` without
 `--ephemeral`. Codex sandbox must be `-s read-only` so `~/.memoree/memory`
-is not a missing workspace path.
+is not a missing workspace path. Live LLM turns default to Claude `haiku`
+and Codex `gpt-5.6-luna` with `model_reasoning_effort=low` so they do not
+inherit Opus / frontier Codex from the operator profile. Override with
+`MEMOREE_LIVE_CLAUDE_MODEL` and `MEMOREE_LIVE_CODEX_MODEL`.
 
 On a disposable VM whose job is this PR, the complete live proof is:
 
@@ -126,7 +129,7 @@ Live is green only when all of these hold:
 - session events &gt; 0 and summaries under `/summaries/%` &gt; 0
 - at least one **768-element** embedding
 - the Claude identifier appears in sessions **and** is recoverable later
-  (Claude recall + Codex recall / `grep` of `~/.memoree/memory/summaries/`)
+  (Claude recall + Codex `grep` of `~/.memoree/memory/`)
 - `runtime:validate` structured VFS: rule/goal/KPI edits persist; unsafe
   `rm -rf` on the mount is denied
 - `live:e2e` final line reports event and summary counts; on failure the
@@ -242,7 +245,9 @@ are generated and must not be edited by hand. Do not add a fourth harness.
 - `npm test` runs the full source and built-artifact suite.
 - `npm run live:e2e` runs unaided Claude Code + Codex sessions against an
   isolated DB (needs promoted runtime bundles, authenticated CLIs). Antigravity
-  unaided `agy` is skipped when the CLI is missing or not signed in.
+  unaided `agy` is skipped when the CLI is missing or not signed in. Live turns
+  use Claude `haiku` and Codex `gpt-5.6-luna` unless `MEMOREE_LIVE_CLAUDE_MODEL`
+  / `MEMOREE_LIVE_CODEX_MODEL` override them.
 - `npm run runtime:validate` is the promote-completion live gate (needs
   promoted or `MEMOREE_RUNTIME_DIR` bundles).
 - `npx vitest run tests/shared/atomic-write.test.ts` targets one test file.

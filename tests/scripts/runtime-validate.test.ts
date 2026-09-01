@@ -8,6 +8,7 @@ import {
   assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
   classifyAgentCommandError,
+  claudeLiveCliArgs,
   copyCodexAuthentication,
   createValidationWorkspace,
   hookBodyContains,
@@ -17,6 +18,14 @@ import {
   lexicalValidationPrompt,
   claudeLexicalRecallPrompt,
   CLAUDE_LEXICAL_RECALL_ATTEMPTS,
+  CODEX_SEMANTIC_RECALL_ATTEMPTS,
+  DEFAULT_LIVE_CLAUDE_MODEL,
+  DEFAULT_LIVE_CODEX_MODEL,
+  DEFAULT_LIVE_CODEX_REASONING_EFFORT,
+  liveClaudeModel,
+  liveCodexModel,
+  liveCodexReasoningEffort,
+  codexExecLiveArgs,
   codexSemanticRecallPrompt,
   skipLiveCodexRequested,
   skipLiveAntigravityRequested,
@@ -163,6 +172,7 @@ describe("runtime validation lexical marker", () => {
     const prompt = lexicalValidationPrompt(identifier);
     expect(redactSecrets(prompt)).toBe(prompt);
     expect(prompt).toContain(identifier);
+    expect(redactSecrets(`${prompt}.`)).toContain(identifier);
   });
 
   it("guards against the secret-like token label used by the failed validator", () => {
@@ -173,12 +183,34 @@ describe("runtime validation lexical marker", () => {
 });
 
 describe("runtime validation Codex semantic recall prompt", () => {
-  it("tells Codex to grep Memoree summaries instead of answering from the user message", () => {
+  it("tells Codex to grep the whole Memoree mount instead of answering from the user message", () => {
     const prompt = codexSemanticRecallPrompt();
     expect(prompt).toContain("grep -ri");
-    expect(prompt).toContain("~/.memoree/memory/summaries/");
+    expect(prompt).toContain('grep -ri "observatory lantern" ~/.memoree/memory/');
+    expect(prompt).not.toContain("summaries/");
     expect(prompt).toContain("observatory lantern");
+    expect(prompt).toContain("NONE");
+    expect(prompt).toMatch(/do not generate a uuid/i);
+    expect(prompt).not.toMatch(/do not say none/i);
     expect(prompt).not.toMatch(/do not (read files|use tools)/i);
+  });
+
+  it("runs cheap Codex semantic recall with unaided-e2e hooks, not --ephemeral", () => {
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    const recallBlock = source.slice(
+      source.indexOf("checking semantic recall through Codex"),
+      source.indexOf("running an authenticated Codex capture turn"),
+    );
+    expect(recallBlock).toContain("--dangerously-bypass-hook-trust");
+    expect(recallBlock).toContain("codexSemanticRecallPrompt(");
+    expect(recallBlock).not.toMatch(/["']--ephemeral["']/);
+  });
+
+  it("retries cheap-model Codex semantic recall", () => {
+    expect(CODEX_SEMANTIC_RECALL_ATTEMPTS).toBe(5);
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    expect(source).toContain("CODEX_SEMANTIC_RECALL_ATTEMPTS");
+    expect(source).toContain("codexSemanticRecallPrompt(");
   });
 });
 
@@ -260,6 +292,7 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("wc must be a count, not the file body");
     expect(source).toContain("jq .userName must not dump the rest of identity.json");
     expect(source).toContain("graph/query/store");
+    expect(source).toMatch(/retryHookUntilContains\([\s\S]*?Codex graph query\/store/);
     expect(source).toContain("graph/show/persistGraph");
     expect(source).toContain("graph/impact/writeSnapshot");
     expect(source).toContain("session-start.js");
@@ -278,6 +311,7 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("skillify");
     expect(source).toContain("embeddings");
     expect(source).toContain("\"graph\", \"history\"");
+    expect(source).not.toContain("private test fact");
     expect(source).not.toMatch(/mkdtempSync\(join\(tmpdir\(\)/);
   });
 });
@@ -332,6 +366,54 @@ describe("runtime validation skip-live-antigravity", () => {
     ].join("\n"));
     expect(() => assertAntigravityLiveUsedMcp(home, "used tools")).not.toThrow();
     expect(() => assertAntigravityLiveUsedMcp(home, "I do not have access to the `memoree_read` tools")).toThrow(/did not receive Memoree MCP tools/);
+  });
+});
+
+describe("runtime validation live models", () => {
+  it("defaults Claude to haiku and Codex to gpt-5.6-luna with low effort", () => {
+    expect(DEFAULT_LIVE_CLAUDE_MODEL).toBe("haiku");
+    expect(DEFAULT_LIVE_CODEX_MODEL).toBe("gpt-5.6-luna");
+    expect(DEFAULT_LIVE_CODEX_REASONING_EFFORT).toBe("low");
+    expect(liveClaudeModel({})).toBe("haiku");
+    expect(liveCodexModel({})).toBe("gpt-5.6-luna");
+    expect(liveCodexReasoningEffort({})).toBe("low");
+  });
+
+  it("honors MEMOREE_LIVE_* overrides and ignores blank values", () => {
+    expect(liveClaudeModel({ MEMOREE_LIVE_CLAUDE_MODEL: "opus" })).toBe("opus");
+    expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "gpt-5.5" })).toBe("gpt-5.5");
+    expect(liveCodexReasoningEffort({ MEMOREE_LIVE_CODEX_REASONING_EFFORT: "medium" })).toBe("medium");
+    expect(liveClaudeModel({ MEMOREE_LIVE_CLAUDE_MODEL: "  " })).toBe("haiku");
+    expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "" })).toBe("gpt-5.6-luna");
+  });
+
+  it("builds claude -p --model and codex exec -m flags", () => {
+    expect(claudeLiveCliArgs("PROMPT", ["--bare"], {})).toEqual([
+      "-p", "PROMPT", "--model", "haiku", "--bare",
+    ]);
+    expect(claudeLiveCliArgs("PROMPT", ["--bare"], { MEMOREE_LIVE_CLAUDE_MODEL: "sonnet" })).toEqual([
+      "-p", "PROMPT", "--model", "sonnet", "--bare",
+    ]);
+    expect(codexExecLiveArgs(["--ephemeral", "hi"], {})).toEqual([
+      "exec",
+      "-m",
+      "gpt-5.6-luna",
+      "-c",
+      'model_reasoning_effort="low"',
+      "--ephemeral",
+      "hi",
+    ]);
+  });
+
+  it("pins every live Claude and Codex CLI invocation to those helpers", () => {
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    const claudeCalls = source.match(/run\("claude"/g) ?? [];
+    const pinnedClaude = source.match(/run\("claude",\s*claudeLiveCliArgs\(/g) ?? [];
+    expect(claudeCalls.length).toBeGreaterThan(0);
+    expect(pinnedClaude).toHaveLength(claudeCalls.length);
+    expect(source.match(/runCodex\(\[/)).toBeNull();
+    expect(source).toContain("codexExecLiveArgs(");
+    expect(source).toContain("live models:");
   });
 });
 

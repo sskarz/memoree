@@ -24,6 +24,9 @@ scripts already set these; copy them if you add a harness:
 | `MEMOREE_GRAPHS_HOME` | throwaway graph snapshots |
 | `HOME` / `CODEX_HOME` | isolated profiles (Codex hooks + auth copy) |
 | `MEMOREE_VALIDATION_CLAUDE_HOME` | real home so Claude auth and wiki workers still work |
+| `MEMOREE_LIVE_CLAUDE_MODEL` | optional; default `haiku` for live `claude -p` |
+| `MEMOREE_LIVE_CODEX_MODEL` | optional; default `gpt-5.6-luna` for live `codex exec` |
+| `MEMOREE_LIVE_CODEX_REASONING_EFFORT` | optional; default `low` |
 
 `recall-events.jsonl` currently writes under `homedir()` / `.memoree`, not
 `MEMOREE_STATE_DIR`. Live e2e therefore uses an isolated `HOME` so telemetry
@@ -207,7 +210,8 @@ Assert all of:
 - at least one 768-element embedding on a session or summary row
 - the Claude observatory-lantern UUID appears in sessions **or** summaries
 - unless `--skip-live-codex`, Codex repeats its lexical UUID and greps the
-  Claude fact from `~/.memoree/memory/summaries/`
+  Claude observatory-lantern fact from `~/.memoree/memory/` (sessions plus
+  summaries; wiki may paraphrase the lantern sentence)
 - structured VFS rule/goal/KPI edits persisted with the expected owner/status
 - missing VFS paths fail as normal commands; unsafe `rm -rf` on the mount is
   denied (hook status 2)
@@ -222,8 +226,9 @@ Live session e2e passed: N events, M summaries, unaided Claude/Codex hooks, …
 
 with N &gt; 0 and M &gt; 0. Also:
 
-- Claude ran **without** `--bare`
-- Codex ran **without** `--ephemeral` and with `-s read-only`
+- Claude ran **without** `--bare` and with `--model haiku` (or `MEMOREE_LIVE_CLAUDE_MODEL`)
+- Codex ran **without** `--ephemeral`, with `-s read-only`, `-m gpt-5.6-luna`
+  (or `MEMOREE_LIVE_CODEX_MODEL`), and `model_reasoning_effort=low`
 - harbor-kite UUID in the Claude answer, later Claude recall, and Codex grep
 - lantern UUID captured from Codex
 - wiki/session reflection produced summaries (not only session rows)
@@ -297,6 +302,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
 | npm publish from `main` (OIDC trusted publisher) | S | — | — | `publish.yml` uses Node 24, environment `memoree github actions`, no `registry-url` / `NODE_AUTH_TOKEN`. `release-from-main.mjs` strips classic tokens. Users upgrade with `npx -y @sskarz/memoree install` |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
+| Live Claude/Codex model pin (haiku / gpt-5.6-luna) | S | — | — | `runtime:validate` + `live:e2e` pass `--model haiku` / `-m gpt-5.6-luna` + low effort. Cheap Codex recall greps `~/.memoree/memory/` (not summaries-only). Override `MEMOREE_LIVE_CLAUDE_MODEL` / `MEMOREE_LIVE_CODEX_MODEL` |
 
 ## Why each sandboxed command exists
 

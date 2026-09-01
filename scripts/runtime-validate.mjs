@@ -79,7 +79,7 @@ export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
 }
 
 export function lexicalValidationPrompt(identifier) {
-  return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
+  return `Lexical fallback marker identifier: ${identifier}`;
 }
 
 export const CLAUDE_LEXICAL_RECALL_ATTEMPTS = 3;
@@ -92,12 +92,24 @@ export function claudeLexicalRecallPrompt(identifier) {
   ].join(" ");
 }
 
-export function codexSemanticRecallPrompt() {
+/**
+ * Cheap-model recall: copy a UUID from grep stdout. Do not forbid "none" —
+ * that pushed gpt-5.6-luna to invent an identifier when grep was empty.
+ *
+ * Search the whole mount, not summaries/ only. Wiki summaries may paraphrase
+ * the lantern sentence while sessions still contain the captured fact.
+ */
+export function grepRecallPrompt(needle, path = "~/.memoree/memory/") {
   return [
-    "Search Memoree memory for the unusual observatory lantern and its exact identifier.",
-    "Use the shell: grep -ri \"observatory lantern\" ~/.memoree/memory/summaries/",
-    "Answer with only the matching UUID. Do not invent an identifier. Do not say none was provided.",
+    `Run this exact shell command: grep -ri ${JSON.stringify(needle)} ${path}`,
+    "Copy the UUID from that command's stdout into your final answer.",
+    "If stdout has no UUID, reply NONE.",
+    "Do not generate a UUID. Do not guess.",
   ].join("\n");
+}
+
+export function codexSemanticRecallPrompt() {
+  return grepRecallPrompt("observatory lantern", "~/.memoree/memory/");
 }
 
 export function copyCodexAuthentication(realHome, isolatedCodexHome) {
@@ -300,6 +312,45 @@ export function callMemoreeMcpTool(serverPath, name, args, options) {
     text,
     isError: reply?.result?.isError === true,
   };
+}
+
+/** Claude Code alias for live gates. Wiki workers already use this. */
+export const DEFAULT_LIVE_CLAUDE_MODEL = "haiku";
+/**
+ * OpenAI Codex CLI slug for GPT-5.6 Luna (cheap tier). Same id as the API
+ * model; not a Cursor-only name. Override if the slug moves.
+ */
+export const DEFAULT_LIVE_CODEX_MODEL = "gpt-5.6-luna";
+export const DEFAULT_LIVE_CODEX_REASONING_EFFORT = "low";
+export const CODEX_SEMANTIC_RECALL_ATTEMPTS = 5;
+
+export function liveClaudeModel(env = process.env) {
+  return env.MEMOREE_LIVE_CLAUDE_MODEL?.trim() || DEFAULT_LIVE_CLAUDE_MODEL;
+}
+
+export function liveCodexModel(env = process.env) {
+  return env.MEMOREE_LIVE_CODEX_MODEL?.trim() || DEFAULT_LIVE_CODEX_MODEL;
+}
+
+export function liveCodexReasoningEffort(env = process.env) {
+  return env.MEMOREE_LIVE_CODEX_REASONING_EFFORT?.trim() || DEFAULT_LIVE_CODEX_REASONING_EFFORT;
+}
+
+/** `claude -p <prompt> --model haiku …` so live turns do not inherit Opus. */
+export function claudeLiveCliArgs(prompt, extra = [], env = process.env) {
+  return ["-p", prompt, "--model", liveClaudeModel(env), ...extra];
+}
+
+/** `codex exec -m gpt-5.6-luna -c model_reasoning_effort="low" …`. */
+export function codexExecLiveArgs(rest = [], env = process.env) {
+  return [
+    "exec",
+    "-m",
+    liveCodexModel(env),
+    "-c",
+    `model_reasoning_effort="${liveCodexReasoningEffort(env)}"`,
+    ...rest,
+  ];
 }
 
 export function hookUpdatedInput(stdout) {
@@ -753,16 +804,22 @@ export async function validateRuntime(options = {}) {
 
     status("checking graph query/ through Codex and Claude hooks");
     const claudePreTool = join(claudeBundle, "pre-tool-use.js");
-    const queryStoreCodex = runHookResult(codexPreTool, {
-      ...hookBase,
-      tool_input: { command: "cat ~/.memoree/memory/graph/query/store" },
-    }, vfsHookOptions);
-    assertHookContains(queryStoreCodex, "persistGraph", "Codex graph query/store");
-    const queryPersistCodex = runHookResult(codexPreTool, {
-      ...hookBase,
-      tool_input: { command: "cat ~/.memoree/memory/graph/query/persist" },
-    }, vfsHookOptions);
-    assertHookContains(queryPersistCodex, "persistGraph", "Codex graph query/persist");
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/query/store" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph query/store",
+    );
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/query/persist" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph query/persist",
+    );
     const lexicalFindStore = runHookResult(codexPreTool, {
       ...hookBase,
       tool_input: { command: "cat ~/.memoree/memory/graph/find/store" },
@@ -1083,15 +1140,15 @@ export async function validateRuntime(options = {}) {
       hook_event_name: "Stop",
     }, { cwd: repository, env: { ...env, MEMOREE_GRAPH_TICK_INTERVAL_MS: "0" } }), "Antigravity graph-on-stop");
 
+    status(`live models: claude=${liveClaudeModel()} codex=${liveCodexModel()} effort=${liveCodexReasoningEffort()}`);
     const claudeSession = crypto.randomUUID();
-    const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
+    const claudePrompt = semanticFact;
     status("running an authenticated Claude Code capture turn");
     let claudeResponse = "";
     /** @type {unknown} */
     let captureTurnError = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      claudeResponse = run("claude", [
-        "-p", claudePrompt,
+    for (let attempt = 0; attempt < 5; attempt++) {
+      claudeResponse = run("claude", claudeLiveCliArgs(claudePrompt, [
         "--bare",
         "--safe-mode",
         "--tools", "",
@@ -1099,7 +1156,7 @@ export async function validateRuntime(options = {}) {
         "--output-format", "text",
         "--no-session-persistence",
         "--session-id", attempt === 0 ? claudeSession : crypto.randomUUID(),
-      ], { cwd: repository, env: claudeEnv });
+      ]), { cwd: repository, env: claudeEnv });
       try {
         assertAgentResponseContainsIdentifier(
           claudeResponse,
@@ -1341,14 +1398,13 @@ export async function validateRuntime(options = {}) {
         "Use the shell to run: cat ~/.memoree/memory/identity.json",
         `After that command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
       ].join("\n");
-      const structuredResponse = runCodex([
-        "exec",
+      const structuredResponse = runCodex(codexExecLiveArgs([
         "--skip-git-repo-check",
         "--ephemeral",
         "--ignore-user-config",
         "-s", "read-only",
         structuredPrompt,
-      ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
+      ]), { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
       assertAgentResponseContainsIdentifier(
         structuredResponse,
         structuredMarker,
@@ -1359,14 +1415,13 @@ export async function validateRuntime(options = {}) {
       let semanticRecall = "";
       /** @type {unknown} */
       let semanticRecallError = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        semanticRecall = runCodex([
-          "exec",
+      for (let attempt = 0; attempt < CODEX_SEMANTIC_RECALL_ATTEMPTS; attempt++) {
+        semanticRecall = runCodex(codexExecLiveArgs([
           "--skip-git-repo-check",
-          "--ephemeral",
+          "--dangerously-bypass-hook-trust",
           "-s", "read-only",
           codexSemanticRecallPrompt(),
-        ], { cwd: repository, env: recallEnv });
+        ]), { cwd: repository, env: recallEnv });
         try {
           assertAgentResponseContainsIdentifier(
             semanticRecall,
@@ -1387,14 +1442,13 @@ export async function validateRuntime(options = {}) {
       // UUID labeled as an identifier is unique while remaining non-secret.
       const codexPrompt = lexicalValidationPrompt(lexicalIdentifier);
       status("running an authenticated Codex capture turn with embeddings disabled");
-      const codexResponse = runCodex([
-        "exec",
+      const codexResponse = runCodex(codexExecLiveArgs([
         "--skip-git-repo-check",
         "--ephemeral",
         "--ignore-user-config",
         "-s", "read-only",
         codexPrompt,
-      ], { cwd: repository, env: lexicalEnv });
+      ]), { cwd: repository, env: lexicalEnv });
       assertAgentResponseContainsIdentifier(
         codexResponse,
         lexicalIdentifier,
@@ -1473,15 +1527,16 @@ export async function validateRuntime(options = {}) {
       /** @type {unknown} */
       let lexicalRecallError = null;
       for (let attempt = 0; attempt < CLAUDE_LEXICAL_RECALL_ATTEMPTS; attempt++) {
-        lexicalRecall = run("claude", [
-          "-p",
+        lexicalRecall = run("claude", claudeLiveCliArgs(
           claudeLexicalRecallPrompt(lexicalIdentifier),
-          "--append-system-prompt",
-          "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
-          "--settings", claudeSettings,
-          "--output-format", "text",
-          "--no-session-persistence",
-        ], {
+          [
+            "--append-system-prompt",
+            "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
+            "--settings", claudeSettings,
+            "--output-format", "text",
+            "--no-session-persistence",
+          ],
+        ), {
           cwd: repository,
           env: authenticatedClaudeEnvironment(
             { ...lexicalEnv, MEMOREE_CAPTURE: "false" },
