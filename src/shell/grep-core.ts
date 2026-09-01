@@ -19,6 +19,7 @@ import { sqlStr, sqlLike, sqlIdent } from "../utils/sql.js";
 import { scoreVectorRows, vectorScanLimit } from "../storage/vector-search.js";
 import type { StorageDialect } from "../storage/schema.js";
 import { likeOperator, textExpression } from "../storage/sql-dialect.js";
+import { projectKeyScopeSql } from "../utils/repo-identity.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,11 @@ export interface SearchOptions {
   limit?: number;
   /** Scope docs search to one project (legacy '' rows always included). */
   project?: string;
+  /**
+   * Scope session/summary search to this git-remote (or abs-cwd) key.
+   * Legacy rows with empty `project_key` stay visible. Omit for unscoped.
+   */
+  projectKey?: string;
   /**
    * If set, switches to semantic (cosine) search via Memoree's `<#>` operator
    * against `summary_embedding` / `message_embedding` FLOAT4[] columns. When
@@ -321,8 +327,10 @@ export async function searchMemoreeTables(
    */
   meta?: { truncated: boolean },
 ): Promise<ContentRow[]> {
-  const { pathFilter, contentScanOnly, likeOp, escapedPattern, prefilterPattern, prefilterPatterns, queryEmbedding, multiWordPatterns } = opts;
+  const { contentScanOnly, likeOp, escapedPattern, prefilterPattern, prefilterPatterns, queryEmbedding, multiWordPatterns } = opts;
   const limit = opts.limit ?? 100;
+  const keyScope = projectKeyScopeSql(opts.projectKey);
+  const pathFilter = `${opts.pathFilter}${keyScope ? ` AND ${keyScope}` : ""}`;
 
   // SQLite and vanilla PostgreSQL have no vector operator. Query each source
   // independently (also avoiding SQLite's compound-select limitations), then
@@ -813,11 +821,13 @@ export async function grepBothTables(
   params: GrepMatchParams,
   targetPath: string,
   queryEmbedding?: number[] | null,
+  projectKey?: string,
 ): Promise<string[]> {
   const meta = { truncated: false };
   const rows = await searchMemoreeTables(api, memoryTable, sessionsTable, {
     ...buildGrepSearchOptions(params, targetPath),
     queryEmbedding,
+    projectKey,
   }, meta);
   // Defensive path dedup — memory and sessions tables use disjoint path
   // prefixes in every schema we ship (/summaries/… vs /sessions/…), so the

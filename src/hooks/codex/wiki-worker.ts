@@ -32,6 +32,7 @@ interface WorkerConfig {
   sessionId: string;
   userName: string;
   project: string;
+  projectKey?: string;
   pluginVersion?: string;
   tmpDir: string;
   codexBin: string;
@@ -258,6 +259,7 @@ async function main(): Promise<void> {
           vpath, fname,
           userName: cfg.userName,
           project: cfg.project,
+          projectKey: cfg.projectKey,
           agent: "codex",
           sessionId: cfg.sessionId,
           text,

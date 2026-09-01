@@ -74,6 +74,15 @@ describe("schema definitions", () => {
     expect(msg?.sql).not.toMatch(/NOT NULL/);
   });
 
+  it("MEMORY_COLUMNS and SESSIONS_COLUMNS include project_key for per-repo scoping", () => {
+    expect(MEMORY_COLUMNS.map(c => c.name)).toContain("project_key");
+    expect(SESSIONS_COLUMNS.map(c => c.name)).toContain("project_key");
+    const mem = MEMORY_COLUMNS.find(c => c.name === "project_key");
+    const sess = SESSIONS_COLUMNS.find(c => c.name === "project_key");
+    expect(mem?.sql).toContain("DEFAULT ''");
+    expect(sess?.sql).toContain("DEFAULT ''");
+  });
+
   it("RULES_COLUMNS encodes the version-bump pattern (BIGINT version, default 1)", () => {
     const version = RULES_COLUMNS.find(c => c.name === "version");
     expect(version?.sql).toContain("BIGINT");

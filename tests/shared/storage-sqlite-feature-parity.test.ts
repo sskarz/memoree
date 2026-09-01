@@ -54,6 +54,7 @@ describe("SQLite feature parity smoke", () => {
       userName: "alice",
       sizeBytes: message.length,
       projectName: "demo",
+      projectKey: "demo-key",
       description: "Prompt",
       agent: "codex",
       pluginVersion: "test",

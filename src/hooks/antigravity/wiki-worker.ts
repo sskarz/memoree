@@ -32,6 +32,7 @@ interface WorkerConfig {
   sessionId: string;
   userName: string;
   project: string;
+  projectKey?: string;
   pluginVersion?: string;
   tmpDir: string;
   agyBin: string;
@@ -251,6 +252,7 @@ async function main(): Promise<void> {
           vpath, fname,
           userName: cfg.userName,
           project: cfg.project,
+          projectKey: cfg.projectKey,
           agent: "antigravity",
           sessionId: cfg.sessionId,
           text,

@@ -42,6 +42,7 @@
 
 import { sqlStr } from "../../utils/sql.js";
 import { projectNameFromCwd } from "../../utils/project-name.js";
+import { deriveProjectKey } from "../../utils/repo-identity.js";
 import type { StorageDialect } from "../../storage/schema.js";
 import { escapedStringPrefix } from "../../storage/sql-dialect.js";
 
@@ -95,6 +96,7 @@ export function buildPlaceholderInsertSql(params: PlaceholderParams): { sql: str
   const uuid = params.uuid ? params.uuid() : crypto.randomUUID();
   const summaryPath = `/summaries/${userName}/${sessionId}.md`;
   const projectName = projectNameFromCwd(cwd);
+  const projectKey = deriveProjectKey(cwd || ".").key;
   const sessionSource = `/sessions/${userName}/${userName}_${orgName}_${workspaceId}_${sessionId}.jsonl`;
   const content = [
     `# Session ${sessionId}`,
@@ -113,9 +115,9 @@ export function buildPlaceholderInsertSql(params: PlaceholderParams): { sql: str
   // shadowing finalized summaries. `WHERE NOT EXISTS` keys on `path` only — any
   // existing row (placeholder or finalized) suppresses the write.
   const sql =
-    `INSERT INTO "${table}" (id, path, filename, summary, author, mime_type, size_bytes, project, description, agent, plugin_version, creation_date, last_update_date) ` +
+    `INSERT INTO "${table}" (id, path, filename, summary, author, mime_type, size_bytes, project, project_key, description, agent, plugin_version, creation_date, last_update_date) ` +
     `SELECT '${uuid}', '${sqlStr(summaryPath)}', '${sqlStr(filename)}', ${stringPrefix}'${sqlStr(content)}', '${sqlStr(userName)}', 'text/markdown', ` +
-    `${sizeBytes}, '${sqlStr(projectName)}', '${PLACEHOLDER_DESCRIPTION}', '${sqlStr(agent)}', '${sqlStr(pluginVersion)}', '${now}', '${now}' ` +
+    `${sizeBytes}, '${sqlStr(projectName)}', '${sqlStr(projectKey)}', '${PLACEHOLDER_DESCRIPTION}', '${sqlStr(agent)}', '${sqlStr(pluginVersion)}', '${now}', '${now}' ` +
     `WHERE NOT EXISTS (SELECT 1 FROM "${table}" WHERE path = '${sqlStr(summaryPath)}')`;
 
   return { sql, summaryPath };

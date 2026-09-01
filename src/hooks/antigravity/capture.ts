@@ -10,6 +10,7 @@ import { resolveCaptureConfig } from "../shared/dir-gate.js";
 import { redactSecrets } from "../shared/redact.js";
 import { createStorageBackend } from "../../storage/factory.js";
 import { projectNameFromCwd } from "../../utils/project-name.js";
+import { deriveProjectKey } from "../../utils/repo-identity.js";
 import { log as _log } from "../../utils/debug.js";
 import { buildSessionPath } from "../../utils/session-path.js";
 import { EmbedClient } from "../../embeddings/client.js";
@@ -96,6 +97,7 @@ export async function captureAntigravityEvent(
     userName: config.userName,
     sizeBytes: Buffer.byteLength(line, "utf-8"),
     projectName: projectNameFromCwd(cwd),
+    projectKey: deriveProjectKey(cwd || process.cwd()).key,
     description: eventName,
     agent: "antigravity",
     pluginVersion: PLUGIN_VERSION,

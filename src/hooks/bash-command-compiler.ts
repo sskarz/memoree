@@ -408,6 +408,7 @@ interface ExecuteCompiledBashDeps {
   listVirtualPathRowsForDirsFn?: typeof listVirtualPathRowsForDirs;
   findVirtualPathsFn?: typeof findVirtualPaths;
   handleGrepDirectFn?: typeof handleGrepDirect;
+  projectKey?: string;
 }
 
 export async function executeCompiledBashCommand(
@@ -422,6 +423,7 @@ export async function executeCompiledBashCommand(
     listVirtualPathRowsForDirsFn = listVirtualPathRowsForDirs,
     findVirtualPathsFn = findVirtualPaths,
     handleGrepDirectFn = handleGrepDirect,
+    projectKey,
   } = deps;
 
   const plan = parseCompiledBashCommand(cmd);
@@ -431,7 +433,7 @@ export async function executeCompiledBashCommand(
   const listDirs = [...new Set(plan.flatMap((segment) => segment.kind === "ls" ? segment.dirs.map(dir => dir.replace(/\/+$/, "") || "/") : []))];
 
   const contentMap = readPaths.length > 0
-    ? await readVirtualPathContentsFn(api, memoryTable, sessionsTable, readPaths)
+    ? await readVirtualPathContentsFn(api, memoryTable, sessionsTable, readPaths, projectKey)
     : new Map<string, string | null>();
   const dirRowsMap = listDirs.length > 0
     ? await listVirtualPathRowsForDirsFn(api, memoryTable, sessionsTable, listDirs)
@@ -495,7 +497,7 @@ export async function executeCompiledBashCommand(
         outputs.push("(no matches)");
         continue;
       }
-      const candidateContents = await readVirtualPathContentsFn(api, memoryTable, sessionsTable, candidatePaths);
+      const candidateContents = await readVirtualPathContentsFn(api, memoryTable, sessionsTable, candidatePaths, projectKey);
       const matched = refineGrepMatches(
         candidatePaths.flatMap((path) => {
           const content = candidateContents.get(path);
@@ -510,7 +512,7 @@ export async function executeCompiledBashCommand(
     }
 
     if (segment.kind === "grep") {
-      const result = await handleGrepDirectFn(api, memoryTable, sessionsTable, segment.params);
+      const result = await handleGrepDirectFn(api, memoryTable, sessionsTable, segment.params, projectKey);
       if (result === null) return null;
       if (segment.lineLimit > 0) {
         outputs.push(result.split("\n").slice(0, segment.lineLimit).join("\n"));

@@ -68,6 +68,7 @@ async function main(): Promise<void> {
     kpisTable,
     docsTable,
     docsProject: deriveProjectKey(process.cwd()).key,
+    projectKey: deriveProjectKey(process.cwd()).key,
     identity: {
       userName: config.userName,
       organization: config.orgName,

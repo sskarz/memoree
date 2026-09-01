@@ -22,6 +22,8 @@ export interface UploadParams {
   fname: string;
   userName: string;
   project: string;
+  /** Stable git-remote (or abs-cwd) key. Written on INSERT; left untouched on UPDATE. */
+  projectKey?: string;
   agent: string;
   sessionId: string;
   text: string;
@@ -130,6 +132,7 @@ export function isFinalizedSummaryText(text: unknown): boolean {
  */
 export async function uploadSummary(query: QueryFn, params: UploadParams): Promise<UploadResult> {
   const { tableName, vpath, fname, userName, project, agent } = params;
+  const projectKey = params.projectKey ?? "";
   // Mask any secret a summary may have quoted before it's stored/indexed.
   const text = redactSecrets(params.text);
   const ts = params.ts ?? new Date().toISOString();
@@ -186,9 +189,9 @@ export async function uploadSummary(query: QueryFn, params: UploadParams): Promi
   // INSERT path: new row, no previous value to preserve — default to ''.
   const pluginVersionForInsert = pluginVersion ?? "";
   const sql =
-    `INSERT INTO "${tableName}" (id, path, filename, summary, summary_embedding, author, mime_type, size_bytes, project, description, agent, plugin_version, creation_date, last_update_date) ` +
+    `INSERT INTO "${tableName}" (id, path, filename, summary, summary_embedding, author, mime_type, size_bytes, project, project_key, description, agent, plugin_version, creation_date, last_update_date) ` +
     `VALUES ('${randomUUID()}', '${esc(vpath)}', '${esc(fname)}', ${stringPrefix}'${esc(text)}', ${embSql}, '${esc(userName)}', 'text/markdown', ` +
-    `${sizeBytes}, '${esc(project)}', ${stringPrefix}'${esc(desc)}', '${esc(agent)}', '${esc(pluginVersionForInsert)}', '${ts}', '${ts}')`;
+    `${sizeBytes}, '${esc(project)}', '${esc(projectKey)}', ${stringPrefix}'${esc(desc)}', '${esc(agent)}', '${esc(pluginVersionForInsert)}', '${ts}', '${ts}')`;
   await query(sql);
   return { path: "insert", sql, descLength: desc.length, summaryLength: text.length };
 }

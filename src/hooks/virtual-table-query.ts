@@ -2,6 +2,7 @@ import type { StorageBackend } from "../storage/backend.js";
 import { sqlLike, sqlStr } from "../utils/sql.js";
 import { normalizeContent, emptySessionBodyNotice } from "../shell/grep-core.js";
 import { nullExpression, textExpression } from "../storage/sql-dialect.js";
+import { projectKeyScopeSql } from "../utils/repo-identity.js";
 
 type Row = Record<string, unknown>;
 
@@ -152,6 +153,7 @@ export async function readVirtualPathContents(
   memoryTable: string,
   sessionsTable: string,
   virtualPaths: string[],
+  projectKey?: string,
 ): Promise<Map<string, string | null>> {
   const uniquePaths = [...new Set(virtualPaths)];
   const result = new Map<string, string | null>(uniquePaths.map(path => [path, null]));
@@ -223,14 +225,16 @@ export async function readVirtualPathContents(
     // event — without GROUP BY a single conversation appeared dozens of
     // times in the index.
     const fetchLimit = INDEX_LIMIT_PER_SECTION + 1;
+    const keyScope = projectKeyScopeSql(projectKey);
+    const keyFilter = keyScope ? ` AND ${keyScope}` : "";
     const [summaryRows, sessionRows] = await Promise.all([
       api.query(
         `SELECT path, project, description, creation_date, last_update_date FROM "${memoryTable}" ` +
-        `WHERE path LIKE '/summaries/%' ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
+        `WHERE path LIKE '/summaries/%'${keyFilter} ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
       ).catch(() => [] as Row[]),
       api.query(
         `SELECT path, MAX(description) AS description, MIN(creation_date) AS creation_date, MAX(last_update_date) AS last_update_date ` +
-        `FROM "${sessionsTable}" WHERE path LIKE '/sessions/%' ` +
+        `FROM "${sessionsTable}" WHERE path LIKE '/sessions/%'${keyFilter} ` +
         `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${fetchLimit}`
       ).catch(() => [] as Row[]),
     ]);
@@ -289,8 +293,9 @@ export async function readVirtualPathContent(
   memoryTable: string,
   sessionsTable: string,
   virtualPath: string,
+  projectKey?: string,
 ): Promise<string | null> {
-  return (await readVirtualPathContents(api, memoryTable, sessionsTable, [virtualPath])).get(virtualPath) ?? null;
+  return (await readVirtualPathContents(api, memoryTable, sessionsTable, [virtualPath], projectKey)).get(virtualPath) ?? null;
 }
 
 export async function listVirtualPathRows(

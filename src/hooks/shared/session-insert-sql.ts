@@ -22,6 +22,8 @@ export interface DirectSessionInsertParams {
   userName: string;
   sizeBytes: number;
   projectName: string;
+  /** Stable git-remote (or abs-cwd) key. Empty string only for tests of the default. */
+  projectKey: string;
   description: string;
   agent: string;
   pluginVersion: string;
@@ -53,9 +55,9 @@ export function buildDirectSessionInsertSql(
   const table = sqlIdent(sessionsTable);
   const id = sqlStr(p.id);
   return (
-    `INSERT INTO "${table}" (id, path, filename, message, message_embedding, author, size_bytes, project, description, agent, plugin_version, creation_date, last_update_date) ` +
+    `INSERT INTO "${table}" (id, path, filename, message, message_embedding, author, size_bytes, project, project_key, description, agent, plugin_version, creation_date, last_update_date) ` +
     `SELECT '${id}', '${sqlStr(p.sessionPath)}', '${sqlStr(p.filename)}', ${jsonLiteral(p.jsonForSql, dialect)}, ${p.embeddingSql}, '${sqlStr(p.userName)}', ` +
-    `${p.sizeBytes}, '${sqlStr(p.projectName)}', '${sqlStr(p.description)}', '${sqlStr(p.agent)}', '${sqlStr(p.pluginVersion)}', '${sqlStr(p.timestamp)}', '${sqlStr(p.timestamp)}' ` +
+    `${p.sizeBytes}, '${sqlStr(p.projectName)}', '${sqlStr(p.projectKey)}', '${sqlStr(p.description)}', '${sqlStr(p.agent)}', '${sqlStr(p.pluginVersion)}', '${sqlStr(p.timestamp)}', '${sqlStr(p.timestamp)}' ` +
     `WHERE NOT EXISTS (SELECT 1 FROM "${table}" WHERE id = '${id}')`
   );
 }

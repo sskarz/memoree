@@ -22,6 +22,7 @@ import { loadConfig } from "../../config.js";
 import { resolveDirConfig } from "../../dir-config.js";
 import { createStorageBackend } from "../../storage/factory.js";
 import { projectNameFromCwd } from "../../utils/project-name.js";
+import { deriveProjectKey } from "../../utils/repo-identity.js";
 import { log as _log } from "../../utils/debug.js";
 import { bundleDirFromImportMeta, spawnCodexWikiWorker, wikiLog } from "./spawn-wiki-worker.js";
 import { forceSessionEndTrigger } from "../../skillify/triggers.js";
@@ -93,6 +94,7 @@ async function main(): Promise<void> {
       const line = JSON.stringify(entry);
       const sessionPath = buildSessionPath(config, sessionId);
       const projectName = projectNameFromCwd(input.cwd);
+      const projectKey = deriveProjectKey(input.cwd || process.cwd()).key;
       const filename = sessionPath.split("/").pop() ?? "";
       // For JSONB: only escape single quotes for the SQL literal, keep JSON structure intact.
       // sqlStr() would also escape backslashes and strip control chars, corrupting the JSON.
@@ -116,6 +118,7 @@ async function main(): Promise<void> {
         userName: config.userName,
         sizeBytes: Buffer.byteLength(line, "utf-8"),
         projectName,
+        projectKey,
         description: "Stop",
         agent: "codex",
         pluginVersion: PLUGIN_VERSION,

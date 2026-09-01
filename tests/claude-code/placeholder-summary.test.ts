@@ -114,6 +114,11 @@ describe("buildPlaceholderInsertSql — atomic, finalize-safe placeholder write"
     expect(sql).toContain("'codex'");
     expect(sql).toContain("'9.9.9'");
   });
+
+  it("writes project_key next to the human project name", () => {
+    const { sql } = buildPlaceholderInsertSql(BASE);
+    expect(sql).toContain("project, project_key, description");
+  });
 });
 
 describe("createPlaceholderSummary — fast-path skip", () => {

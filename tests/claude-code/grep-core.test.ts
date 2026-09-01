@@ -710,6 +710,20 @@ describe("searchMemoreeTables", () => {
     expect(sql).toContain("UNION ALL");
   });
 
+  it("scopes both tables to project_key (plus legacy empty keys) when set", async () => {
+    const api = mockApi([]);
+    await searchMemoreeTables(api, "memory", "sessions", {
+      pathFilter: "",
+      contentScanOnly: false,
+      likeOp: "ILIKE",
+      escapedPattern: "foo",
+      projectKey: "abc123def4567890",
+    });
+    const sql = api.query.mock.calls[0][0] as string;
+    const occurrences = sql.split("(project_key = 'abc123def4567890' OR project_key = '')").length - 1;
+    expect(occurrences).toBe(2);
+  });
+
   it("skips LIKE filter when contentScanOnly is true (regex-in-memory mode)", async () => {
     const api = mockApi([]);
     await searchMemoreeTables(api, "m", "s", {
