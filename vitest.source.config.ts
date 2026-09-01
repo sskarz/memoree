@@ -28,6 +28,7 @@ export default defineConfig({
       "tests/cli/cli-install-antigravity.test.ts",
       "tests/shared/embeddings-schema.test.ts",
       "tests/shared/graph/graph-on-stop-bundle.test.ts",
+      "tests/shared/mcp-server-bundle.test.ts",
     ],
     setupFiles: ["./tests/test-setup.ts"],
     environment: "node",
