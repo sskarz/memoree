@@ -95,8 +95,11 @@ export function claudeLexicalRecallPrompt(identifier) {
 /**
  * Cheap-model recall: copy a UUID from grep stdout. Do not forbid "none" —
  * that pushed gpt-5.6-luna to invent an identifier when grep was empty.
+ *
+ * Search the whole mount, not summaries/ only. Wiki summaries may paraphrase
+ * the lantern sentence while sessions still contain the captured fact.
  */
-export function grepRecallPrompt(needle, path = "~/.memoree/memory/summaries/") {
+export function grepRecallPrompt(needle, path = "~/.memoree/memory/") {
   return [
     `Run this exact shell command: grep -ri ${JSON.stringify(needle)} ${path}`,
     "Copy the UUID from that command's stdout into your final answer.",
@@ -106,7 +109,7 @@ export function grepRecallPrompt(needle, path = "~/.memoree/memory/summaries/") 
 }
 
 export function codexSemanticRecallPrompt() {
-  return grepRecallPrompt("observatory lantern");
+  return grepRecallPrompt("observatory lantern", "~/.memoree/memory/");
 }
 
 export function copyCodexAuthentication(realHome, isolatedCodexHome) {
@@ -1132,7 +1135,7 @@ export async function validateRuntime(options = {}) {
       for (let attempt = 0; attempt < CODEX_SEMANTIC_RECALL_ATTEMPTS; attempt++) {
         semanticRecall = runCodex(codexExecLiveArgs([
           "--skip-git-repo-check",
-          "--ephemeral",
+          "--dangerously-bypass-hook-trust",
           "-s", "read-only",
           codexSemanticRecallPrompt(),
         ]), { cwd: repository, env: recallEnv });

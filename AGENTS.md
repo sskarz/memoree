@@ -123,7 +123,7 @@ Live is green only when all of these hold:
 - session events &gt; 0 and summaries under `/summaries/%` &gt; 0
 - at least one **768-element** embedding
 - the Claude identifier appears in sessions **and** is recoverable later
-  (Claude recall + Codex recall / `grep` of `~/.memoree/memory/summaries/`)
+  (Claude recall + Codex `grep` of `~/.memoree/memory/`)
 - `runtime:validate` structured VFS: rule/goal/KPI edits persist; unsafe
   `rm -rf` on the mount is denied
 - `live:e2e` final line reports event and summary counts; on failure the

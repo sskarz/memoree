@@ -24,6 +24,7 @@ describe("live session e2e harness", () => {
     expect(source).not.toMatch(/runCodex\(\[/);
     expect(source).toContain("live models:");
     expect(source).toContain("grepRecallPrompt(");
+    expect(source.match(/grepRecallPrompt\("harbor kite", "~\/\.memoree\/memory\/"\)/g)).toHaveLength(2);
     expect(source).not.toMatch(/do not say none/i);
   });
 

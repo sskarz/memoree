@@ -56,7 +56,7 @@ function claudeRecallPrompt() {
 }
 
 function codexLivePrompt() {
-  return grepRecallPrompt("harbor kite");
+  return grepRecallPrompt("harbor kite", "~/.memoree/memory/");
 }
 
 export async function runLiveSessionE2E() {

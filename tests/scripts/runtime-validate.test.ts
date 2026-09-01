@@ -177,15 +177,27 @@ describe("runtime validation lexical marker", () => {
 });
 
 describe("runtime validation Codex semantic recall prompt", () => {
-  it("tells Codex to grep Memoree summaries instead of answering from the user message", () => {
+  it("tells Codex to grep the whole Memoree mount instead of answering from the user message", () => {
     const prompt = codexSemanticRecallPrompt();
     expect(prompt).toContain("grep -ri");
-    expect(prompt).toContain("~/.memoree/memory/summaries/");
+    expect(prompt).toContain('grep -ri "observatory lantern" ~/.memoree/memory/');
+    expect(prompt).not.toContain("summaries/");
     expect(prompt).toContain("observatory lantern");
     expect(prompt).toContain("NONE");
     expect(prompt).toMatch(/do not generate a uuid/i);
     expect(prompt).not.toMatch(/do not say none/i);
     expect(prompt).not.toMatch(/do not (read files|use tools)/i);
+  });
+
+  it("runs cheap Codex semantic recall with unaided-e2e hooks, not --ephemeral", () => {
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    const recallBlock = source.slice(
+      source.indexOf("checking semantic recall through Codex"),
+      source.indexOf("running an authenticated Codex capture turn"),
+    );
+    expect(recallBlock).toContain("--dangerously-bypass-hook-trust");
+    expect(recallBlock).toContain("codexSemanticRecallPrompt(");
+    expect(recallBlock).not.toMatch(/["']--ephemeral["']/);
   });
 
   it("retries cheap-model Codex semantic recall", () => {
