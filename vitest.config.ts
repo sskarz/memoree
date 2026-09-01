@@ -86,6 +86,7 @@ export default defineConfig({
         "src/cli/install-claude.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/cli/stage-package.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/cli/run-install.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/cli/run-uninstall.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/shared/memory-command-contract.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/shared/shell-replacement.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/hooks/codex/compatibility-broker.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },

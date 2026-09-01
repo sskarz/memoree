@@ -28,5 +28,8 @@ plugin-bundled hooks until that review happens.
 npx @sskarz/memoree codex uninstall
 ```
 
+That unwires Codex only and keeps `~/.memoree` plus leftover plugin files.
+For a complete wipe, use `npx @sskarz/memoree uninstall --purge --yes`.
+
 For repository development, do not `npm link` the development checkout.
 Use the isolated runtime workflow in the root README instead.

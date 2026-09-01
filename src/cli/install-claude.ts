@@ -76,9 +76,13 @@ export function installClaude(options: { source?: string } = {}): void {
   log(`  Claude Code    enabled ${PLUGIN_KEY} from ${source}`);
 }
 
-export function uninstallClaude(): void {
+export function uninstallClaude(options: { removeMarketplace?: boolean } = {}): void {
   requireClaudeCli();
   runClaude(["plugin", "disable", PLUGIN_KEY, "--scope", "user"]);
   runClaude(["plugin", "uninstall", PLUGIN_KEY, "--scope", "user"]);
+  if (options.removeMarketplace) {
+    runClaude(["plugin", "marketplace", "remove", MARKETPLACE_NAME]);
+    log("  Claude Code    Memoree marketplace removed");
+  }
   log("  Claude Code    Memoree plugin uninstalled");
 }

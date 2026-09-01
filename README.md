@@ -275,8 +275,19 @@ npx @sskarz/memoree uninstall
 npx @sskarz/memoree codex uninstall
 ```
 
-Uninstalling integrations does not delete `~/.memoree`. Remove that specific
-directory yourself only after making any desired backup.
+Uninstalling integrations does not delete `~/.memoree`. To also remove leftover
+plugin copies, the staged package, Memoree-managed skills, embeddings, and
+`~/.memoree` itself:
+
+```sh
+npx @sskarz/memoree uninstall --purge
+npx @sskarz/memoree uninstall --purge --yes
+```
+
+`--purge` asks for confirmation (default No). Non-interactive runs require
+`--yes`. It does not drop a remote PostgreSQL schema, revert Codex's global
+`hooks` feature flag, or scan other clones for `graph init` git hooks — run
+`memoree graph uninstall` in those repos if you enabled them.
 
 ## Testing (every PR, and live)
 
