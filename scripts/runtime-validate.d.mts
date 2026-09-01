@@ -21,6 +21,8 @@ export function assertAgentResponseContainsIdentifier(
   phase: string,
 ): void;
 export function lexicalValidationPrompt(identifier: string): string;
+export const CLAUDE_LEXICAL_RECALL_ATTEMPTS: 3;
+export function claudeLexicalRecallPrompt(identifier: string): string;
 export function codexSemanticRecallPrompt(): string;
 export function copyCodexAuthentication(realHome: string, isolatedCodexHome: string): void;
 export function createValidationWorkspace(home?: string): string;

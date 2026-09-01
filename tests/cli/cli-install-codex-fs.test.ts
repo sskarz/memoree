@@ -85,27 +85,35 @@ describe("installCodex — happy path", () => {
     expect(readFileSync(join(pluginDir, ".memoree_version"), "utf-8")).toBe("1.2.3");
   });
 
-  it("writes a hooks.json with exactly five memoree events: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop", async () => {
-    const { installCodex } = await importInstaller();
+  it("writes a hooks.json with the shared Claude/Codex product events", async () => {
+    const { installCodex, CODEX_SESSION_START_MATCHER } = await importInstaller();
     installCodex();
 
     const hooks = JSON.parse(readFileSync(join(tmpHome, ".codex", "hooks.json"), "utf-8"));
     expect(Object.keys(hooks.hooks).sort()).toEqual([
-      "PostToolUse", "PreToolUse", "SessionStart", "Stop", "UserPromptSubmit",
+      "PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop",
+      "SubagentStop", "UserPromptSubmit",
     ]);
     // Each of our events ships exactly one entry on cold install.
     for (const event of Object.keys(hooks.hooks)) {
       expect(hooks.hooks[event]).toHaveLength(1);
     }
-    expect(hooks.hooks.SessionStart[0].matcher).toBe("startup|resume");
+    expect(hooks.hooks.SessionStart[0].matcher).toBe(CODEX_SESSION_START_MATCHER);
     expect(hooks.hooks.SessionStart[0].hooks[0].timeout).toBe(10);
-    // PreToolUse carries the Bash matcher.
+    // PreToolUse carries the Bash matcher (Codex documents shell as Bash).
     expect(hooks.hooks.PreToolUse[0].matcher).toBe("Bash");
     expect(hooks.hooks.PreToolUse[0].hooks[0].timeout).toBe(10);
+    // UserPromptSubmit carries capture + recall (Codex additionalContext JSON).
+    const promptCmds = hooks.hooks.UserPromptSubmit[0].hooks.map((h: { command: string }) => h.command);
+    expect(promptCmds.some((c: string) => c.includes("capture.js"))).toBe(true);
+    expect(promptCmds.some((c: string) => c.includes("recall.js"))).toBe(true);
     // G3: the single Stop block carries BOTH stop.js and graph-on-stop.js.
     const stopCmds = hooks.hooks.Stop[0].hooks.map((h: { command: string }) => h.command);
     expect(stopCmds.some((c: string) => c.includes("stop.js"))).toBe(true);
     expect(stopCmds.some((c: string) => c.includes("graph-on-stop.js"))).toBe(true);
+    expect(hooks.hooks.SubagentStop[0].hooks[0].command).toContain("capture.js");
+    expect(hooks.hooks.SessionEnd[0].hooks[0].command).toContain("session-end.js");
+    expect(hooks.hooks.SessionEnd[0].hooks[0].timeout).toBe(3);
   });
 
   it("is idempotent: a second install does NOT rewrite hooks.json (avoids Codex re-trust prompt)", async () => {

@@ -1,8 +1,10 @@
 {
   "name": "memoree",
   "description": "Local-first persistent memory for Claude Code",
-  "version": "0.7.145",
-  "author": { "name": "sskarz" },
+  "version": "0.7.146",
+  "author": {
+    "name": "sskarz"
+  },
   "homepage": "https://github.com/sskarz/memoree",
   "repository": "https://github.com/sskarz/memoree",
   "license": "Apache-2.0",

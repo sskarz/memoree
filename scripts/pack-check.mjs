@@ -53,6 +53,8 @@ export const REQUIRED_ARTIFACT_FILES = [
   "harnesses/claude-code/bundle/session-end.js",
   "harnesses/codex/bundle/session-start.js",
   "harnesses/codex/bundle/capture.js",
+  "harnesses/codex/bundle/recall.js",
+  "harnesses/codex/bundle/session-end.js",
   "harnesses/antigravity/bundle/pre-invocation.js",
   "harnesses/antigravity/bundle/mcp-server.js",
   "embeddings/embed-daemon.js",

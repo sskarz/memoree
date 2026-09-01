@@ -14,6 +14,8 @@ import {
   linkSharedEmbeddingRuntime,
   isolatedCounts,
   lexicalValidationPrompt,
+  claudeLexicalRecallPrompt,
+  CLAUDE_LEXICAL_RECALL_ATTEMPTS,
   codexSemanticRecallPrompt,
   skipLiveCodexRequested,
   skipLiveAntigravityRequested,
@@ -176,6 +178,23 @@ describe("runtime validation Codex semantic recall prompt", () => {
   });
 });
 
+describe("runtime validation Claude lexical fallback recall prompt", () => {
+  it("tells Claude to grep the exact UUID and not echo another identifier", () => {
+    const identifier = "06f71ade-bba5-4fda-8f73-a9cebb7d8ff9";
+    const prompt = claudeLexicalRecallPrompt(identifier);
+    expect(prompt).toContain("grep");
+    expect(prompt).toContain(identifier);
+    expect(prompt).toMatch(/do not return any other UUID/i);
+  });
+
+  it("retries the live Claude lexical turn", () => {
+    expect(CLAUDE_LEXICAL_RECALL_ATTEMPTS).toBe(3);
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    expect(source).toContain("claudeLexicalRecallPrompt(");
+    expect(source).toContain("CLAUDE_LEXICAL_RECALL_ATTEMPTS");
+  });
+});
+
 describe("runtime validation agent responses", () => {
   const identifier = "a912d384-5605-43ab-bae7-e34b50e6f81a";
 
@@ -227,6 +246,8 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("graph-on-stop.js");
     expect(source).toContain("PostToolUse");
     expect(source).toContain("SubagentStop");
+    expect(source).toContain("Codex SessionEnd");
+    expect(source).toContain("checking Codex proactive recall hook");
     expect(source).toContain("Claude lexical Grep");
     expect(source).toContain("docs/src/snapshot.ts.md");
     expect(source).toContain("docs/find/persistGraph");

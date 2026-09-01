@@ -4,15 +4,16 @@
 
 ## Version Bump
 
-> **To trigger a release**, bump `"version"` in `package.json` before merging.
->
-> | Change type     | Version bump          | Example              |
-> | --------------- | --------------------- | -------------------- |
-> | Bug fix         | patch (1.2.0 → 1.2.1) | `"version": "1.2.1"` |
-> | New feature     | minor (1.2.0 → 1.3.0) | `"version": "1.3.0"` |
-> | Breaking change | major (1.2.0 → 2.0.0) | `"version": "2.0.0"` |
->
-> If you don't bump the version, no release will be created.
+Do not bump `"version"` in PRs. Merges to `main` that contain `feat` / `fix` /
+`perf` commits are published automatically by `.github/workflows/publish.yml`
+(`npx -y @sskarz/memoree` tracks that npm release). Docs-only merges do not
+publish.
+
+Users upgrade with:
+
+```sh
+npx -y @sskarz/memoree install
+```
 
 ## Test plan
 
@@ -22,6 +23,6 @@ Follow `AGENTS.md` (PR verification loop) and `docs/TESTING.md`.
 - [ ] Runtime-affecting: `npm run build`, `npm test`, `git diff --check`
 - [ ] Live, when keys exist: `npm run runtime:validate` (and `npm run live:e2e` for unaided hooks)
 - [ ] Isolated DBs only; no writes to the operator `~/.memoree`
-- [ ] If Codex or Claude live was skipped, say so — do not mark it passed
+- [ ] If Codex, Claude, or Antigravity live was skipped, say so — do not mark it passed
 - [ ] Relevant new tests added
-- [ ] Version bumped in `package.json`, or no release needed for this change
+- [ ] Version left unchanged (publish happens on merge to `main`, not in the PR)

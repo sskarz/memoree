@@ -2,7 +2,7 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
@@ -19,6 +19,11 @@
             "type": "command",
             "command": "node \"$PLUGIN_ROOT/bundle/capture.js\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/bundle/recall.js\"",
+            "timeout": 2
           }
         ]
       }
@@ -58,6 +63,28 @@
             "type": "command",
             "command": "node \"$PLUGIN_ROOT/bundle/graph-on-stop.js\"",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/bundle/capture.js\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/bundle/session-end.js\"",
+            "timeout": 3
           }
         ]
       }

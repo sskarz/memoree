@@ -95,7 +95,10 @@ interface RecallInput {
   hook_event_name?: string;
 }
 
-/** Emit the model-context injection (or nothing). Claude Code: model-only. */
+/** Emit the model-context injection (or nothing).
+ * Claude Code: model-only. Codex UserPromptSubmit: extra developer context
+ * (developers.openai.com/codex/hooks — same JSON shape).
+ */
 function emit(additionalContext: string): void {
   console.log(JSON.stringify({
     hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext },

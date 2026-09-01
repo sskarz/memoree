@@ -126,7 +126,7 @@ Live is green only when all of these hold:
 - session events &gt; 0 and summaries under `/summaries/%` &gt; 0
 - at least one **768-element** embedding
 - the Claude identifier appears in sessions **and** is recoverable later
-  (Claude recall + Codex `grep` of `~/.memoree/memory/summaries/`)
+  (Claude recall + Codex recall / `grep` of `~/.memoree/memory/summaries/`)
 - `runtime:validate` structured VFS: rule/goal/KPI edits persist; unsafe
   `rm -rf` on the mount is denied
 - `live:e2e` final line reports event and summary counts; on failure the
@@ -181,10 +181,13 @@ auto-mine and memory backfill when due.
 
 ### Codex hooks
 
-SessionStart (+ setup, matcher `startup|resume`), UserPromptSubmit capture,
-PreToolUse Bash only, PostToolUse capture, Stop (capture + wiki + graph).
-No SessionEnd and no `recall.js`; Codex gets memory instructions from a
-managed block in `~/.codex/AGENTS.md`.
+SessionStart (+ setup, matcher `startup|resume|clear|compact`), UserPromptSubmit
+capture + recall, PreToolUse Bash only (Codex documents shell as `Bash`; there
+is no Read/Grep/Glob tool), PostToolUse / Stop / SubagentStop capture,
+SessionEnd (wiki worker). Graph auto-build stays on Stop because Codex
+SessionEnd is advisory and capped at 3s. plugin-cache-gc is Claude-plugin-cache
+specific. Standing memory instructions also live in a managed block in
+`~/.codex/AGENTS.md`.
 
 ### Antigravity hooks
 
@@ -266,5 +269,9 @@ exact committed SHA and its successful `npm run runtime:validate` result before
 declaring the runtime change complete. If authenticated validation must happen
 after merge because sessions must be closed, mark that gate pending and do
 not treat the rollout as complete until it passes. Documentation-only and
-other non-runtime PRs do not require promotion. Do not bump the package version
-unless a release is explicitly intended.
+other non-runtime PRs do not require promotion. Do not bump the package version in PRs. Merges to `main` with `feat` / `fix` /
+`perf` commits are published by `.github/workflows/publish.yml` (Node 24,
+OIDC trusted publisher, no `NODE_AUTH_TOKEN` / `registry-url`). Docs-only
+merges do not publish. `runtime:promote` is a developer-machine tool and is
+never a substitute for npm; end users upgrade with
+`npx -y @sskarz/memoree install`.

@@ -171,7 +171,7 @@ export function isMemoryLookupCommand(command: string): boolean {
  * We sum text-part lengths and fall back to JSON-stringified length for
  * unknown shapes. Never throws.
  */
-function toolResultByteLength(content: unknown): number {
+export function toolResultByteLength(content: unknown): number {
   if (typeof content === "string") return Buffer.byteLength(content, "utf-8");
   if (Array.isArray(content)) {
     let n = 0;

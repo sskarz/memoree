@@ -58,7 +58,7 @@ filesystem operation.
 | Agent | Installation | Main lifecycle |
 |---|---|---|
 | Claude Code | Local marketplace plugin | Session start, capture, recall, stop, session end |
-| Codex | Explicit `memoree codex install` | Session start, capture, recall, stop |
+| Codex | Explicit `memoree codex install` | Session start, capture, recall, stop, subagent stop, session end |
 | Antigravity | Explicit `memoree antigravity install` | PreInvocation inject/recall, MCP memory, capture, stop |
 
 Claude Code and Codex intercept `~/.memoree/memory` through host-command rewrite.

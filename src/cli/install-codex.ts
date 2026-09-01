@@ -32,6 +32,8 @@ You have global team memory at \`~/.memoree/memory/\`, shared across all session
 ${MEMORY_COMMAND_GUIDANCE} Do not spawn subagents to read memory.
 ${MEMOREE_BLOCK_END}`;
 
+export const CODEX_SESSION_START_MATCHER = "startup|resume|clear|compact";
+
 function hookCmd(bundleFile: string, timeout: number, matcher?: string): Record<string, unknown> {
   const block: Record<string, unknown> = {
     hooks: [{
@@ -44,29 +46,44 @@ function hookCmd(bundleFile: string, timeout: number, matcher?: string): Record<
   return block;
 }
 
+function commandsBlock(
+  commands: Array<{ file: string; timeout: number }>,
+  matcher?: string,
+): Record<string, unknown> {
+  const block: Record<string, unknown> = {
+    hooks: commands.map(({ file, timeout }) => ({
+      type: "command",
+      command: `node "${join(PLUGIN_DIR, "bundle", file)}"`,
+      timeout,
+    })),
+  };
+  if (matcher) block.matcher = matcher;
+  return block;
+}
+
 function buildHooksJson(): Record<string, unknown> {
   return {
     hooks: {
-      SessionStart: [hookCmd("session-start.js", 10, "startup|resume")],
-      UserPromptSubmit: [hookCmd("capture.js", 10)],
+      SessionStart: [hookCmd("session-start.js", 10, CODEX_SESSION_START_MATCHER)],
+      UserPromptSubmit: [commandsBlock([
+        { file: "capture.js", timeout: 10 },
+        { file: "recall.js", timeout: 2 },
+      ])],
       PreToolUse: [hookCmd("pre-tool-use.js", 10, "Bash")],
       PostToolUse: [hookCmd("capture.js", 15)],
-      // One Stop matcher-block with TWO commands — stop.js (capture) +
+      // One Stop matcher-block with TWO commands — stop.js (capture + wiki) +
       // graph-on-stop.js (code-graph auto-build, G3). Single block (not two)
       // mirrors the static harnesses/codex/hooks/hooks.json and keeps one entry per
       // event for the merge/dedupe logic.
-      Stop: [stopBlockWithGraph(30)],
+      Stop: [commandsBlock([
+        { file: "stop.js", timeout: 30 },
+        { file: "graph-on-stop.js", timeout: 30 },
+      ])],
+      SubagentStop: [hookCmd("capture.js", 30)],
+      // SessionEnd is advisory and capped at 3s — wiki spawn is a fast detach.
+      // Graph auto-build stays on Stop (30s). plugin-cache-gc is Claude-only.
+      SessionEnd: [hookCmd("session-end.js", 3)],
     },
-  };
-}
-
-/** Stop block carrying both the capture stop hook and the graph auto-build. */
-function stopBlockWithGraph(timeout: number): Record<string, unknown> {
-  return {
-    hooks: [
-      { type: "command", command: `node "${join(PLUGIN_DIR, "bundle", "stop.js")}"`, timeout },
-      { type: "command", command: `node "${join(PLUGIN_DIR, "bundle", "graph-on-stop.js")}"`, timeout },
-    ],
   };
 }
 
@@ -78,8 +95,10 @@ const MEMOREE_BUNDLE_FILES = [
   "session-start.js",
   "session-start-setup.js",
   "capture.js",
+  "recall.js",
   "pre-tool-use.js",
   "stop.js",
+  "session-end.js",
   "graph-on-stop.js",
   "wiki-worker.js",
 ] as const;

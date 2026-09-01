@@ -266,10 +266,11 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Claude PreToolUse VFS (Bash/Read/Grep/Glob) | S | V | L | Live exercises `cat`/`printf` on the mount |
 | Claude PostToolUse / Stop / SubagentStop capture | S | V | L | SubagentStop is source-tested; live is main session |
 | Claude SessionEnd wiki + plugin-cache-gc + graph-on-stop | S | V | L | Wiki worker uses `MEMOREE_VALIDATION_CLAUDE_HOME` |
-| Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume`; `codex exec` may not fire it |
-| Codex capture (UserPromptSubmit / PostToolUse / Stop) | S | V | L | Stop needs a real session file; no `--ephemeral` |
+| Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume\|clear\|compact`; `codex exec` may still skip it |
+| Codex capture (UserPromptSubmit / PostToolUse / Stop / SubagentStop) | S | V | L | Stop needs a real session file; no `--ephemeral`; SubagentStop is source + validate |
+| Codex UserPromptSubmit recall.js | S | V | L | Same recall.js bundle as Claude; Codex documents additionalContext as developer context |
 | Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
-| Codex SessionEnd | — | — | — | Codex has no SessionEnd; wiki is on Stop |
+| Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock. Usage recap parses Codex rollouts (`function_call` / `exec_command_*`), not Claude `tool_use` transcripts |
 | Antigravity install/uninstall + named hooks + MCP | S | V | — | Merges `memoree` into `~/.gemini/config/hooks.json` and `mcp_config.json` |
 | Antigravity PreInvocation inject + recall | S | V | — | First `invocationNum` 0/1 claims wake lock; `injectSteps` |
 | Antigravity PreToolUse steer (never `allow`) | S | V | — | `{ decision: "deny", reason }` on the mount; unrelated tools `{}` |
@@ -294,6 +295,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `backend check` / embeddings status | S | V | L | |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
 | `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
+| npm publish from `main` (OIDC trusted publisher) | S | — | — | `publish.yml` uses Node 24, environment `memoree github actions`, no `registry-url` / `NODE_AUTH_TOKEN`. `release-from-main.mjs` strips classic tokens. Users upgrade with `npx -y @sskarz/memoree install` |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
 
 ## Known gaps, overlap, and follow-ups
@@ -305,7 +307,7 @@ Not missing from the product on purpose, but not fully live-proven:
 - Graph git-hook init, snapshot diff, backend pull, uninstall
 - `memoree memory flush`
 - Interactive TUIs
-- Codex SessionStart during `codex exec` (matcher may not match)
+- Codex SessionStart during `codex exec` (matcher now includes `clear`/`compact`; exec may still skip SessionStart)
 - `recall-events.jsonl` ignoring `MEMOREE_STATE_DIR`
 
 Redundant or stale on purpose until cleaned up:
@@ -319,7 +321,6 @@ Redundant or stale on purpose until cleaned up:
 Follow-ups that would make the PR loop tighter (do not block docs):
 
 - Honor `MEMOREE_STATE_DIR` in `src/hooks/shared/recall-events.ts`
-- Expand Codex SessionStart matchers if `codex exec` should inject context
 - Optional `MEMOREE_RUNTIME_DIR` mode that installs Codex hooks from the PR
   checkout into the **isolated** `CODEX_HOME` only, without `npm link`
 
