@@ -32,6 +32,12 @@ describe("live session e2e harness", () => {
     expect(pkg.scripts["live:e2e"]).toBe("node scripts/live-session-e2e.mjs");
   });
 
+  it("retries the unaided Claude capture for every cheap-model attempt", () => {
+    expect(source).toContain("claudeLiveAttempts");
+    expect(source).toMatch(/attempt === claudeLiveAttempts - 1/);
+    expect(source).not.toMatch(/if \(attempt === 1\) throw/);
+  });
+
   it("does not glue the harbor-kite UUID to a trailing period (capture redaction)", () => {
     expect(source).not.toMatch(/\$\{harborId\}\./);
     expect(source).toContain("Harbor kite identifier:");

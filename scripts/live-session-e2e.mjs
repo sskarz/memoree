@@ -167,8 +167,9 @@ export async function runLiveSessionE2E() {
     status(`live models: claude=${liveClaudeModel()} codex=${liveCodexModel()} effort=${liveCodexReasoningEffort()}`);
     status("running a live Claude Code session (hooks enabled, not --bare)");
     const claudeSession = crypto.randomUUID();
+    const claudeLiveAttempts = 3;
     let claudeOut = "";
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < claudeLiveAttempts; attempt++) {
       claudeOut = run("claude", claudeLiveCliArgs(claudeLivePrompt(harborId, ruleId), [
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
@@ -179,7 +180,7 @@ export async function runLiveSessionE2E() {
         assertAgentResponseContainsIdentifier(claudeOut, harborId, "live Claude Code session");
         break;
       } catch (error) {
-        if (attempt === 1) throw error;
+        if (attempt === claudeLiveAttempts - 1) throw error;
       }
     }
 
