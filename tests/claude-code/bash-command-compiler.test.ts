@@ -288,7 +288,7 @@ describe("bash-command-compiler execution", () => {
       },
     );
 
-    expect(readVirtualPathContentsFn).toHaveBeenCalledWith(expect.anything(), "memory", "sessions", ["/a.md", "/b.md"]);
+    expect(readVirtualPathContentsFn).toHaveBeenCalledWith(expect.anything(), "memory", "sessions", ["/a.md", "/b.md"], undefined);
     expect(listVirtualPathRowsForDirsFn).toHaveBeenCalledWith(expect.anything(), "memory", "sessions", ["/summaries/a", "/summaries/b"]);
     expect(handleGrepDirectFn).toHaveBeenCalledTimes(1);
     expect(output).toContain("line1\nline2\nline3");
@@ -451,6 +451,7 @@ describe("bash-command-compiler execution", () => {
       "memory",
       "sessions",
       ["/summaries/a.md", "/summaries/shared.json", "/summaries/b.json"],
+      undefined,
     );
     expect(output).toBe("/summaries/a.md");
   });

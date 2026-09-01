@@ -135,7 +135,7 @@ export function decideGate(ctx: GateContext): GateDecision {
     return { fire: false, reason: `rate limit (${Math.round((ctx.now - last.ts) / 1000)}s < ${Math.round(ctx.intervalMs / 1000)}s)` };
   }
 
-  if (head === last.commit_sha) {
+  if (head === null || head === last.commit_sha) {
     return { fire: false, reason: "HEAD unchanged since last build" };
   }
 

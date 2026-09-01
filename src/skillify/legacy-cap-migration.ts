@@ -223,7 +223,7 @@ function migrateEntry(entry: PulledEntry): boolean {
 
     // (d) Refresh the fan-out symlinks for the new dir the same way pull/auto-
     // pull does, then persist the resolved set onto the canonical entry.
-    const symlinks = fanOutSymlinks(cappedDirPath, cappedDir, detectAgentSkillsRoots(entry.installRoot));
+    const symlinks = fanOutSymlinks(cappedDirPath, cappedDir, detectAgentSkillsRoots(entry.installRoot, { install: entry.install }));
     if (symlinks.length > 0) {
       recordPull({
         dirName: cappedDir,

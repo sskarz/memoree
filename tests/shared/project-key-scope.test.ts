@@ -98,7 +98,7 @@ describe("project_key scopes session grep, recall, and index.md", () => {
       id: "sess-legacy",
       sessionPath: "/sessions/alice/legacy.jsonl",
       filename: "legacy.jsonl",
-      jsonForSql: JSON.stringify({ type: "user_message", content: "legacy-visible-uuid" }),
+      jsonForSql: JSON.stringify({ type: "user_message", content: "legacy-secret-uuid" }),
       embeddingSql: "NULL",
       userName: "alice",
       sizeBytes: 20,

@@ -722,6 +722,7 @@ describe("processPreToolUse: index cache short-circuit", () => {
       expect.anything(),
       expect.anything(),
       ["/sessions/x.json"],
+      expect.anything(),
     );
     // Cache re-write always fires when /index.md is in the result set —
     // idempotent for the hit path (same content in, same content out).
