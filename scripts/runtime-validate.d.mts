@@ -33,6 +33,18 @@ export function runStructuredFilesystemViaHooks(
   options: { cwd: string; env?: NodeJS.ProcessEnv; sessionId?: string },
 ): Array<{ command: string; status: number | null; stdout: string; stderr: string }>;
 export function skipLiveCodexRequested(argv?: string[], env?: NodeJS.ProcessEnv): boolean;
+export const DEFAULT_LIVE_CLAUDE_MODEL: "haiku";
+export const DEFAULT_LIVE_CODEX_MODEL: "gpt-5.4-mini";
+export const DEFAULT_LIVE_CODEX_REASONING_EFFORT: "low";
+export function liveClaudeModel(env?: NodeJS.ProcessEnv): string;
+export function liveCodexModel(env?: NodeJS.ProcessEnv): string;
+export function liveCodexReasoningEffort(env?: NodeJS.ProcessEnv): string;
+export function claudeLiveCliArgs(
+  prompt: string,
+  extra?: string[],
+  env?: NodeJS.ProcessEnv,
+): string[];
+export function codexExecLiveArgs(rest?: string[], env?: NodeJS.ProcessEnv): string[];
 export function hookUpdatedInput(stdout: string): Record<string, unknown>;
 export function linkSharedEmbeddingRuntime(realHome: string, isolatedHome: string): void;
 export function hookBodyContains(stdout: string, needle: string): boolean;

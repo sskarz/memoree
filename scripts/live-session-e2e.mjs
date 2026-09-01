@@ -6,6 +6,7 @@
  * `codex exec` WITH plugin/hooks enabled so SessionStart, capture, recall,
  * PreToolUse VFS, Stop, SubagentStop, and SessionEnd fire on their own.
  * Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
+ * Live turns default to Claude `haiku` and Codex `gpt-5.4-mini` (low effort).
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -16,16 +17,21 @@ import { runtimePaths } from "./runtime-manager.mjs";
 import {
   assert,
   assertAgentResponseContainsIdentifier,
+  claudeLiveCliArgs,
   copyCodexAuthentication,
   createValidationWorkspace,
   inspectCaptureDatabase,
   lexicalValidationPrompt,
   linkSharedEmbeddingRuntime,
+  liveClaudeModel,
+  liveCodexModel,
+  liveCodexReasoningEffort,
   removeValidationWorkspace,
   run,
   runCodex,
   status,
   waitForCapture,
+  codexExecLiveArgs,
 } from "./runtime-validate.mjs";
 
 function claudeLivePrompt(harborId, ruleId) {
@@ -165,18 +171,17 @@ export async function runLiveSessionE2E() {
     run(process.execPath, [cli, "memory", "backfill", "--dry-run"], { cwd: repository, env });
     run(process.execPath, [cli, "sessions", "prune"], { cwd: repository, env });
 
+    status(`live models: claude=${liveClaudeModel()} codex=${liveCodexModel()} effort=${liveCodexReasoningEffort()}`);
     status("running a live Claude Code session (hooks enabled, not --bare)");
     const claudeSession = crypto.randomUUID();
     let claudeOut = "";
     for (let attempt = 0; attempt < 2; attempt++) {
-      claudeOut = run("claude", [
-        "-p",
-        claudeLivePrompt(harborId, ruleId),
+      claudeOut = run("claude", claudeLiveCliArgs(claudeLivePrompt(harborId, ruleId), [
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
         "--no-session-persistence",
         "--session-id", attempt === 0 ? claudeSession : crypto.randomUUID(),
-      ], { cwd: repository, env, timeout: 300_000 });
+      ]), { cwd: repository, env, timeout: 300_000 });
       try {
         assertAgentResponseContainsIdentifier(claudeOut, harborId, "live Claude Code session");
         break;
@@ -189,35 +194,31 @@ export async function runLiveSessionE2E() {
     await waitForCapture(databasePath, harborId, { requireSummary: true, timeoutMs: 180_000 });
 
     status("running a live Claude recall session");
-    const recallOut = run("claude", [
-      "-p",
-      claudeRecallPrompt(),
+    const recallOut = run("claude", claudeLiveCliArgs(claudeRecallPrompt(), [
       "--permission-mode", "bypassPermissions",
       "--output-format", "text",
       "--no-session-persistence",
-    ], { cwd: repository, env, timeout: 300_000 });
+    ]), { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(recallOut, harborId, "live Claude Code recall");
 
     status("running a live Codex capture session (hooks enabled)");
     // Do not use --ephemeral: that skips session files, so Stop cannot read the
     // transcript and UserPromptSubmit/Stop capture never persist the prompt.
-    const codexCapture = runCodex([
-      "exec",
+    const codexCapture = runCodex(codexExecLiveArgs([
       "--skip-git-repo-check",
       "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       lexicalValidationPrompt(lanternId),
-    ], { cwd: repository, env, timeout: 300_000 });
+    ]), { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(codexCapture, lanternId, "live Codex capture");
 
     status("running a live Codex recall of the Claude harbor-kite fact");
-    const codexRecall = runCodex([
-      "exec",
+    const codexRecall = runCodex(codexExecLiveArgs([
       "--skip-git-repo-check",
       "--dangerously-bypass-hook-trust",
       "-s", "read-only",
       codexLivePrompt(),
-    ], { cwd: repository, env, timeout: 300_000 });
+    ]), { cwd: repository, env, timeout: 300_000 });
     assertAgentResponseContainsIdentifier(codexRecall, harborId, "live Codex harbor-kite recall");
 
     status("waiting for Codex capture/summary");

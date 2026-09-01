@@ -169,6 +169,41 @@ export function skipLiveCodexRequested(argv = process.argv, env = process.env) {
   return argv.includes("--skip-live-codex") || env.MEMOREE_VALIDATION_SKIP_LIVE_CODEX === "1";
 }
 
+/** Claude Code alias for live gates. Wiki workers already use this. */
+export const DEFAULT_LIVE_CLAUDE_MODEL = "haiku";
+/** Current cheap Codex CLI model (not Cursor Luna/Sol). Override if the slug moves. */
+export const DEFAULT_LIVE_CODEX_MODEL = "gpt-5.4-mini";
+export const DEFAULT_LIVE_CODEX_REASONING_EFFORT = "low";
+
+export function liveClaudeModel(env = process.env) {
+  return env.MEMOREE_LIVE_CLAUDE_MODEL?.trim() || DEFAULT_LIVE_CLAUDE_MODEL;
+}
+
+export function liveCodexModel(env = process.env) {
+  return env.MEMOREE_LIVE_CODEX_MODEL?.trim() || DEFAULT_LIVE_CODEX_MODEL;
+}
+
+export function liveCodexReasoningEffort(env = process.env) {
+  return env.MEMOREE_LIVE_CODEX_REASONING_EFFORT?.trim() || DEFAULT_LIVE_CODEX_REASONING_EFFORT;
+}
+
+/** `claude -p <prompt> --model haiku …` so live turns do not inherit Opus. */
+export function claudeLiveCliArgs(prompt, extra = [], env = process.env) {
+  return ["-p", prompt, "--model", liveClaudeModel(env), ...extra];
+}
+
+/** `codex exec -m gpt-5.4-mini -c model_reasoning_effort="low" …`. */
+export function codexExecLiveArgs(rest = [], env = process.env) {
+  return [
+    "exec",
+    "-m",
+    liveCodexModel(env),
+    "-c",
+    `model_reasoning_effort="${liveCodexReasoningEffort(env)}"`,
+    ...rest,
+  ];
+}
+
 export function hookUpdatedInput(stdout) {
   try {
     return JSON.parse(stdout)?.hookSpecificOutput?.updatedInput ?? {};
@@ -800,6 +835,7 @@ export async function validateRuntime(options = {}) {
       hook_event_name: "Stop",
     }, { cwd: repository, env: { ...env, MEMOREE_GRAPH_TICK_INTERVAL_MS: "0" } }), "Codex graph-on-stop");
 
+    status(`live models: claude=${liveClaudeModel()} codex=${liveCodexModel()} effort=${liveCodexReasoningEffort()}`);
     const claudeSession = crypto.randomUUID();
     const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
     status("running an authenticated Claude Code capture turn");
@@ -807,8 +843,7 @@ export async function validateRuntime(options = {}) {
     /** @type {unknown} */
     let captureTurnError = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      claudeResponse = run("claude", [
-        "-p", claudePrompt,
+      claudeResponse = run("claude", claudeLiveCliArgs(claudePrompt, [
         "--bare",
         "--safe-mode",
         "--tools", "",
@@ -816,7 +851,7 @@ export async function validateRuntime(options = {}) {
         "--output-format", "text",
         "--no-session-persistence",
         "--session-id", attempt === 0 ? claudeSession : crypto.randomUUID(),
-      ], { cwd: repository, env: claudeEnv });
+      ]), { cwd: repository, env: claudeEnv });
       try {
         assertAgentResponseContainsIdentifier(
           claudeResponse,
@@ -1058,14 +1093,13 @@ export async function validateRuntime(options = {}) {
         "Use the shell to run: cat ~/.memoree/memory/identity.json",
         `After that command, respond with exactly STRUCTURED_OK ${structuredMarker}.`,
       ].join("\n");
-      const structuredResponse = runCodex([
-        "exec",
+      const structuredResponse = runCodex(codexExecLiveArgs([
         "--skip-git-repo-check",
         "--ephemeral",
         "--ignore-user-config",
         "-s", "read-only",
         structuredPrompt,
-      ], { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
+      ]), { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } });
       assertAgentResponseContainsIdentifier(
         structuredResponse,
         structuredMarker,
@@ -1077,13 +1111,12 @@ export async function validateRuntime(options = {}) {
       /** @type {unknown} */
       let semanticRecallError = null;
       for (let attempt = 0; attempt < 3; attempt++) {
-        semanticRecall = runCodex([
-          "exec",
+        semanticRecall = runCodex(codexExecLiveArgs([
           "--skip-git-repo-check",
           "--ephemeral",
           "-s", "read-only",
           codexSemanticRecallPrompt(),
-        ], { cwd: repository, env: recallEnv });
+        ]), { cwd: repository, env: recallEnv });
         try {
           assertAgentResponseContainsIdentifier(
             semanticRecall,
@@ -1104,14 +1137,13 @@ export async function validateRuntime(options = {}) {
       // UUID labeled as an identifier is unique while remaining non-secret.
       const codexPrompt = lexicalValidationPrompt(lexicalIdentifier);
       status("running an authenticated Codex capture turn with embeddings disabled");
-      const codexResponse = runCodex([
-        "exec",
+      const codexResponse = runCodex(codexExecLiveArgs([
         "--skip-git-repo-check",
         "--ephemeral",
         "--ignore-user-config",
         "-s", "read-only",
         codexPrompt,
-      ], { cwd: repository, env: lexicalEnv });
+      ]), { cwd: repository, env: lexicalEnv });
       assertAgentResponseContainsIdentifier(
         codexResponse,
         lexicalIdentifier,
@@ -1162,15 +1194,16 @@ export async function validateRuntime(options = {}) {
       /** @type {unknown} */
       let lexicalRecallError = null;
       for (let attempt = 0; attempt < CLAUDE_LEXICAL_RECALL_ATTEMPTS; attempt++) {
-        lexicalRecall = run("claude", [
-          "-p",
+        lexicalRecall = run("claude", claudeLiveCliArgs(
           claudeLexicalRecallPrompt(lexicalIdentifier),
-          "--append-system-prompt",
-          "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
-          "--settings", claudeSettings,
-          "--output-format", "text",
-          "--no-session-persistence",
-        ], {
+          [
+            "--append-system-prompt",
+            "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
+            "--settings", claudeSettings,
+            "--output-format", "text",
+            "--no-session-persistence",
+          ],
+        ), {
           cwd: repository,
           env: authenticatedClaudeEnvironment(
             { ...lexicalEnv, MEMOREE_CAPTURE: "false" },

@@ -17,6 +17,14 @@ describe("live session e2e harness", () => {
     expect(source).not.toMatch(/["']--ephemeral["']/);
   });
 
+  it("pins unaided Claude and Codex turns to the cheap live models", () => {
+    expect(source).toContain("claudeLiveCliArgs(");
+    expect(source).toContain("codexExecLiveArgs(");
+    expect(source).not.toMatch(/run\("claude",\s*\[/);
+    expect(source).not.toMatch(/runCodex\(\[/);
+    expect(source).toContain("live models:");
+  });
+
   it("is wired as npm run live:e2e", () => {
     const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
     expect(pkg.scripts["live:e2e"]).toBe("node scripts/live-session-e2e.mjs");

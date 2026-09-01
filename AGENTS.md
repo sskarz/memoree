@@ -99,7 +99,10 @@ npm run live:e2e
 
 `live:e2e` must use `claude -p` without `--bare` and `codex exec` without
 `--ephemeral`. Codex sandbox must be `-s read-only` so `~/.memoree/memory`
-is not a missing workspace path.
+is not a missing workspace path. Live LLM turns default to Claude `haiku`
+and Codex `gpt-5.4-mini` with `model_reasoning_effort=low` so they do not
+inherit Opus / frontier Codex from the operator profile. Override with
+`MEMOREE_LIVE_CLAUDE_MODEL` and `MEMOREE_LIVE_CODEX_MODEL`.
 
 On a disposable VM whose job is this PR, the complete live proof is:
 
@@ -214,7 +217,9 @@ are generated and must not be edited by hand. Do not add a new harness.
 - `npm run build` type-checks and builds the CLI and supported runtime bundles.
 - `npm test` runs the full source and built-artifact suite.
 - `npm run live:e2e` runs unaided Claude Code + Codex sessions against an
-  isolated DB (needs promoted runtime bundles, authenticated CLIs).
+  isolated DB (needs promoted runtime bundles, authenticated CLIs). Live turns
+  use Claude `haiku` and Codex `gpt-5.4-mini` unless `MEMOREE_LIVE_CLAUDE_MODEL`
+  / `MEMOREE_LIVE_CODEX_MODEL` override them.
 - `npm run runtime:validate` is the promote-completion live gate (needs
   promoted or `MEMOREE_RUNTIME_DIR` bundles).
 - `npx vitest run tests/shared/atomic-write.test.ts` targets one test file.

@@ -7,6 +7,7 @@ import {
   assertAgentResponseContainsIdentifier,
   authenticatedClaudeEnvironment,
   classifyAgentCommandError,
+  claudeLiveCliArgs,
   copyCodexAuthentication,
   createValidationWorkspace,
   hookBodyContains,
@@ -16,6 +17,13 @@ import {
   lexicalValidationPrompt,
   claudeLexicalRecallPrompt,
   CLAUDE_LEXICAL_RECALL_ATTEMPTS,
+  DEFAULT_LIVE_CLAUDE_MODEL,
+  DEFAULT_LIVE_CODEX_MODEL,
+  DEFAULT_LIVE_CODEX_REASONING_EFFORT,
+  liveClaudeModel,
+  liveCodexModel,
+  liveCodexReasoningEffort,
+  codexExecLiveArgs,
   codexSemanticRecallPrompt,
   skipLiveCodexRequested,
   waitForCapture,
@@ -259,6 +267,54 @@ describe("runtime validation skip-live-codex", () => {
     expect(skipLiveCodexRequested(["node", "runtime-validate.mjs"], {})).toBe(false);
     expect(skipLiveCodexRequested(["node", "runtime-validate.mjs", "--skip-live-codex"], {})).toBe(true);
     expect(skipLiveCodexRequested(["node", "runtime-validate.mjs"], { MEMOREE_VALIDATION_SKIP_LIVE_CODEX: "1" })).toBe(true);
+  });
+});
+
+describe("runtime validation live models", () => {
+  it("defaults Claude to haiku and Codex to gpt-5.4-mini with low effort", () => {
+    expect(DEFAULT_LIVE_CLAUDE_MODEL).toBe("haiku");
+    expect(DEFAULT_LIVE_CODEX_MODEL).toBe("gpt-5.4-mini");
+    expect(DEFAULT_LIVE_CODEX_REASONING_EFFORT).toBe("low");
+    expect(liveClaudeModel({})).toBe("haiku");
+    expect(liveCodexModel({})).toBe("gpt-5.4-mini");
+    expect(liveCodexReasoningEffort({})).toBe("low");
+  });
+
+  it("honors MEMOREE_LIVE_* overrides and ignores blank values", () => {
+    expect(liveClaudeModel({ MEMOREE_LIVE_CLAUDE_MODEL: "opus" })).toBe("opus");
+    expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "gpt-5.5" })).toBe("gpt-5.5");
+    expect(liveCodexReasoningEffort({ MEMOREE_LIVE_CODEX_REASONING_EFFORT: "medium" })).toBe("medium");
+    expect(liveClaudeModel({ MEMOREE_LIVE_CLAUDE_MODEL: "  " })).toBe("haiku");
+    expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "" })).toBe("gpt-5.4-mini");
+  });
+
+  it("builds claude -p --model and codex exec -m flags", () => {
+    expect(claudeLiveCliArgs("PROMPT", ["--bare"], {})).toEqual([
+      "-p", "PROMPT", "--model", "haiku", "--bare",
+    ]);
+    expect(claudeLiveCliArgs("PROMPT", ["--bare"], { MEMOREE_LIVE_CLAUDE_MODEL: "sonnet" })).toEqual([
+      "-p", "PROMPT", "--model", "sonnet", "--bare",
+    ]);
+    expect(codexExecLiveArgs(["--ephemeral", "hi"], {})).toEqual([
+      "exec",
+      "-m",
+      "gpt-5.4-mini",
+      "-c",
+      'model_reasoning_effort="low"',
+      "--ephemeral",
+      "hi",
+    ]);
+  });
+
+  it("pins every live Claude and Codex CLI invocation to those helpers", () => {
+    const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
+    const claudeCalls = source.match(/run\("claude"/g) ?? [];
+    const pinnedClaude = source.match(/run\("claude",\s*claudeLiveCliArgs\(/g) ?? [];
+    expect(claudeCalls.length).toBeGreaterThan(0);
+    expect(pinnedClaude).toHaveLength(claudeCalls.length);
+    expect(source.match(/runCodex\(\[/)).toBeNull();
+    expect(source).toContain("codexExecLiveArgs(");
+    expect(source).toContain("live models:");
   });
 });
 
