@@ -78,6 +78,19 @@ describe("Antigravity MCP session capture", () => {
     process.env.MEMOREE_CAPTURE = "true";
     process.env.MEMOREE_USER_NAME = "mcp-capture";
     process.env.ANTIGRAVITY_CONVERSATION_ID = "agy-conv-grep";
+    const { SqliteBackend } = await import("../../src/storage/sqlite.js");
+    const schema = new SqliteBackend(databasePath, "memory", {
+      memory: "memory",
+      sessions: "sessions",
+      skills: "skills",
+      rules: "memoree_rules",
+      goals: "memoree_goals",
+      kpis: "memoree_kpis",
+      docs: "memoree_docs",
+      codebase: "codebase",
+    });
+    await schema.initializeSchema();
+    await schema.close();
     const marker = "e7c1a2b3-4d5e-6789-abcd-ef0123456789";
     await captureMcpToolCall(
       "memoree_write",
