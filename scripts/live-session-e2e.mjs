@@ -37,7 +37,7 @@ import {
 function claudeLivePrompt(harborId, ruleId) {
   return [
     "You are in a Memoree live-harness session. Hooks are enabled. Complete EVERY step with tools.",
-    `1. Remember this private fact and include the UUID in your final answer: the harbor kite code is ${harborId}.`,
+    `1. Harbor kite identifier: ${harborId} — include that UUID in your final answer.`,
     "2. Run: cat ~/.memoree/memory/identity.json",
     "3. Run: cat ~/.memoree/memory/index.md",
     "4. Run: cat ~/.memoree/memory/rules.md",
@@ -175,7 +175,7 @@ export async function runLiveSessionE2E() {
     status("running a live Claude Code session (hooks enabled, not --bare)");
     const claudeSession = crypto.randomUUID();
     let claudeOut = "";
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       claudeOut = run("claude", claudeLiveCliArgs(claudeLivePrompt(harborId, ruleId), [
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",

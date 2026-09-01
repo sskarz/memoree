@@ -30,6 +30,11 @@ describe("live session e2e harness", () => {
     expect(pkg.scripts["live:e2e"]).toBe("node scripts/live-session-e2e.mjs");
   });
 
+  it("does not glue the harbor-kite UUID to a trailing period (capture redaction)", () => {
+    expect(source).not.toMatch(/\$\{harborId\}\./);
+    expect(source).toContain("Harbor kite identifier:");
+  });
+
   it("keeps Memoree state on isolated HOME/DB paths", () => {
     expect(source).toContain("MEMOREE_SQLITE_PATH");
     expect(source).toContain("createValidationWorkspace");

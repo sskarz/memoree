@@ -211,6 +211,12 @@ describe("redactSecrets — high-entropy backstop", () => {
     expect(redactSecrets(`org_id=${uuid}`)).toContain(uuid);
   });
 
+  it("does NOT mask a UUID glued to a trailing period by the entropy charset", () => {
+    const uuid = "a912d384-5605-43ab-bae7-e34b50e6f81a";
+    const sentence = `the harbor kite code is ${uuid}.`;
+    expect(redactSecrets(sentence)).toBe(sentence);
+  });
+
   it("does NOT mask a long single-case word or a filesystem path", () => {
     expect(redactSecrets("abcdefghijklmnopqrstuvwxyzabc")).toBe("abcdefghijklmnopqrstuvwxyzabc");
     const path = "/home/admin/sasun/work/memoree-api/internal/workspaces";

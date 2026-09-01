@@ -165,6 +165,7 @@ describe("runtime validation lexical marker", () => {
     const prompt = lexicalValidationPrompt(identifier);
     expect(redactSecrets(prompt)).toBe(prompt);
     expect(prompt).toContain(identifier);
+    expect(redactSecrets(`${prompt}.`)).toContain(identifier);
   });
 
   it("guards against the secret-like token label used by the failed validator", () => {
@@ -240,6 +241,7 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("runStructuredFilesystemViaHooks");
     expect(source).toContain("skipLiveCodex");
     expect(source).toContain("graph/query/store");
+    expect(source).toMatch(/retryHookUntilContains\([\s\S]*?Codex graph query\/store/);
     expect(source).toContain("graph/show/persistGraph");
     expect(source).toContain("graph/impact/writeSnapshot");
     expect(source).toContain("session-start.js");
@@ -258,6 +260,7 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("skillify");
     expect(source).toContain("embeddings");
     expect(source).toContain("\"graph\", \"history\"");
+    expect(source).not.toContain("private test fact");
     expect(source).not.toMatch(/mkdtempSync\(join\(tmpdir\(\)/);
   });
 });

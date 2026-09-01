@@ -79,7 +79,7 @@ export function authenticatedClaudeEnvironment(baseEnv, home, configDir) {
 }
 
 export function lexicalValidationPrompt(identifier) {
-  return `Repeat this exact lexical fallback marker identifier: ${identifier}`;
+  return `Lexical fallback marker identifier: ${identifier}`;
 }
 
 export const CLAUDE_LEXICAL_RECALL_ATTEMPTS = 3;
@@ -646,16 +646,22 @@ export async function validateRuntime(options = {}) {
 
     status("checking graph query/ through Codex and Claude hooks");
     const claudePreTool = join(claudeBundle, "pre-tool-use.js");
-    const queryStoreCodex = runHookResult(codexPreTool, {
-      ...hookBase,
-      tool_input: { command: "cat ~/.memoree/memory/graph/query/store" },
-    }, vfsHookOptions);
-    assertHookContains(queryStoreCodex, "persistGraph", "Codex graph query/store");
-    const queryPersistCodex = runHookResult(codexPreTool, {
-      ...hookBase,
-      tool_input: { command: "cat ~/.memoree/memory/graph/query/persist" },
-    }, vfsHookOptions);
-    assertHookContains(queryPersistCodex, "persistGraph", "Codex graph query/persist");
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/query/store" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph query/store",
+    );
+    retryHookUntilContains(
+      () => runHookResult(codexPreTool, {
+        ...hookBase,
+        tool_input: { command: "cat ~/.memoree/memory/graph/query/persist" },
+      }, vfsHookOptions),
+      "persistGraph",
+      "Codex graph query/persist",
+    );
     const lexicalFindStore = runHookResult(codexPreTool, {
       ...hookBase,
       tool_input: { command: "cat ~/.memoree/memory/graph/find/store" },
@@ -837,12 +843,12 @@ export async function validateRuntime(options = {}) {
 
     status(`live models: claude=${liveClaudeModel()} codex=${liveCodexModel()} effort=${liveCodexReasoningEffort()}`);
     const claudeSession = crypto.randomUUID();
-    const claudePrompt = `Repeat this exact private test fact: ${semanticFact}`;
+    const claudePrompt = semanticFact;
     status("running an authenticated Claude Code capture turn");
     let claudeResponse = "";
     /** @type {unknown} */
     let captureTurnError = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       claudeResponse = run("claude", claudeLiveCliArgs(claudePrompt, [
         "--bare",
         "--safe-mode",

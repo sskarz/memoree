@@ -57,7 +57,9 @@ function looksLikeSecret(tok: string): boolean {
   if (tok.length < 24) return false;
   if (/^\d+$/.test(tok)) return false; // pure number
   if (/^[0-9a-f]+$/i.test(tok)) return false; // hex hash / git SHA / md5
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tok)) return false; // UUID
+  // UUIDs, including a trailing `.`/`_`/`-` glued on by the entropy charset
+  // (`the id is <uuid>.` otherwise becomes one token and gets masked).
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[._-]*$/i.test(tok)) return false;
   // Provider model identifiers (e.g. claude-haiku-4-5-20251001, gpt-5.6-sol,
   // qwen2.5-coder-32b-instruct, us.anthropic.claude-3-5-sonnet-20241022-v2) —
   // a long dated slug can otherwise trip the entropy check, and these are
