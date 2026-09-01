@@ -4,18 +4,18 @@
  * CLI surface for the codebase-graph feature (Phase 1.5).
  *
  * memoree graph build [--cwd <path>]
- *   Walk the project for source files, run the tree-sitter extractor on each
- *   (TypeScript, JavaScript, Python, Go, Rust, Java, Ruby, C, C++), write a
- *   snapshot to ~/.memoree/graphs/<repo-key>/.
+ *   List git-tracked (and untracked-not-ignored) source files, run the
+ *   tree-sitter extractor on each (TypeScript, JavaScript, Python, Go, Rust,
+ *   Java, Ruby, C, C++), write a snapshot to ~/.memoree/graphs/<repo-key>/.
+ *   Refuses to run outside a git worktree — never walks $HOME or /.
  */
 
 import { execSync } from "node:child_process";
 import { loadConfig } from "../config.js";
 import { runDocsOnboarding } from "../docs/onboarding.js";
-import { tryGitTopLevel } from "../graph/git-hook-install.js";
 import { loadCurrentSnapshot } from "../graph/load-current.js";
 import { spawnDetachedNodeWorker } from "../utils/spawn-detached.js";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -42,6 +42,7 @@ import {
 } from "../graph/ignore-config.js";
 import {
   installPostCommitHook,
+  tryGitTopLevel,
   uninstallPostCommitHook,
 } from "../graph/git-hook-install.js";
 import { countHistoryEntries, readHistoryTail, type SnapshotTrigger } from "../graph/history.js";
@@ -58,8 +59,9 @@ const USAGE = `memoree graph — codebase-graph commands (Phase 1.5)
 
 Usage:
   memoree graph build [--cwd <path>]
-      Walk the project for supported source files (TS, JS, Python, Go, Rust, Java, Ruby, C, C++), extract symbols + edges,
+      List git-tracked source files (TS, JS, Python, Go, Rust, Java, Ruby, C, C++), extract symbols + edges,
       and write a snapshot to ~/.memoree/graphs/<repo-key>/snapshots/<commit-sha>.json.
+      Requires a git worktree; refuses to crawl a non-git directory.
       Also updates ~/.memoree/graphs/<repo-key>/latest-commit.txt and the
       per-repo .last-build.json (consumed by the SessionEnd auto-build hook).
 
@@ -457,6 +459,11 @@ export async function runBuildCommand(args: string[]): Promise<void> {
   // here keeps logged paths absolute too (worktree_path, output messages).
   const cwd = resolve(opts.cwd);
 
+  if (tryGitTopLevel(cwd) === null) {
+    console.error("memoree graph build: not a git repository. Run this from a git worktree.");
+    process.exit(1);
+  }
+
   const { key: repoKey, project } = deriveProjectKey(cwd);
   const baseDir = repoDir(repoKey);
   const commitSha = readGitCommit(cwd);
@@ -465,7 +472,7 @@ export async function runBuildCommand(args: string[]): Promise<void> {
 
   console.log(`Building codebase graph for ${project}`);
   console.log(`  repo_key:   ${repoKey}`);
-  console.log(`  commit_sha: ${commitSha ?? "(not in a git repo)"}`);
+  console.log(`  commit_sha: ${commitSha ?? "(empty repository — no commits yet)"}`);
   console.log(`  branch:     ${branch ?? "(none / detached)"}`);
   console.log(`  output:     ${baseDir}`);
   console.log("");
@@ -684,28 +691,20 @@ export async function runPullCommand(args: string[]): Promise<void> {
 
 function discoverSourceFiles(rootDir: string, config: GraphIgnoreConfig): string[] {
   const ignore = ignoreDirSet(config);
-  // Preferred path: let git's own ignore engine (.gitignore, nested rules,
-  // .git/info/exclude, anchoring) decide what's in-repo, then drop anything
-  // under an ignored dir name as a safety net for tracked junk.
-  if (config.respectGitignore) {
-    const fromGit = gitListSourceFiles(rootDir, ignore);
-    if (fromGit !== null) return fromGit;
-  }
-  // Fallback (non-git repo, or git unavailable): manual walk with name-based ignores.
-  const out: string[] = [];
-  walk(rootDir, out, ignore);
-  out.sort(); // deterministic order across runs (FS readdir order isn't guaranteed)
-  return out;
+  // Git's own ignore engine (.gitignore, nested rules, .git/info/exclude,
+  // anchoring) decides what's in-repo. Never walk the filesystem: a failed
+  // `git ls-files` used to crawl $HOME / / when this wasn't a git repo.
+  return gitListSourceFiles(rootDir, ignore);
 }
 
 /**
  * List in-repo source files via `git ls-files --cached --others --exclude-standard`
  * (tracked + untracked-not-ignored, honoring .gitignore EXACTLY — anchoring and
- * nested rules included). Returns absolute paths, or null when this isn't a
- * usable git repo (caller falls back to walk()). The ignore-name set is still
- * applied as a safety net for directories the repo happens to track.
+ * nested rules included). Returns absolute paths, or [] when git is unavailable
+ * inside an otherwise-valid worktree. The ignore-name set is still applied as
+ * a safety net for directories the repo happens to track.
  */
-function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] | null {
+function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] {
   let stdout: string;
   try {
     stdout = execSync("git ls-files --cached --others --exclude-standard -z", {
@@ -715,7 +714,7 @@ function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] | nu
       maxBuffer: 64 * 1024 * 1024,
     });
   } catch {
-    return null; // not a git repo / git unavailable
+    return [];
   }
   const out: string[] = [];
   for (const rel of stdout.split("\0")) {
@@ -726,27 +725,6 @@ function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] | nu
   }
   out.sort();
   return out;
-}
-
-function walk(dir: string, out: string[], ignore: Set<string>, relPrefix = ""): void {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return; // unreadable dirs (permissions, races) are skipped silently
-  }
-  for (const entry of entries) {
-    const rel = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
-    if (pathHasIgnoredSegment(rel, ignore)) continue;
-    // Skip dotfiles/dotdirs except the dir itself (rare edge — we entered via name, not '.')
-    if (entry.name.startsWith(".")) continue;
-    const abs = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(abs, out, ignore, rel);
-    } else if (entry.isFile() && isSourceFile(entry.name)) {
-      out.push(abs);
-    }
-  }
 }
 
 function isSourceFile(name: string): boolean {

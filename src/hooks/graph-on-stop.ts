@@ -26,7 +26,8 @@
  *
  *   1. Read ~/.memoree/graphs/<key>/.last-build.json
  *   2. If now - lastBuild.ts < TICK_INTERVAL_MS → exit 0 (rate limit)
- *   3. Get HEAD via git rev-parse. If null → exit 0 (not in a git repo)
+ *   3. `git rev-parse --show-toplevel`. If null → exit 0 (not in a git repo).
+ *      Empty repos with no HEAD still count as git worktrees (first build).
  *   4. If HEAD == lastBuild.commit_sha → exit 0 (no new commits)
  *   5. If `git diff --name-only <last-commit>..HEAD -- '*.ts' '*.tsx' | wc -l` < 1
  *      → exit 0 (threshold gate; only commit-touched source files trigger)
@@ -50,6 +51,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { acquireBuildLock, releaseBuildLock } from "../graph/build-lock.js";
+import { tryGitTopLevel } from "../graph/git-hook-install.js";
 import { readLastBuild } from "../graph/last-build.js";
 import { repoDir } from "../graph/snapshot.js";
 import { isDirectRun } from "../utils/direct-run.js";
@@ -112,14 +114,15 @@ export function decideGate(ctx: GateContext): GateDecision {
   // .last-build.json and the gate would refuse to rebuild for either.
   const last = readLastBuild(baseDir, workTreeIdFor(ctx.cwd));
 
-  // CodeRabbit P1: check git state BEFORE the first-build fast-path.
+  // Check git worktree BEFORE the first-build fast-path.
   // Without this, the hook fires on a brand-new non-git directory (which
-  // hits last === null) and creates snapshots for arbitrary non-repo cwds
-  // — contradicting the documented "not in a git repo → exit 0" skip.
-  const head = readGitCommit(ctx.cwd);
-  if (head === null) {
+  // hits last === null) and creates snapshots for arbitrary non-repo cwds.
+  // Empty repos (no HEAD yet) still count — git ls-files works and the
+  // first build should populate a snapshot.
+  if (tryGitTopLevel(ctx.cwd) === null) {
     return { fire: false, reason: "not in a git repo" };
   }
+  const head = readGitCommit(ctx.cwd);
 
   if (last === null) {
     // Never built for this worktree before AND we're in a git repo: fire
