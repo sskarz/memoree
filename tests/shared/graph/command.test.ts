@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, chmodSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,6 +196,40 @@ describe("runGraphCommand build — end-to-end against a tiny git repo", () => {
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(readdirSync(graphsHome)).toEqual([]);
     } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it("fails when git ls-files errors and does not write a snapshot", async () => {
+    initTinyGitRepo(workDir, { "src/a.ts": "export const x = 1;" });
+    const bin = join(workDir, "bin");
+    mkdirSync(bin);
+    const realGit = execSync("command -v git", { encoding: "utf8" }).trim();
+    const wrapper = join(bin, "git");
+    writeFileSync(wrapper, `#!/bin/sh
+for a in "$@"; do
+  if [ "$a" = "ls-files" ]; then
+    echo "fatal: Unable to read current index" >&2
+    exit 128
+  fi
+done
+exec ${JSON.stringify(realGit)} "$@"
+`);
+    chmodSync(wrapper, 0o755);
+    const prevPath = process.env.PATH;
+    process.env.PATH = `${bin}:${prevPath ?? ""}`;
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit(${code})`);
+    }) as never);
+    try {
+      const { err } = await captureOutput(async () => {
+        try { await runGraphCommand(["build", "--cwd", workDir]); } catch { /* swallow forced exit */ }
+      });
+      expect(err).toMatch(/git ls-files failed/);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(readdirSync(graphsHome)).toEqual([]);
+    } finally {
+      process.env.PATH = prevPath;
       exitSpy.mockRestore();
     }
   });

@@ -478,7 +478,15 @@ export async function runBuildCommand(args: string[]): Promise<void> {
   console.log("");
 
   const ignoreConfig = loadGraphIgnore();
-  const sourceFiles = discoverSourceFiles(cwd, ignoreConfig);
+  let sourceFiles: string[];
+  try {
+    sourceFiles = discoverSourceFiles(cwd, ignoreConfig);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
+    process.exit(1);
+    return;
+  }
   console.log(`Discovered ${sourceFiles.length} source files. Extracting...`);
 
   // The parser stack includes optional native tree-sitter packages. Load it
@@ -700,9 +708,9 @@ function discoverSourceFiles(rootDir: string, config: GraphIgnoreConfig): string
 /**
  * List in-repo source files via `git ls-files --cached --others --exclude-standard`
  * (tracked + untracked-not-ignored, honoring .gitignore EXACTLY — anchoring and
- * nested rules included). Returns absolute paths, or [] when git is unavailable
- * inside an otherwise-valid worktree. The ignore-name set is still applied as
- * a safety net for directories the repo happens to track.
+ * nested rules included). Returns absolute paths. An empty successful listing
+ * (empty repo, or no source files) is valid. A failed `git ls-files` throws so
+ * the build does not write an empty snapshot and stamp last-build.
  */
 function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] {
   let stdout: string;
@@ -710,11 +718,12 @@ function gitListSourceFiles(rootDir: string, ignore: Set<string>): string[] {
     stdout = execSync("git ls-files --cached --others --exclude-standard -z", {
       cwd: rootDir,
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 64 * 1024 * 1024,
     });
-  } catch {
-    return [];
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`memoree graph build: git ls-files failed. Cannot list source files for this worktree.\n${detail}`);
   }
   const out: string[] = [];
   for (const rel of stdout.split("\0")) {
