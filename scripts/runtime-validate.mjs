@@ -216,6 +216,51 @@ export function antigravityLivePrompt(identifier) {
   ].join(" ");
 }
 
+/**
+ * Second unaided agy turn: prove Claude/Codex facts and the shared graph/docs
+ * mount are readable through MCP in the same project/DB.
+ */
+export function antigravityCrossAgentReadPrompt(opts) {
+  const harborNeedle = opts.harborNeedle ?? "harbor kite";
+  const lanternId = opts.lanternId;
+  const claudeRuleId = opts.claudeRuleId;
+  const steps = [
+    "You have Memoree MCP tools. Complete EVERY step.",
+    `1. Call memoree_grep with pattern ${JSON.stringify(harborNeedle)} and path "".`,
+  ];
+  if (lanternId) {
+    steps.push(`2. Call memoree_grep with pattern ${lanternId} and path "".`);
+  }
+  if (claudeRuleId) {
+    steps.push(`3. Call memoree_read with path rules/active/${claudeRuleId}.md`);
+  }
+  steps.push(
+    "4. Call memoree_read with path graph/query/store",
+    "5. Call memoree_read with path graph/layers",
+    "6. Call memoree_read with path docs/index.md",
+    "7. Call memoree_read with path identity.json",
+    "Copy every UUID from those tool results into your final answer.",
+    "If graph/query/store contains persistGraph, include persistGraph.",
+    "If a UUID is missing, reply NONE for that step.",
+    "Do not generate a UUID. Do not guess.",
+  );
+  return steps.join("\n");
+}
+
+/** Cheap-model graph share check: copy persistGraph from the shared VFS. */
+export function catGraphQueryPrompt(path = "~/.memoree/memory/graph/query/store") {
+  return [
+    `Run this exact shell command: cat ${path}`,
+    "If stdout contains persistGraph, reply persistGraph.",
+    "If stdout has no persistGraph, reply NONE.",
+    "Do not invent a symbol name.",
+  ].join("\n");
+}
+
+export function agyLivePath(realHome, env = process.env) {
+  return `${join(realHome, ".local", "bin")}:/tmp/agy-bin:${env.PATH ?? ""}`;
+}
+
 export function assertAntigravityLiveUsedMcp(isolatedHome, agyResponse) {
   assert(!/do not have access to the `memoree_read`/i.test(agyResponse),
     `Live Antigravity did not receive Memoree MCP tools; response=${String(agyResponse).slice(0, 400)}`);
@@ -501,10 +546,11 @@ async function captureUntilEmbedded(bundlePath, input, options, databasePath) {
   throw new Error("Timed out waiting for a 768-element embedding from the installed capture hook");
 }
 
-function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier) {
+function inspectDatabase(databasePath, semanticFact, semanticIdentifier, lexicalIdentifier, agyIdentifier) {
   return inspectCaptureDatabase(databasePath, {
     requireInEvents: lexicalIdentifier ? [semanticFact, lexicalIdentifier] : [semanticFact],
     requireInSummaries: lexicalIdentifier ? [semanticIdentifier, lexicalIdentifier] : [semanticIdentifier],
+    requireInEventsOrSummaries: agyIdentifier ? [agyIdentifier] : [],
     emptyEventsMessage: "No runtime validation events were captured",
     emptySummariesMessage: "No runtime validation summaries were generated",
   });
@@ -1216,6 +1262,15 @@ export async function validateRuntime(options = {}) {
     // the value. The unique UUID is the durable, non-derivable proof that the
     // generated summary retained the captured fact.
     await waitForCapture(databasePath, semanticIdentifier, { requireSummary: true });
+    status("checking Antigravity MCP can grep the Claude observatory-lantern fact");
+    {
+      const mcpClaudeGrep = callMemoreeMcpTool(mcpServer, "memoree_grep", {
+        pattern: "observatory lantern",
+        path: "",
+      }, mcpOpts);
+      assert(mcpClaudeGrep.ok && mcpClaudeGrep.text.includes(semanticIdentifier),
+        `Antigravity MCP grep missed Claude observatory-lantern ${semanticIdentifier}: ${mcpClaudeGrep.text.slice(0, 400)}`);
+    }
     {
       const db = new DatabaseSync(databasePath, { readOnly: true });
       try {
@@ -1473,6 +1528,15 @@ export async function validateRuntime(options = {}) {
 
       status("waiting for the Codex lexical summary");
       await waitForCapture(databasePath, lexicalIdentifier, { requireSummary: true });
+      status("checking Antigravity MCP can grep the Codex lexical identifier");
+      {
+        const mcpCodexGrep = callMemoreeMcpTool(mcpServer, "memoree_grep", {
+          pattern: lexicalIdentifier,
+          path: "",
+        }, mcpOpts);
+        assert(mcpCodexGrep.ok && mcpCodexGrep.text.includes(lexicalIdentifier),
+          `Antigravity MCP grep missed Codex lexical ${lexicalIdentifier}: ${mcpCodexGrep.text.slice(0, 400)}`);
+      }
     } else {
       status("skipping live Codex exec (--skip-live-codex)");
     }
@@ -1481,13 +1545,15 @@ export async function validateRuntime(options = {}) {
     const runLiveAntigravity = !skipLiveAntigravity
       && antigravityCliAvailable()
       && geminiKey.length > 0;
+    /** @type {string | null} */
+    let agyIdentifier = null;
     if (runLiveAntigravity) {
       status("installing Antigravity hooks into the isolated profile");
       run(process.execPath, [cli, "antigravity", "install"], { cwd: repository, env });
       status("running an authenticated Antigravity capture turn (isolated HOME + GEMINI_API_KEY)");
       writeIsolatedAntigravityGeminiSettings(isolatedHome);
-      const agyIdentifier = crypto.randomUUID();
-      const agyPath = `${join(realHome, ".local", "bin")}:/tmp/agy-bin:${process.env.PATH ?? ""}`;
+      agyIdentifier = crypto.randomUUID();
+      const agyPath = agyLivePath(realHome);
       const agyResponse = run("agy", [
         "-p",
         antigravityLivePrompt(agyIdentifier),
@@ -1501,6 +1567,81 @@ export async function validateRuntime(options = {}) {
       assertAntigravityLiveUsedMcp(isolatedHome, agyResponse);
       status("waiting for the Antigravity unaided capture");
       await waitForCapture(databasePath, agyIdentifier, { requireSummary: false, timeoutMs: 60_000 });
+
+      status("checking Claude and Codex VFS can read the Antigravity-written rule");
+      retryHookUntilContains(
+        () => runHookResult(claudePreTool, {
+          session_id: crypto.randomUUID(),
+          cwd: repository,
+          hook_event_name: "PreToolUse",
+          tool_name: "Grep",
+          tool_use_id: "runtime-validation-agy-grep",
+          tool_input: { path: "~/.memoree/memory", pattern: agyIdentifier },
+        }, vfsHookOptions),
+        agyIdentifier,
+        "Claude Grep Antigravity identifier",
+      );
+      retryHookUntilContains(
+        () => runHookResult(codexPreTool, {
+          ...hookBase,
+          tool_input: { command: `cat ~/.memoree/memory/rules/active/${agyIdentifier}.md` },
+        }, vfsHookOptions),
+        agyIdentifier,
+        "Codex cat Antigravity rule",
+      );
+
+      status("checking Claude proactive semantic recall of the Antigravity MCP row");
+      const agyRecall = runHookResult(join(claudeBundle, "recall.js"), {
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "UserPromptSubmit",
+        prompt: `Remember the Antigravity Memoree identifier ${agyIdentifier}. What exact identifier did we record?`,
+      }, { cwd: repository, env });
+      assertHookExitZero(agyRecall, "Claude recall of Antigravity identifier");
+      if (agyRecall.stdout.includes(agyIdentifier)) {
+        status("Antigravity MCP semantic recall: hit");
+      } else {
+        status("Antigravity MCP semantic recall: miss (MCP capture skips embeddings; wiki summary is best-effort)");
+      }
+
+      if (!skipLiveCodex) {
+        status("checking live Codex grep of the Antigravity identifier");
+        const agyCodexRecall = runCodex(codexExecLiveArgs([
+          "--skip-git-repo-check",
+          "--dangerously-bypass-hook-trust",
+          "-s", "read-only",
+          grepRecallPrompt(agyIdentifier),
+        ]), { cwd: repository, env: recallEnv });
+        assertAgentResponseContainsIdentifier(
+          agyCodexRecall,
+          agyIdentifier,
+          "Codex recall of Antigravity identifier",
+        );
+      }
+
+      status("checking live Claude grep of the Antigravity identifier");
+      const agyClaudeRecall = run("claude", claudeLiveCliArgs(
+        grepRecallPrompt(agyIdentifier),
+        [
+          "--append-system-prompt",
+          "Reply with only the matching UUID. Do not read AGENTS.md or run unrelated tools.",
+          "--settings", claudeSettings,
+          "--output-format", "text",
+          "--no-session-persistence",
+        ],
+      ), {
+        cwd: repository,
+        env: authenticatedClaudeEnvironment(
+          { ...env, MEMOREE_CAPTURE: "false" },
+          realHome,
+          realClaudeConfigDir,
+        ),
+      });
+      assertAgentResponseContainsIdentifier(
+        agyClaudeRecall,
+        agyIdentifier,
+        "Claude Code recall of Antigravity identifier",
+      );
     } else {
       status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
     }
@@ -1564,11 +1705,12 @@ export async function validateRuntime(options = {}) {
       semanticFact,
       semanticIdentifier,
       skipLiveCodex ? null : lexicalIdentifier,
+      agyIdentifier,
     );
     process.stdout.write(
       skipLiveCodex
-        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, memory index/summaries/sessions, docs set/show/find, rules/goal/kpi/skillify CLI, Claude capture/summary/recall/Grep/Glob/Write-deny, Codex capture/Stop, lexical Grep.\n`
-        : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall.\n`,
+        ? `Runtime validation passed without live Codex exec: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, graph query/find/show/impact/neighborhood/layers/tour/path, KPI VFS, memory index/summaries/sessions, docs set/show/find, rules/goal/kpi/skillify CLI, Claude capture/summary/recall/Grep/Glob/Write-deny, Codex capture/Stop, lexical Grep, Claude↔Antigravity share.\n`
+        : `Runtime validation passed: ${counts.events} events, ${counts.summaries} summaries, SQLite integrity/WAL, 768-d embeddings, semantic and lexical cross-agent recall, Claude↔Codex↔Antigravity share.\n`,
     );
   } finally {
     removeValidationWorkspace(root);

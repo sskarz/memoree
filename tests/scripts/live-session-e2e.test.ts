@@ -24,6 +24,19 @@ describe("live session e2e harness", () => {
     expect(source).toContain("waitForCapture(databasePath, agyId");
   });
 
+  it("proves Claude↔Codex↔Antigravity retrieve in the same isolated project", () => {
+    expect(source).toContain("claudeLanternRecallPrompt");
+    expect(source).toContain("catGraphQueryPrompt");
+    expect(source).toContain("antigravityCrossAgentReadPrompt");
+    expect(source).toContain("live Claude Codex-lantern recall");
+    expect(source).toContain("live Codex graph query/store");
+    expect(source).toContain("live Antigravity harbor-kite recall");
+    expect(source).toContain("live Antigravity lantern recall");
+    expect(source).toContain("live Claude Antigravity recall");
+    expect(source).toContain("live Codex Antigravity recall");
+    expect(source).toContain("Claude↔Codex↔Antigravity share");
+  });
+
   it("pins unaided Claude and Codex turns to the cheap live models", () => {
     expect(source).toContain("claudeLiveCliArgs(");
     expect(source).toContain("codexExecLiveArgs(");

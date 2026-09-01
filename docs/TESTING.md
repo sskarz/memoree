@@ -230,7 +230,10 @@ with N &gt; 0 and M &gt; 0. Also:
 - Codex ran **without** `--ephemeral`, with `-s read-only`, `-m gpt-5.6-luna`
   (or `MEMOREE_LIVE_CODEX_MODEL`), and `model_reasoning_effort=low`
 - harbor-kite UUID in the Claude answer, later Claude recall, and Codex grep
-- lantern UUID captured from Codex
+- lantern UUID captured from Codex, then Claude grep of that lantern UUID
+- unless Antigravity live is skipped: Agy UUID in Claude and Codex grep; Agy
+  MCP grep of harbor-kite and lantern; Agy `memoree_read` of `graph/query/store`
+  contains `persistGraph`
 - wiki/session reflection produced summaries (not only session rows)
 - 768-d embeddings present
 - CLI side paths used in the script succeeded (`graph build`, `docs set/show`,
@@ -264,6 +267,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 
 | Feature | S | V | L | Notes |
 |---|---|---|---|---|
+| Cross-agent session/rule/graph retrieve (Claude↔Codex↔Agy) | S | V | L | Same isolated DB/cwd. Claude/Codex grep the Agy UUID and cat the Agy-written rule; Agy MCP greps Claude/Codex facts and reads `graph/query/store`. MCP capture skips embeddings, so proactive semantic recall of an Agy-only row is recorded as hit/miss, not a silent pass. |
 | Claude SessionStart inject + placeholder summary | S | V | L | Auto-mine/backfill spawn is unit-locked and wired |
 | Claude session-start-setup (async) | S | V | L | Runs in plugin; validate also invokes the bundle |
 | Claude UserPromptSubmit capture | S | V | L | |
@@ -287,7 +291,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | KPI CLI + `kpi/<goal>/<kpi>.md` | S | V | L | |
 | `index.md` / `summaries/` / `sessions/` | S | V | L | |
 | Graph `build` + `history` | S | V | L | |
-| Graph VFS `query/` + `layers` | S | V | L | Live e2e cats `graph/layers` and `graph/query/store` only |
+| Graph VFS `query/` + `layers` | S | V | L | Live e2e: Claude cats `graph/layers` and `graph/query/store`; Codex cats `query/store`; Agy `memoree_read` of `graph/query/store` |
 | Graph VFS `find`/`show`/`impact`/`neighborhood`/`tour`/`path` | S | V | — | Driven in `runtime:validate`, not unaided live |
 | Graph `init` / `diff` / `pull` / `uninstall` | S | — | — | CLI + git-hook unit tests; not in live harness |
 | Docs set/show/list + VFS `docs/index.md`, `docs/find/<words>`, `docs/<file>.md` | S | V | L | There is no `docs/leaves` path |
@@ -344,6 +348,11 @@ Not missing from the product on purpose, but not fully live-proven:
 - Interactive TUIs
 - Codex SessionStart during `codex exec` (matcher now includes `clear`/`compact`; exec may still skip SessionStart)
 - `recall-events.jsonl` ignoring `MEMOREE_STATE_DIR`
+
+Documented shareability edges (source-tested; not a schema change in this pass):
+
+- Session/summary `project` is cwd basename only; grep/recall are DB-wide. Docs/skills/graphs use `deriveProjectKey`. Antigravity proactive recall matches Claude/Codex (no basename filter).
+- Skillify project install is Claude-canonical (`<cwd>/.claude/skills`); Codex/Agy see those files only after global pull + symlink fan-out.
 
 Redundant or stale on purpose until cleaned up:
 
