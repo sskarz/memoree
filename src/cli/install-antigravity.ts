@@ -1,6 +1,6 @@
-import { existsSync, lstatSync, readFileSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   HOME, pkgRoot, ensureDir, copyDir, writeJson, writeJsonIfChanged,
   writeVersionStamp, symlinkForce, log, warn,
@@ -92,9 +92,17 @@ export function stripMcpServer(existing: Record<string, unknown>): Record<string
   return next;
 }
 
-function tryAgyPluginInstall(): void {
+const ESM_PACKAGE_JSON = '{"type":"module"}\n';
+
+function writeBundleEsmMarker(pluginDir: string): void {
+  writeFileSync(join(pluginDir, "bundle", "package.json"), ESM_PACKAGE_JSON);
+}
+
+/** Register with `agy` from the package harness, never the destination. */
+function tryAgyPluginInstall(sourceDir: string): void {
+  if (resolve(sourceDir) === resolve(ANTIGRAVITY_PLUGIN_DIR)) return;
   try {
-    execFileSync("agy", ["plugin", "install", ANTIGRAVITY_PLUGIN_DIR], { stdio: "ignore" });
+    execFileSync("agy", ["plugin", "install", sourceDir], { stdio: "ignore" });
     log("  Antigravity    agy plugin install ok");
   } catch {
     // IDE users may not have `agy` on PATH; hooks + MCP still land on disk.
@@ -125,6 +133,8 @@ export function installAntigravity(options: { packageRoot?: string } = {}): void
   if (!existsSync(srcBundle)) {
     throw new Error(`Antigravity bundle missing at ${srcBundle}. Run 'npm run build' first.`);
   }
+
+  tryAgyPluginInstall(join(root, "harnesses", "antigravity"));
 
   ensureDir(ANTIGRAVITY_PLUGIN_DIR);
   copyDir(srcBundle, join(ANTIGRAVITY_PLUGIN_DIR, "bundle"));
@@ -162,7 +172,7 @@ export function installAntigravity(options: { packageRoot?: string } = {}): void
   }
 
   writeVersionStamp(ANTIGRAVITY_PLUGIN_DIR, getVersion());
-  tryAgyPluginInstall();
+  writeBundleEsmMarker(ANTIGRAVITY_PLUGIN_DIR);
   log(`  Antigravity    installed -> ${ANTIGRAVITY_PLUGIN_DIR}`);
 }
 
