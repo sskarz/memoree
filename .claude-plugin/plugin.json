@@ -1,7 +1,7 @@
 {
   "name": "memoree",
   "description": "Local-first persistent memory for Claude Code",
-  "version": "0.7.149",
+  "version": "0.7.150",
   "author": {
     "name": "sskarz"
   },

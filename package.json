@@ -1,6 +1,6 @@
 {
   "name": "@sskarz/memoree",
-  "version": "0.7.149",
+  "version": "0.7.150",
   "description": "Local-first persistent memory for Claude Code, Codex, and Antigravity",
   "type": "module",
   "license": "Apache-2.0",
