@@ -242,6 +242,8 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("callMemoreeMcpTool");
     expect(source).toContain("encodeMcpStdio");
     expect(source).toContain("ndjson");
+    expect(source).toContain("call_mcp_tool");
+    expect(source).toContain("do not have access to the `memoree_read`");
     expect(source).toContain("antigravityLivePrompt");
     expect(source).toContain("memoree_head");
     expect(source).toContain("graph/query/store");

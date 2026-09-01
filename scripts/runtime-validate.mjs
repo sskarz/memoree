@@ -1385,15 +1385,18 @@ export async function validateRuntime(options = {}) {
         agyIdentifier,
         "Antigravity capture turn",
       );
+      assert(!/do not have access to the `memoree_read`/i.test(agyResponse),
+        `Live Antigravity did not receive Memoree MCP tools; response=${agyResponse.slice(0, 400)}`);
       const agyHomeText = (() => {
         const roots = [
           join(isolatedHome, ".gemini", "antigravity-cli", "brain"),
           join(isolatedHome, ".gemini", "antigravity-cli", "log"),
           join(isolatedHome, ".gemini", "antigravity-cli", "conversations"),
+          join(isolatedHome, ".gemini", "antigravity-cli", "mcp"),
         ].filter(existsSync);
         if (roots.length === 0) return "";
         try {
-          return execFileSync("grep", ["-R", "--include=*.jsonl", "--include=*.log", "--include=*.txt", "memoree_read", ...roots], {
+          return execFileSync("grep", ["-R", "--include=*.jsonl", "--include=*.log", "--include=*.txt", "--include=*.json", "call_mcp_tool\\|memoree_read", ...roots], {
             encoding: "utf8",
             timeout: 10_000,
           });
@@ -1401,8 +1404,8 @@ export async function validateRuntime(options = {}) {
           return "";
         }
       })();
-      assert(agyHomeText.trim().length > 0,
-        "Live Antigravity did not call memoree_read; MCP tools were not used");
+      assert(/call_mcp_tool/.test(agyHomeText) && /memoree_read/.test(agyHomeText),
+        "Live Antigravity did not call memoree_read via MCP; tools were not used");
     } else {
       status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
     }
