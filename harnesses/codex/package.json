@@ -1,6 +1,6 @@
 {
   "name": "memoree-codex",
-  "version": "0.7.150",
+  "version": "0.7.151",
   "description": "Cloud-backed persistent shared memory for OpenAI Codex CLI powered by Memoree",
   "type": "module"
 }
