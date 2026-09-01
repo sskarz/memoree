@@ -34,7 +34,7 @@ export function runStructuredFilesystemViaHooks(
 ): Array<{ command: string; status: number | null; stdout: string; stderr: string }>;
 export function skipLiveCodexRequested(argv?: string[], env?: NodeJS.ProcessEnv): boolean;
 export const DEFAULT_LIVE_CLAUDE_MODEL: "haiku";
-export const DEFAULT_LIVE_CODEX_MODEL: "gpt-5.4-mini";
+export const DEFAULT_LIVE_CODEX_MODEL: "gpt-5.6-luna";
 export const DEFAULT_LIVE_CODEX_REASONING_EFFORT: "low";
 export function liveClaudeModel(env?: NodeJS.ProcessEnv): string;
 export function liveCodexModel(env?: NodeJS.ProcessEnv): string;

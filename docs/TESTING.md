@@ -25,7 +25,7 @@ scripts already set these; copy them if you add a harness:
 | `HOME` / `CODEX_HOME` | isolated profiles (Codex hooks + auth copy) |
 | `MEMOREE_VALIDATION_CLAUDE_HOME` | real home so Claude auth and wiki workers still work |
 | `MEMOREE_LIVE_CLAUDE_MODEL` | optional; default `haiku` for live `claude -p` |
-| `MEMOREE_LIVE_CODEX_MODEL` | optional; default `gpt-5.4-mini` for live `codex exec` |
+| `MEMOREE_LIVE_CODEX_MODEL` | optional; default `gpt-5.6-luna` for live `codex exec` |
 | `MEMOREE_LIVE_CODEX_REASONING_EFFORT` | optional; default `low` |
 
 `recall-events.jsonl` currently writes under `homedir()` / `.memoree`, not
@@ -216,7 +216,7 @@ Live session e2e passed: N events, M summaries, unaided Claude/Codex hooks, …
 with N &gt; 0 and M &gt; 0. Also:
 
 - Claude ran **without** `--bare` and with `--model haiku` (or `MEMOREE_LIVE_CLAUDE_MODEL`)
-- Codex ran **without** `--ephemeral`, with `-s read-only`, `-m gpt-5.4-mini`
+- Codex ran **without** `--ephemeral`, with `-s read-only`, `-m gpt-5.6-luna`
   (or `MEMOREE_LIVE_CODEX_MODEL`), and `model_reasoning_effort=low`
 - harbor-kite UUID in the Claude answer, later Claude recall, and Codex grep
 - lantern UUID captured from Codex
@@ -285,7 +285,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
 | npm publish from `main` (OIDC trusted publisher) | S | — | — | `publish.yml` uses Node 24, environment `memoree github actions`, no `registry-url` / `NODE_AUTH_TOKEN`. `release-from-main.mjs` strips classic tokens. Users upgrade with `npx -y @sskarz/memoree install` |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |
-| Live Claude/Codex model pin (haiku / gpt-5.4-mini) | S | — | — | `runtime:validate` + `live:e2e` pass `--model haiku` / `-m gpt-5.4-mini` + low effort. Override `MEMOREE_LIVE_CLAUDE_MODEL` / `MEMOREE_LIVE_CODEX_MODEL`. These are Claude Code and Codex CLIs, not Cursor Luna/Sol |
+| Live Claude/Codex model pin (haiku / gpt-5.6-luna) | S | — | — | `runtime:validate` + `live:e2e` pass `--model haiku` / `-m gpt-5.6-luna` + low effort. Override `MEMOREE_LIVE_CLAUDE_MODEL` / `MEMOREE_LIVE_CODEX_MODEL` |
 
 ## Known gaps, overlap, and follow-ups
 

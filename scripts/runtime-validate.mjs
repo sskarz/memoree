@@ -171,8 +171,8 @@ export function skipLiveCodexRequested(argv = process.argv, env = process.env) {
 
 /** Claude Code alias for live gates. Wiki workers already use this. */
 export const DEFAULT_LIVE_CLAUDE_MODEL = "haiku";
-/** Current cheap Codex CLI model (not Cursor Luna/Sol). Override if the slug moves. */
-export const DEFAULT_LIVE_CODEX_MODEL = "gpt-5.4-mini";
+/** Cheap Codex CLI model (GPT-5.6 Luna). Override if the slug moves. */
+export const DEFAULT_LIVE_CODEX_MODEL = "gpt-5.6-luna";
 export const DEFAULT_LIVE_CODEX_REASONING_EFFORT = "low";
 
 export function liveClaudeModel(env = process.env) {
@@ -192,7 +192,7 @@ export function claudeLiveCliArgs(prompt, extra = [], env = process.env) {
   return ["-p", prompt, "--model", liveClaudeModel(env), ...extra];
 }
 
-/** `codex exec -m gpt-5.4-mini -c model_reasoning_effort="low" …`. */
+/** `codex exec -m gpt-5.6-luna -c model_reasoning_effort="low" …`. */
 export function codexExecLiveArgs(rest = [], env = process.env) {
   return [
     "exec",

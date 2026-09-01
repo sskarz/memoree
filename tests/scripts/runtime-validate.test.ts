@@ -271,12 +271,12 @@ describe("runtime validation skip-live-codex", () => {
 });
 
 describe("runtime validation live models", () => {
-  it("defaults Claude to haiku and Codex to gpt-5.4-mini with low effort", () => {
+  it("defaults Claude to haiku and Codex to gpt-5.6-luna with low effort", () => {
     expect(DEFAULT_LIVE_CLAUDE_MODEL).toBe("haiku");
-    expect(DEFAULT_LIVE_CODEX_MODEL).toBe("gpt-5.4-mini");
+    expect(DEFAULT_LIVE_CODEX_MODEL).toBe("gpt-5.6-luna");
     expect(DEFAULT_LIVE_CODEX_REASONING_EFFORT).toBe("low");
     expect(liveClaudeModel({})).toBe("haiku");
-    expect(liveCodexModel({})).toBe("gpt-5.4-mini");
+    expect(liveCodexModel({})).toBe("gpt-5.6-luna");
     expect(liveCodexReasoningEffort({})).toBe("low");
   });
 
@@ -285,7 +285,7 @@ describe("runtime validation live models", () => {
     expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "gpt-5.5" })).toBe("gpt-5.5");
     expect(liveCodexReasoningEffort({ MEMOREE_LIVE_CODEX_REASONING_EFFORT: "medium" })).toBe("medium");
     expect(liveClaudeModel({ MEMOREE_LIVE_CLAUDE_MODEL: "  " })).toBe("haiku");
-    expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "" })).toBe("gpt-5.4-mini");
+    expect(liveCodexModel({ MEMOREE_LIVE_CODEX_MODEL: "" })).toBe("gpt-5.6-luna");
   });
 
   it("builds claude -p --model and codex exec -m flags", () => {
@@ -298,7 +298,7 @@ describe("runtime validation live models", () => {
     expect(codexExecLiveArgs(["--ephemeral", "hi"], {})).toEqual([
       "exec",
       "-m",
-      "gpt-5.4-mini",
+      "gpt-5.6-luna",
       "-c",
       'model_reasoning_effort="low"',
       "--ephemeral",

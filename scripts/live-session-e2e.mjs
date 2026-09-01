@@ -6,7 +6,7 @@
  * `codex exec` WITH plugin/hooks enabled so SessionStart, capture, recall,
  * PreToolUse VFS, Stop, SubagentStop, and SessionEnd fire on their own.
  * Isolated HOME/DB only. Do not use `--bare` or `--ephemeral`.
- * Live turns default to Claude `haiku` and Codex `gpt-5.4-mini` (low effort).
+ * Live turns default to Claude `haiku` and Codex `gpt-5.6-luna` (low effort).
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
