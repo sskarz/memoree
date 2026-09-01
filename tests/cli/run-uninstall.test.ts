@@ -9,6 +9,7 @@ import {
   PURGE_CONFIRM_PROMPT,
   PURGE_NON_TTY_ERROR,
   runUninstall,
+  skillPurgeTarget,
   unwireHarnesses,
   type UninstallRuntime,
 } from "../../src/cli/run-uninstall.js";
@@ -48,6 +49,7 @@ function runtime(home: string, overrides: Partial<UninstallRuntime> = {}): Unins
     uninstallPostCommitHook: () => ({ kind: "no-hook", path: "" }),
     readUserConfig: () => ({}),
     stagedPackageHome: () => undefined,
+    rmSync,
     ...overrides,
   };
 }
@@ -61,6 +63,21 @@ describe("parseUninstallArgs", () => {
   it("accepts --purge and --yes independently", () => {
     expect(parseUninstallArgs(["--purge"])).toEqual({ purge: true, yes: false });
     expect(parseUninstallArgs(["--yes", "--purge"])).toEqual({ purge: true, yes: true });
+  });
+});
+
+describe("skillPurgeTarget", () => {
+  it("maps a SKILL.md file to its skill directory and refuses the skills root", () => {
+    expect(skillPurgeTarget("/home/u/.claude/skills/mined/SKILL.md")).toBe(
+      "/home/u/.claude/skills/mined",
+    );
+    expect(skillPurgeTarget("/home/u/.claude/skills/mined")).toBe("/home/u/.claude/skills/mined");
+    expect(skillPurgeTarget("/home/u/.agents/skills/mined/SKILL.md")).toBe(
+      "/home/u/.agents/skills/mined",
+    );
+    expect(skillPurgeTarget("/home/u/.claude/skills")).toBeNull();
+    expect(skillPurgeTarget("/home/u/.claude/skills/SKILL.md")).toBeNull();
+    expect(skillPurgeTarget("/tmp/not-a-skill-path")).toBeNull();
   });
 });
 
@@ -314,21 +331,26 @@ describe("purgeLeftovers", () => {
 
   it("removes locally-mined skill dirs recorded in the local manifest, not hand-written skills", () => {
     const home = tmpHome();
-    mkdirSync(join(home, ".claude", "skills", "mined-skill"), { recursive: true });
-    writeFileSync(join(home, ".claude", "skills", "mined-skill", "SKILL.md"), "mined\n");
+    const minedDir = join(home, ".claude", "skills", "mined-skill");
+    mkdirSync(minedDir, { recursive: true });
+    writeFileSync(join(minedDir, "SKILL.md"), "mined\n");
+    writeFileSync(join(minedDir, "notes.md"), "companion\n");
     mkdirSync(join(home, ".claude", "skills", "my-own"), { recursive: true });
     writeFileSync(join(home, ".claude", "skills", "my-own", "SKILL.md"), "hand\n");
     mkdirSync(join(home, ".agents", "skills"), { recursive: true });
     const minedLink = join(home, ".agents", "skills", "mined-skill");
     writeFileSync(minedLink, "link\n");
+    const fileSymlink = join(home, ".agents", "skills", "mined-skill-file", "SKILL.md");
+    mkdirSync(join(home, ".agents", "skills", "mined-skill-file"), { recursive: true });
+    writeFileSync(fileSymlink, "file-link\n");
     purgeLeftovers(runtime(home, {
       readLocalManifest: () => ({
         created_at: "t",
         entries: [
           {
             skill_name: "mined-skill",
-            canonical_path: join(home, ".claude", "skills", "mined-skill"),
-            symlinks: [minedLink, "/tmp/not-a-skill-path"],
+            canonical_path: join(minedDir, "SKILL.md"),
+            symlinks: [minedLink, fileSymlink, "/tmp/not-a-skill-path"],
             source_session_ids: [],
             source_session_paths: [],
             source_agent: "claude_code",
@@ -339,10 +361,33 @@ describe("purgeLeftovers", () => {
         ],
       }),
     }));
-    expect(existsSync(join(home, ".claude", "skills", "mined-skill"))).toBe(false);
+    expect(existsSync(minedDir)).toBe(false);
+    expect(existsSync(join(minedDir, "notes.md"))).toBe(false);
     expect(existsSync(minedLink)).toBe(false);
+    expect(existsSync(join(home, ".agents", "skills", "mined-skill-file"))).toBe(false);
     expect(existsSync("/tmp/not-a-skill-path")).toBe(false);
     expect(existsSync(join(home, ".claude", "skills", "my-own", "SKILL.md"))).toBe(true);
+  });
+
+  it("still wipes ~/.memoree when a leftover tree fails to delete", () => {
+    const home = tmpHome();
+    mkdirSync(join(home, ".memoree"), { recursive: true });
+    writeFileSync(join(home, ".memoree", "keep"), "1");
+    const leftover = join(home, ".codex", "memoree");
+    mkdirSync(leftover, { recursive: true });
+    writeFileSync(join(leftover, "bundle.js"), "x");
+    const warn = vi.fn();
+    purgeLeftovers(runtime(home, {
+      warn,
+      rmSync: (path, options) => {
+        if (String(path) === leftover) throw new Error("EACCES: permission denied");
+        return rmSync(path, options);
+      },
+    }));
+    expect(existsSync(join(home, ".memoree"))).toBe(false);
+    expect(existsSync(leftover)).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("failed to remove"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(leftover));
   });
 
   it("removes a custom MEMOREE_PKG_HOME staged copy", () => {

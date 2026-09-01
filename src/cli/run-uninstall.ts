@@ -5,7 +5,7 @@
 
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { uninstallClaude } from "./install-claude.js";
 import { uninstallCodex } from "./install-codex.js";
 import { uninstallAntigravity } from "./install-antigravity.js";
@@ -50,6 +50,7 @@ export interface UninstallRuntime {
   uninstallPostCommitHook: typeof uninstallPostCommitHook;
   readUserConfig: typeof readUserConfig;
   stagedPackageHome: () => string | undefined;
+  rmSync: typeof rmSync;
 }
 
 export interface UninstallFlags {
@@ -106,6 +107,7 @@ function resolveRuntime(overrides: Partial<UninstallRuntime> = {}): UninstallRun
     uninstallPostCommitHook,
     readUserConfig,
     stagedPackageHome: () => process.env.MEMOREE_PKG_HOME,
+    rmSync,
     ...overrides,
   };
 }
@@ -137,15 +139,19 @@ function pathExists(path: string): boolean {
 
 function removeExisting(path: string, runtime: UninstallRuntime): void {
   if (!pathExists(path)) return;
-  rmSync(path, { recursive: true, force: true });
-  runtime.log(`  removed ${path}`);
+  try {
+    runtime.rmSync(path, { recursive: true, force: true });
+    runtime.log(`  removed ${path}`);
+  } catch (error) {
+    runtime.warn(`  failed to remove ${path}: ${(error as Error).message}`);
+  }
 }
 
 function removeEmptyDir(dir: string, runtime: UninstallRuntime): void {
   try {
     if (!existsSync(dir)) return;
     if (readdirSync(dir).length > 0) return;
-    rmSync(dir, { recursive: true, force: true });
+    runtime.rmSync(dir, { recursive: true, force: true });
     runtime.log(`  removed empty ${dir}`);
   } catch {
     /* missing, not a directory, or raced */
@@ -154,6 +160,20 @@ function removeEmptyDir(dir: string, runtime: UninstallRuntime): void {
 
 function isSkillPath(path: string): boolean {
   return path.includes(`${sep}skills${sep}`) || path.endsWith(`${sep}skills`);
+}
+
+/**
+ * Local-mined `canonical_path` is the SKILL.md file (see mine-local).
+ * `--purge` must delete the skill directory so companion files are not left
+ * behind. Recorded symlinks are usually the skill dir; a SKILL.md path is
+ * treated the same. Never returns the skills root itself.
+ */
+export function skillPurgeTarget(path: string): string | null {
+  if (!isSkillPath(path)) return null;
+  const target = basename(path) === "SKILL.md" ? dirname(path) : path;
+  if (basename(target) === "skills") return null;
+  if (!isSkillPath(target)) return null;
+  return target;
 }
 
 function unpullManagedSkills(runtime: UninstallRuntime): void {
@@ -180,11 +200,13 @@ function unpullManagedSkills(runtime: UninstallRuntime): void {
       join(runtime.homedir(), ".claude", "memoree", "local-mined.json"),
     );
     for (const entry of local?.entries ?? []) {
-      if (typeof entry.canonical_path === "string" && isSkillPath(entry.canonical_path)) {
-        removeExisting(entry.canonical_path, runtime);
-      }
+      const canonical = typeof entry.canonical_path === "string"
+        ? skillPurgeTarget(entry.canonical_path)
+        : null;
+      if (canonical) removeExisting(canonical, runtime);
       for (const link of entry.symlinks ?? []) {
-        if (typeof link === "string" && isSkillPath(link)) removeExisting(link, runtime);
+        const target = typeof link === "string" ? skillPurgeTarget(link) : null;
+        if (target) removeExisting(target, runtime);
       }
     }
   } catch (error) {
