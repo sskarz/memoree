@@ -244,6 +244,8 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(preSrc).toContain("session-start-setup.js");
     expect(preSrc).toContain("captureAntigravityEvent");
     expect(preSrc).toContain("recallTopHit");
+    expect(preSrc).not.toContain("projectNameFromCwd");
+    expect(preSrc).toContain("return recallTopHit(q, config.tableName, vec, {});");
     expect(preSrc).toContain("injectSteps");
     expect(preSrc).toContain("autoPullSkills");
     expect(preSrc).toContain("maybeAutoMineLocal");

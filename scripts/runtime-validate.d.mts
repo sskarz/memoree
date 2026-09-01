@@ -37,6 +37,13 @@ export function skipLiveAntigravityRequested(argv?: string[], env?: NodeJS.Proce
 export function antigravityCliAvailable(): boolean;
 export function writeIsolatedAntigravityGeminiSettings(isolatedHome: string): void;
 export function antigravityLivePrompt(identifier: string): string;
+export function antigravityCrossAgentReadPrompt(opts: {
+  harborNeedle?: string;
+  lanternId?: string;
+  claudeRuleId?: string;
+}): string;
+export function catGraphQueryPrompt(path?: string): string;
+export function agyLivePath(realHome: string, env?: NodeJS.ProcessEnv): string;
 export function assertAntigravityLiveUsedMcp(isolatedHome: string, agyResponse: string): void;
 export function encodeMcpStdio(msg: unknown, framing?: "ndjson" | "content-length"): string;
 export function parseMcpFramedMessages(stdout: string): Array<Record<string, any>>;

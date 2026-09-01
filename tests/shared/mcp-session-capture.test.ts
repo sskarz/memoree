@@ -68,6 +68,54 @@ describe("Antigravity MCP session capture", () => {
     }
   });
 
+  it("keeps MCP-captured rows searchable via VFS grep without embeddings", async () => {
+    home = mkdtempSync(join(tmpdir(), "mcp-capture-grep-"));
+    setFakeHome(home);
+    const databasePath = join(home, "memoree.sqlite3");
+    process.env.MEMOREE_BACKEND = "sqlite";
+    process.env.MEMOREE_SQLITE_PATH = databasePath;
+    process.env.MEMOREE_EMBEDDINGS = "false";
+    process.env.MEMOREE_CAPTURE = "true";
+    process.env.MEMOREE_USER_NAME = "mcp-capture";
+    process.env.ANTIGRAVITY_CONVERSATION_ID = "agy-conv-grep";
+    const { SqliteBackend } = await import("../../src/storage/sqlite.js");
+    const schema = new SqliteBackend(databasePath, "memory", {
+      memory: "memory",
+      sessions: "sessions",
+      skills: "skills",
+      rules: "memoree_rules",
+      goals: "memoree_goals",
+      kpis: "memoree_kpis",
+      docs: "memoree_docs",
+      codebase: "codebase",
+    });
+    await schema.initializeSchema();
+    await schema.close();
+    const marker = "e7c1a2b3-4d5e-6789-abcd-ef0123456789";
+    await captureMcpToolCall(
+      "memoree_write",
+      { path: `rules/active/${marker}.md`, content: marker },
+      { ok: true, text: "ok" },
+    );
+    const { loadConfig } = await import("../../src/config.js");
+    const { createStorageBackend } = await import("../../src/storage/factory.js");
+    const { searchMemoreeTables } = await import("../../src/shell/grep-core.js");
+    const config = loadConfig();
+    expect(config).toBeTruthy();
+    const api = createStorageBackend(config!, config!.tableName);
+    try {
+      const rows = await searchMemoreeTables(api, config!.tableName, config!.sessionsTableName, {
+        pathFilter: "",
+        contentScanOnly: false,
+        likeOp: "LIKE",
+        escapedPattern: marker,
+      });
+      expect(rows.some(row => row.content.includes(marker))).toBe(true);
+    } finally {
+      await api.close();
+    }
+  });
+
   it("skips capture when MEMOREE_CAPTURE is false", async () => {
     home = mkdtempSync(join(tmpdir(), "mcp-capture-off-"));
     setFakeHome(home);

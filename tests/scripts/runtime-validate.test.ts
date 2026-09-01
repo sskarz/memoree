@@ -32,6 +32,9 @@ import {
   writeIsolatedAntigravityGeminiSettings,
   parseMcpFramedMessages,
   antigravityLivePrompt,
+  antigravityCrossAgentReadPrompt,
+  catGraphQueryPrompt,
+  agyLivePath,
   assertAntigravityLiveUsedMcp,
   waitForCapture,
 } from "../../scripts/runtime-validate.mjs";
@@ -262,7 +265,7 @@ describe("runtime validation agent responses", () => {
     const source = readFileSync(new URL("../../scripts/runtime-validate.mjs", import.meta.url), "utf8");
     expect(source).not.toContain("lexicalToken");
     expect(source).not.toMatch(/(?:claudeResponse|semanticRecall|codexResponse|lexicalRecall)\.includes\(/);
-    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(7);
+    expect(source.match(/assertAgentResponseContainsIdentifier\(/g)).toHaveLength(9);
     expect(source).toContain("createValidationWorkspace");
     expect(source).toContain("codexSemanticRecallPrompt");
     expect(source).not.toContain("Do not read files. Do not use tools.");
@@ -280,6 +283,15 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("assertAntigravityLiveUsedMcp");
     expect(source).toContain("waitForCapture(databasePath, agyIdentifier");
     expect(source).toContain("antigravityLivePrompt");
+    expect(source).toContain("antigravityCrossAgentReadPrompt");
+    expect(source).toContain("agyLivePath");
+    expect(source).toContain("checking Antigravity MCP can grep the Claude observatory-lantern fact");
+    expect(source).toContain("checking Antigravity MCP can grep the Codex lexical identifier");
+    expect(source).toContain("Claude Grep Antigravity identifier");
+    expect(source).toContain("Codex cat Antigravity rule");
+    expect(source).toContain("Codex recall of Antigravity identifier");
+    expect(source).toContain("Claude Code recall of Antigravity identifier");
+    expect(source).toContain("Antigravity MCP semantic recall:");
     expect(source).toContain("memoree_head");
     expect(source).toContain("memoree_tail");
     expect(source).toContain("memoree_wc");
@@ -346,6 +358,18 @@ describe("runtime validation skip-live-antigravity", () => {
     expect(antigravityLivePrompt("abc")).toContain("memoree_write");
     expect(antigravityLivePrompt("abc")).toContain("memoree_grep");
     expect(antigravityLivePrompt("abc")).toContain("abc");
+    expect(antigravityCrossAgentReadPrompt({
+      harborNeedle: "harbor kite",
+      lanternId: "lantern-id",
+      claudeRuleId: "rule-id",
+    })).toContain("memoree_grep");
+    expect(antigravityCrossAgentReadPrompt({
+      harborNeedle: "harbor kite",
+      lanternId: "lantern-id",
+      claudeRuleId: "rule-id",
+    })).toContain("graph/query/store");
+    expect(catGraphQueryPrompt()).toContain("persistGraph");
+    expect(agyLivePath("/home/tester")).toContain("/home/tester/.local/bin");
   });
 
   it("encodes and parses NDJSON MCP frames for Antigravity stdio", () => {

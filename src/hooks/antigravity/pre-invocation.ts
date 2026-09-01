@@ -32,7 +32,6 @@ import { recallTopHit } from "../shared/recall-query.js";
 import { formatRecallContext } from "../shared/recall-format.js";
 import { withDeadline } from "../shared/with-deadline.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
-import { projectNameFromCwd } from "../../utils/project-name.js";
 import { normalizeAntigravityInput, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
 import { claimFirstInvocation, lastTurn, readTranscriptTurns, takeNewUserPrompt } from "./transcript.js";
 import { captureAntigravityEvent } from "./capture.js";
@@ -69,7 +68,11 @@ async function recallSnippet(prompt: string, cwd: string): Promise<string> {
         log,
       });
       if (!vec) return null;
-      return recallTopHit(q, config.tableName, vec, { project: projectNameFromCwd(cwd) });
+      // Same options as Claude/Codex recall.ts: no basename `project` filter.
+      // Session/summary rows are tagged with cwd basename, which collides
+      // across repos named alike and drops history when the prompt cwd is a
+      // subdirectory. Precision is the `/summaries/%` row filter + threshold.
+      return recallTopHit(q, config.tableName, vec, {});
     })(), RECALL_BUDGET_MS, null);
     if (!hit || !passesThreshold(hit.score, RECALL_THRESHOLD)) return "";
     return formatRecallContext({ hit, currentUser: config.userName, memoryRoot: config.memoryPath, now: Date.now() });

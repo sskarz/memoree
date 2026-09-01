@@ -37,6 +37,9 @@ import {
   writeIsolatedAntigravityGeminiSettings,
   antigravityCliAvailable,
   antigravityLivePrompt,
+  antigravityCrossAgentReadPrompt,
+  catGraphQueryPrompt,
+  agyLivePath,
   assertAntigravityLiveUsedMcp,
   codexExecLiveArgs,
 } from "./runtime-validate.mjs";
@@ -63,6 +66,10 @@ function claudeRecallPrompt() {
 
 function codexLivePrompt() {
   return grepRecallPrompt("harbor kite", "~/.memoree/memory/");
+}
+
+function claudeLanternRecallPrompt(lanternId) {
+  return grepRecallPrompt(lanternId, "~/.memoree/memory/");
 }
 
 export async function runLiveSessionE2E() {
@@ -224,12 +231,33 @@ export async function runLiveSessionE2E() {
     status("waiting for Codex capture/summary");
     await waitForCapture(databasePath, lanternId, { requireSummary: true, timeoutMs: 180_000 });
 
+    status("running a live Claude recall of the Codex lantern fact");
+    const claudeLanternRecall = run("claude", claudeLiveCliArgs(claudeLanternRecallPrompt(lanternId), [
+      "--permission-mode", "bypassPermissions",
+      "--output-format", "text",
+      "--no-session-persistence",
+    ]), { cwd: repository, env, timeout: 300_000 });
+    assertAgentResponseContainsIdentifier(claudeLanternRecall, lanternId, "live Claude Codex-lantern recall");
+
+    status("running a live Codex graph/query/store read");
+    const codexGraph = runCodex(codexExecLiveArgs([
+      "--skip-git-repo-check",
+      "--dangerously-bypass-hook-trust",
+      "-s", "read-only",
+      catGraphQueryPrompt(),
+    ]), { cwd: repository, env, timeout: 300_000 });
+    assertAgentResponseContainsIdentifier(codexGraph, "persistGraph", "live Codex graph query/store");
+
     const geminiKey = typeof process.env.GEMINI_API_KEY === "string" ? process.env.GEMINI_API_KEY.trim() : "";
     const runLiveAntigravity = !skipLiveAntigravityRequested()
       && antigravityCliAvailable()
       && geminiKey.length > 0;
     /** @type {string | null} */
     let agyLiveId = null;
+    const agyEnv = {
+      ...env,
+      PATH: agyLivePath(realHome, env),
+    };
     if (runLiveAntigravity) {
       status("installing Antigravity hooks into the isolated profile");
       run(process.execPath, [cli, "antigravity", "install"], { cwd: repository, env });
@@ -243,15 +271,47 @@ export async function runLiveSessionE2E() {
         "--dangerously-skip-permissions",
       ], {
         cwd: repository,
-        env: {
-          ...env,
-          PATH: `${join(realHome, ".local", "bin")}:/tmp/agy-bin:${process.env.PATH ?? ""}`,
-        },
+        env: agyEnv,
         timeout: 180_000,
       });
       assertAgentResponseContainsIdentifier(agyOut, agyId, "live Antigravity session");
       assertAntigravityLiveUsedMcp(isolatedHome, agyOut);
       await waitForCapture(databasePath, agyId, { requireSummary: false, timeoutMs: 60_000 });
+
+      status("running a live Antigravity cross-agent read of Claude/Codex facts + graph");
+      const agyReadOut = run("agy", [
+        "-p",
+        antigravityCrossAgentReadPrompt({
+          harborNeedle: "harbor kite",
+          lanternId,
+          claudeRuleId: ruleId,
+        }),
+        "--dangerously-skip-permissions",
+      ], {
+        cwd: repository,
+        env: agyEnv,
+        timeout: 180_000,
+      });
+      assertAgentResponseContainsIdentifier(agyReadOut, harborId, "live Antigravity harbor-kite recall");
+      assertAgentResponseContainsIdentifier(agyReadOut, lanternId, "live Antigravity lantern recall");
+      assertAgentResponseContainsIdentifier(agyReadOut, "persistGraph", "live Antigravity graph query/store");
+
+      status("running a live Claude recall of the Antigravity identifier");
+      const claudeAgyRecall = run("claude", claudeLiveCliArgs(grepRecallPrompt(agyId), [
+        "--permission-mode", "bypassPermissions",
+        "--output-format", "text",
+        "--no-session-persistence",
+      ]), { cwd: repository, env, timeout: 300_000 });
+      assertAgentResponseContainsIdentifier(claudeAgyRecall, agyId, "live Claude Antigravity recall");
+
+      status("running a live Codex recall of the Antigravity identifier");
+      const codexAgyRecall = runCodex(codexExecLiveArgs([
+        "--skip-git-repo-check",
+        "--dangerously-bypass-hook-trust",
+        "-s", "read-only",
+        grepRecallPrompt(agyId),
+      ]), { cwd: repository, env, timeout: 300_000 });
+      assertAgentResponseContainsIdentifier(codexAgyRecall, agyId, "live Codex Antigravity recall");
     } else {
       status("skipping live Antigravity (agy missing, unsigned, or --skip-live-antigravity)");
     }
@@ -262,7 +322,7 @@ export async function runLiveSessionE2E() {
       emptySummariesMessage: "Wiki/session reflection produced no summaries",
     });
     process.stdout.write(
-      `Live session e2e passed: ${counts.events} events, ${counts.summaries} summaries, unaided Claude/Codex hooks, wiki reflection, 768-d embeddings, VFS, graph, docs, skillify CLI.\n`,
+      `Live session e2e passed: ${counts.events} events, ${counts.summaries} summaries, unaided Claude/Codex hooks, wiki reflection, 768-d embeddings, VFS, graph, docs, skillify CLI, Claude↔Codex↔Antigravity share.\n`,
     );
     passed = true;
   } finally {

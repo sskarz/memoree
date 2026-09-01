@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -151,6 +152,46 @@ describe("graph query/ and hygiene (VFS)", () => {
 
     const show = await handleGraphVfsAsync("show/writeSnapshot", cwd, hybrid);
     expect(show).toEqual(handleGraphVfs("show/writeSnapshot", cwd));
+  });
+
+  it("find handles stay local to the worktree that ran find/", () => {
+    execFileSync("git", ["init"], { cwd, stdio: "ignore" });
+    execFileSync("git", ["remote", "add", "origin", "https://example.com/memoree-share.git"], { cwd, stdio: "ignore" });
+    const nested = join(cwd, "nested");
+    mkdirSync(nested);
+    const key = deriveProjectKey(cwd).key;
+    expect(deriveProjectKey(nested).key).toBe(key);
+    const sharedDir = repoDir(key);
+    const snapshotsDir = join(sharedDir, "snapshots");
+    mkdirSync(snapshotsDir, { recursive: true });
+    writeFileSync(join(snapshotsDir, `${COMMIT}.json`), JSON.stringify(fixtureSnapshot()));
+    for (const treeCwd of [cwd, nested]) {
+      writeLastBuild(sharedDir, {
+        ts: Date.now(),
+        commit_sha: COMMIT,
+        snapshot_sha256: SNAPSHOT_SHA,
+        node_count: 2,
+        edge_count: 1,
+      }, worktreeId(treeCwd));
+    }
+    try {
+      const find = handleGraphVfs("find/persistGraph", cwd);
+      expect(find.kind).toBe("ok");
+      if (find.kind === "ok") expect(find.body).toMatch(/\[1]/);
+
+      const localShow = handleGraphVfs("show/1", cwd);
+      expect(localShow.kind).toBe("ok");
+      if (localShow.kind === "ok") expect(localShow.body).toContain(PERSIST);
+
+      const foreignShow = handleGraphVfs("show/1", nested);
+      expect(foreignShow.kind).toBe("ok");
+      if (foreignShow.kind === "ok") {
+        expect(foreignShow.body).toMatch(/no recent find/i);
+        expect(foreignShow.body).not.toContain(PERSIST);
+      }
+    } finally {
+      rmSync(sharedDir, { recursive: true, force: true });
+    }
   });
 
   it("SessionStart spawn requests the hygiene worker", () => {
