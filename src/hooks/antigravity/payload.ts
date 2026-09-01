@@ -99,6 +99,26 @@ export function sessionIdOf(input: AntigravityHookInput): string {
   return input.conversationId?.trim() || "unknown";
 }
 
+/**
+ * Memoree MCP tools are persisted in `captureMcpToolCall`. Interactive
+ * PostToolUse also fires for `call_mcp_tool`, which would duplicate the row.
+ * Unaided `agy -p` does not run command hooks, so MCP capture stays required.
+ */
+export function isMemoreeMcpToolCall(
+  name: string | undefined,
+  args?: Record<string, unknown>,
+): boolean {
+  const tool = (name ?? "").trim();
+  if (tool.startsWith("memoree_")) return true;
+  if (tool === "call_mcp_tool" || tool === "mcp_tool") {
+    const inner = String(
+      args?.ToolName ?? args?.toolName ?? args?.name ?? args?.tool_name ?? "",
+    ).trim();
+    return inner.startsWith("memoree_");
+  }
+  return false;
+}
+
 export const MEMORY_STEER =
   "~/.memoree/memory is a virtual filesystem. Use the Memoree MCP tools: " +
   "memoree_read, memoree_ls, memoree_grep, memoree_head, memoree_tail, memoree_wc, " +

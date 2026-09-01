@@ -15,6 +15,8 @@ import {
   writeVersionStamp,
   readVersionStamp,
   detectPlatforms,
+  detectPlatformsAt,
+  isAntigravityHome,
   allPlatformIds,
   log,
   warn,
@@ -228,6 +230,35 @@ describe("detectPlatforms / allPlatformIds", () => {
   it("detectPlatforms entries point at directories under HOME", () => {
     for (const p of detectPlatforms()) {
       expect(p.markerDir.startsWith(HOME)).toBe(true);
+    }
+  });
+
+  it("does not treat a Gemini CLI-only ~/.gemini tree as Antigravity", () => {
+    const home = join(tmpdir(), `memoree-detect-${process.pid}-${Date.now()}`);
+    mkdirSync(join(home, ".gemini"), { recursive: true });
+    writeFileSync(join(home, ".gemini", "settings.json"), "{}\n");
+    mkdirSync(join(home, ".claude"));
+    try {
+      expect(isAntigravityHome(home)).toBe(false);
+      expect(detectPlatformsAt(home).map(p => p.id)).toEqual(["claude"]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("detects Antigravity from antigravity-cli or antigravity under ~/.gemini", () => {
+    const home = join(tmpdir(), `memoree-detect-agy-${process.pid}-${Date.now()}`);
+    try {
+      mkdirSync(join(home, ".gemini", "antigravity-cli"), { recursive: true });
+      expect(isAntigravityHome(home)).toBe(true);
+      expect(detectPlatformsAt(home)).toEqual([
+        { id: "antigravity", markerDir: join(home, ".gemini") },
+      ]);
+      rmSync(join(home, ".gemini"), { recursive: true, force: true });
+      mkdirSync(join(home, ".gemini", "antigravity"), { recursive: true });
+      expect(detectPlatformsAt(home).map(p => p.id)).toEqual(["antigravity"]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

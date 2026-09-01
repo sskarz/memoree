@@ -9,6 +9,11 @@
  * The capture hook main must use isDirectRun(..., "capture"). Without the
  * entry name, esbuild inlines that main into mcp-server.js and it pauses
  * stdin after the first JSON-RPC frame, so `agy` never lists MCP tools.
+ *
+ * Do not embed on this path: a cold or hung embed daemon would delay the
+ * MCP `tools/call` reply even after the VFS job succeeded. PostToolUse
+ * skips `memoree_*` / `call_mcp_tool` so interactive sessions do not
+ * store the same call twice.
  */
 
 import { captureAntigravityEvent } from "../hooks/antigravity/capture.js";
@@ -43,6 +48,7 @@ export async function captureMcpToolCall(
         tool_input: args,
         tool_response: { ok: result.ok, text: result.text.slice(0, 2000) },
       },
+      { embed: false },
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

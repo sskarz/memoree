@@ -7,6 +7,7 @@ import { decidePreToolUse } from "../../src/hooks/antigravity/pre-tool-use.js";
 import {
   MEMORY_STEER,
   eventNameFromArgv,
+  isMemoreeMcpToolCall,
   normalizeAntigravityInput,
   sessionIdOf,
   toolPayloadTouchesMemory,
@@ -165,5 +166,16 @@ describe("Antigravity hook adapters", () => {
     expect(decidePreToolUse({
       tool_call: { name: "run_command", args: { CommandLine: "cat ~/.memoree/memory/identity.json" } },
     })).toEqual({ decision: "deny", reason: MEMORY_STEER });
+  });
+
+  it("treats memoree MCP names and call_mcp_tool wrappers as MCP capture", () => {
+    expect(isMemoreeMcpToolCall("memoree_read")).toBe(true);
+    expect(isMemoreeMcpToolCall("call_mcp_tool", { ToolName: "memoree_write" })).toBe(true);
+    expect(isMemoreeMcpToolCall("call_mcp_tool", { toolName: "memoree_grep" })).toBe(true);
+    expect(isMemoreeMcpToolCall("mcp_tool", { name: "memoree_ls" })).toBe(true);
+    expect(isMemoreeMcpToolCall("call_mcp_tool", { tool_name: "memoree_head" })).toBe(true);
+    expect(isMemoreeMcpToolCall("call_mcp_tool", { ToolName: "run_command" })).toBe(false);
+    expect(isMemoreeMcpToolCall("run_command")).toBe(false);
+    expect(isMemoreeMcpToolCall(undefined)).toBe(false);
   });
 });

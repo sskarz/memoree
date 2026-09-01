@@ -31,7 +31,7 @@ import {
 import { getInstalledVersion } from "../../utils/version-check.js";
 import { isMemoreePluginEnabled } from "../../utils/plugin-state.js";
 import { reactSkillOpt } from "../shared/skillopt-hook.js";
-import { eventNameFromArgv, normalizeAntigravityInput, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
+import { eventNameFromArgv, isMemoreeMcpToolCall, normalizeAntigravityInput, sessionIdOf, workspaceCwd, type AntigravityHookInput } from "./payload.js";
 import { bundleDirFromImportMeta, spawnAntigravityWikiWorker, wikiLog } from "./spawn-wiki-worker.js";
 
 const log = (msg: string) => _log("agy-capture", msg);
@@ -59,6 +59,7 @@ export async function captureAntigravityEvent(
   input: AntigravityHookInput,
   eventName: string,
   event: CaptureEvent,
+  options: { embed?: boolean } = {},
 ): Promise<void> {
   if (process.env.MEMOREE_CAPTURE === "false") return;
   if (!isMemoreePluginEnabled()) return;
@@ -83,7 +84,7 @@ export async function captureAntigravityEvent(
   const sessionPath = buildSessionPath(config, sessionId);
   const line = redactSecrets(JSON.stringify(entry));
   const jsonForSql = line.replace(/'/g, "''");
-  const embedding = embeddingsDisabled()
+  const embedding = embeddingsDisabled() || options.embed === false
     ? null
     : await new EmbedClient({ daemonEntry: resolveEmbedDaemonPath() }).embed(line, "document");
   const insertSql = buildDirectSessionInsertSql(config.sessionsTableName, {
@@ -144,6 +145,7 @@ function maybeTriggerPeriodicSummary(sessionId: string, cwd: string, config: Con
 export async function captureFromHook(input: unknown, eventName: string): Promise<void> {
   const normalized = normalizeAntigravityInput(input);
   if (eventName === "PostToolUse" && normalized.toolCall?.name) {
+    if (isMemoreeMcpToolCall(normalized.toolCall.name, normalized.toolCall.args)) return;
     await captureAntigravityEvent(normalized, eventName, {
       type: "tool_call",
       tool_name: normalized.toolCall.name,

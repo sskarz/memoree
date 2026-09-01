@@ -281,7 +281,10 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(mcpSrc).toContain("content-length");
     expect(mcpSrc).toContain("await captureMcpToolCall");
     expect(mcpSrc).toContain("if (!process.env.VITEST)");
+    const sessionCaptureSrc = readFileSync(join(ROOT, "src/mcp/session-capture.ts"), "utf-8");
+    expect(sessionCaptureSrc).toContain("{ embed: false }");
     const captureSrc = readFileSync(join(ROOT, "src/hooks/antigravity/capture.ts"), "utf-8");
+    expect(captureSrc).toContain("isMemoreeMcpToolCall");
     expect(captureSrc).toContain('isDirectRun(import.meta.url, "capture")');
     const preToolSrc = readFileSync(join(ROOT, "src/hooks/antigravity/pre-tool-use.ts"), "utf-8");
     expect(preToolSrc).toContain('isDirectRun(import.meta.url, "pre-tool-use")');
@@ -291,6 +294,10 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(installSrc).toContain("ANTIGRAVITY_LEGACY_HOOKS_PATH");
     expect(installSrc).toContain("ANTIGRAVITY_HOOK_JSON_PATHS");
     expect(installSrc).not.toContain('plugin", "install", ANTIGRAVITY_PLUGIN_DIR');
+    const utilSrc = readFileSync(join(ROOT, "src/cli/util.ts"), "utf-8");
+    expect(utilSrc).toContain("isAntigravityHome");
+    expect(utilSrc).toContain("antigravity-cli");
+    expect(utilSrc).not.toMatch(/\{ id: "antigravity", markerDir: join\(HOME, "\.gemini"\) \}/);
   });
 });
 

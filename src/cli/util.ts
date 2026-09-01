@@ -103,18 +103,34 @@ export interface DetectedPlatform {
   markerDir: string;
 }
 
-const PLATFORM_MARKERS: DetectedPlatform[] = [
-  { id: "claude", markerDir: join(HOME, ".claude") },
-  { id: "codex", markerDir: join(HOME, ".codex") },
-  { id: "antigravity", markerDir: join(HOME, ".gemini") },
-];
-
-export function detectPlatforms(): DetectedPlatform[] {
-  return PLATFORM_MARKERS.filter(p => existsSync(p.markerDir));
+export function allPlatformIds(): PlatformId[] {
+  return ["claude", "codex", "antigravity"];
 }
 
-export function allPlatformIds(): PlatformId[] {
-  return PLATFORM_MARKERS.map(p => p.id);
+/**
+ * Gemini CLI and Antigravity both live under `~/.gemini`. Only treat the
+ * tree as Antigravity when an Antigravity-specific directory exists, so
+ * `memoree install` does not merge hooks.json / mcp_config.json into a
+ * Gemini-CLI-only home.
+ */
+export function isAntigravityHome(home: string): boolean {
+  const gemini = join(home, ".gemini");
+  return existsSync(join(gemini, "antigravity-cli"))
+    || existsSync(join(gemini, "antigravity"));
+}
+
+export function detectPlatformsAt(home: string): DetectedPlatform[] {
+  const found: DetectedPlatform[] = [];
+  const claude = join(home, ".claude");
+  const codex = join(home, ".codex");
+  if (existsSync(claude)) found.push({ id: "claude", markerDir: claude });
+  if (existsSync(codex)) found.push({ id: "codex", markerDir: codex });
+  if (isAntigravityHome(home)) found.push({ id: "antigravity", markerDir: join(home, ".gemini") });
+  return found;
+}
+
+export function detectPlatforms(): DetectedPlatform[] {
+  return detectPlatformsAt(HOME);
 }
 
 export function log(msg: string): void {
