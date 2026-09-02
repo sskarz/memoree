@@ -403,8 +403,28 @@ describe("extractDescription", () => {
 });
 
 describe("decideWikiUpload / WIKI_EXEC_TIMEOUT_MS", () => {
-  it("uploads a body that already contains ## What Happened (timeout salvage)", () => {
-    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED)).toBe("upload");
+  const stub = "# Session\n- **Status**: in-progress\nJSONL offset: 5\n";
+
+  it("uploads a body that already contains ## What Happened on a successful exec", () => {
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, { execSucceeded: true })).toBe("upload");
+  });
+
+  it("salvages a rewritten ## What Happened body after exec timeout", () => {
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, {
+      execSucceeded: false,
+      previous: stub,
+    })).toBe("upload");
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, {
+      execSucceeded: false,
+      previous: null,
+    })).toBe("upload");
+  });
+
+  it("does not salvage an unchanged pre-seeded summary after exec timeout", () => {
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, {
+      execSucceeded: false,
+      previous: TEXT_WITH_WHAT_HAPPENED,
+    })).toBe("skip-unchanged");
   });
 
   it("skips a missing or empty tmp file", () => {
@@ -414,7 +434,7 @@ describe("decideWikiUpload / WIKI_EXEC_TIMEOUT_MS", () => {
   });
 
   it("skips a SessionStart stub without ## What Happened", () => {
-    expect(decideWikiUpload("# Session\n- **Status**: in-progress\nJSONL offset: 5\n")).toBe("skip-stub");
+    expect(decideWikiUpload(stub, { execSucceeded: false, previous: stub })).toBe("skip-stub");
   });
 
   it("raises the wiki exec budget above the old 120s cap", () => {

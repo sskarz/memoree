@@ -140,16 +140,33 @@ export function isFinalizedSummaryText(text: unknown): boolean {
   return match ? match[1].trim() !== "" : false;
 }
 
-export type WikiUploadDecision = "upload" | "skip-missing" | "skip-stub";
+export type WikiUploadDecision = "upload" | "skip-missing" | "skip-stub" | "skip-unchanged";
+
+export interface WikiUploadOptions {
+  /** False when execFileSync threw (timeout, non-zero, kill). */
+  execSucceeded?: boolean;
+  /** Tmp summary contents captured *before* exec, or null if the file was missing. */
+  previous?: string | null;
+}
 
 /**
- * After wiki `execFileSync` (including timeout), upload only when the tmp
- * summary already contains a populated `## What Happened`. Skip empty files
- * and SessionStart stubs so a killed-but-valid partial can still land.
+ * After wiki `execFileSync` (including timeout), upload a body that has a
+ * populated `## What Happened`. On exec failure, also require the tmp file to
+ * have *changed* — resume runs pre-seed the prior finalized summary, and
+ * salvaging that unchanged file would stampOffset/finalizeSummary past events
+ * that were never summarized.
  */
-export function decideWikiUpload(raw: string | null | undefined): WikiUploadDecision {
+export function decideWikiUpload(
+  raw: string | null | undefined,
+  options: WikiUploadOptions = {},
+): WikiUploadDecision {
   if (typeof raw !== "string" || raw.trim() === "") return "skip-missing";
-  return isFinalizedSummaryText(raw) ? "upload" : "skip-stub";
+  if (!isFinalizedSummaryText(raw)) return "skip-stub";
+  if (options.execSucceeded === false) {
+    const previous = options.previous ?? null;
+    if (previous !== null && raw === previous) return "skip-unchanged";
+  }
+  return "upload";
 }
 
 /**

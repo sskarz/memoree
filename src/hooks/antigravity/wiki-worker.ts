@@ -203,6 +203,7 @@ async function main(): Promise<void> {
 
     wlog("running agy -p");
     let execSucceeded = false;
+    const summaryBeforeExec = existsSync(tmpSummary) ? readFileSync(tmpSummary, "utf-8") : null;
     try {
       const inv = buildAgyInvocation(cfg.agyBin, prompt);
       execFileSync(inv.file, inv.args, {
@@ -222,12 +223,14 @@ async function main(): Promise<void> {
     // ## What Happened even when execFileSync times out; skip stubs so a
     // killed rewrite cannot stamp offset onto a placeholder.
     const raw = existsSync(tmpSummary) ? readFileSync(tmpSummary, "utf-8") : "";
-    const decision = decideWikiUpload(raw);
+    const decision = decideWikiUpload(raw, { execSucceeded, previous: summaryBeforeExec });
     if (decision !== "upload") {
       if (!execSucceeded) {
-        wlog(decision === "skip-missing"
-          ? "agy -p failed without producing a new summary; skipping upload"
-          : "agy -p failed after a stub write without ## What Happened; skipping upload");
+        wlog(decision === "skip-unchanged"
+          ? "agy -p failed without rewriting the pre-seeded summary; skipping upload to avoid advancing the offset"
+          : decision === "skip-missing"
+            ? "agy -p failed without producing a new summary; skipping upload"
+            : "agy -p failed after a stub write without ## What Happened; skipping upload");
       } else if (decision === "skip-missing") {
         wlog("no summary file generated");
       } else {
