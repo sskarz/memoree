@@ -2,13 +2,12 @@ import { build } from "esbuild";
 import { chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const memoreeVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
-// The CLI outdir (`bundle/`) must stay an unnamed ESM stub so pkgRoot() walk-up
-// from bundle/cli.js reaches the real package.json. Harness plugin bundles get
-// a named+versioned package.json so Codex/Antigravity shims can read the version.
-function esmPackageJsonFor(outdir) {
-  if (outdir === "bundle") return '{"type":"module"}\n';
-  return JSON.stringify({ name: "memoree", version: memoreeVersion, type: "module" }, null, 2) + "\n";
-}
+// Every esbuild outdir needs `{type:module}` so Node loads the ESM bundles.
+// Keep this unnamed: a named+versioned package.json would make pkgRoot() from
+// harnesses/*/bundle/*.js stop at the bundle instead of the real package root.
+// Install-time writeBundleEsmPackageJson() stamps name+version into the
+// installed Codex/Antigravity plugin copy so `memoree status` is not 0.0.0.
+const esmPackageJson = '{"type":"module"}\n';
 const treeSitterExternals = [
   "tree-sitter",
   "tree-sitter-typescript",
@@ -50,7 +49,7 @@ async function buildEntries(entries, outdir) {
     define: { __MEMOREE_VERSION__: JSON.stringify(memoreeVersion) },
   });
   for (const entry of entries) chmodSync(`${outdir}/${entry.out}.js`, 0o755);
-  writeFileSync(`${outdir}/package.json`, esmPackageJsonFor(outdir));
+  writeFileSync(`${outdir}/package.json`, esmPackageJson);
 }
 
 async function buildGraphOnStop(outdir) {

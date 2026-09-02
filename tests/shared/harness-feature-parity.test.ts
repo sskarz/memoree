@@ -185,8 +185,7 @@ describe("Claude Code and Codex hook feature parity", () => {
 
   it("stamps a named+versioned Codex bundle package.json so status is not 0.0.0", () => {
     expect(installSrc).toContain("writeBundleEsmPackageJson");
-    expect(esbuild).toContain("esmPackageJsonFor");
-    expect(esbuild).toContain('outdir === "bundle"');
+    expect(esbuild).toContain('{"type":"module"}');
   });
 
   it("salvages wiki uploads after exec timeout when ## What Happened is present", () => {

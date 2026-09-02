@@ -47,7 +47,7 @@ export function pkgRoot(): string {
   return fallback;
 }
 
-/** `{name, version, type:module}` written into each agent bundle so Node ESM loads and pkgRoot walk-up can see a real package. */
+/** `{name, version, type:module}` written into the *installed* Codex/Antigravity plugin bundle so `getVersion()` is not 0.0.0. Build-time esbuild outdirs stay an unnamed `{type:module}` stub so checkout hooks still walk up to the real package root. */
 export function bundleEsmPackageJson(version: string): string {
   return JSON.stringify({ name: "memoree", version, type: "module" }, null, 2) + "\n";
 }
