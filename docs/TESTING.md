@@ -91,6 +91,16 @@ They overlap on capture, summaries, 768-d embeddings, and recall. Keep both:
 - `live:e2e` is the unaided-plugin proof. `--bare` and `--ephemeral` skip the
   path users actually run.
 
+Unaided LLM turns are a **happy-path capture/recall** proof. They will not
+catch shim version, doctor layout, stub-summary, empty-key pool, wiki
+timeout salvage, or embeddings-after-wiring bugs unless the scripts
+**also** drive those fixtures deterministically. That is why the original
+Codex `0.0.0` / `"completed"` / empty-key incidents survived a green live
+run: `live:e2e` never ran `memoree status` through the installed plugin,
+set `MEMOREE_SUMMARY_EVERY_N_MSGS=1000` so first-wiki-at-10 was not the
+path, grepped the VFS instead of asserting recall.js injection, and called
+`embeddings status` only **before** `codex install`.
+
 Do not treat a green `runtime:validate` as proof that Claude plugin hooks
 fired, and do not treat a green `live:e2e` as the full VFS/security suite.
 
@@ -215,6 +225,17 @@ Assert all of:
 - structured VFS rule/goal/KPI edits persisted with the expected owner/status
 - missing VFS paths fail as normal commands; unsafe `rm -rf` on the mount is
   denied (hook status 2)
+- after `codex install`, the **installed** plugin (`~/.codex/memoree/bundle`,
+  not `harnesses/codex/bundle`) reports a real `memoree --version` (not
+  `0.0.0`) and `memoree doctor` does not `FAIL  hook bundles:`
+- checkout `harnesses/*/bundle/package.json` stays an unnamed `{type:module}`
+  stub
+- `embeddings status` shows Codex linked after install; a newly created Claude
+  marketplace cache version starts `✗ not linked` and becomes `✓ linked`
+  after `memoree embeddings install`
+- no `/summaries/%` row has `description = 'completed'`; proactive recall
+  still injects the captured identifier after stub + empty-key competitor rows
+  are seeded
 
 ### `live:e2e`
 
@@ -236,6 +257,12 @@ with N &gt; 0 and M &gt; 0. Also:
 - CLI side paths used in the script succeeded (`graph build`, `docs set/show`,
   `docs wiki --dry-run`, `skillify` status, `context`, `memory backfill --dry-run`,
   `sessions prune`)
+- after isolated `codex install`, installed-plugin `memoree --version` is not
+  `0.0.0` and doctor does not `FAIL  hook bundles:`
+- embeddings are rechecked **after** Codex install; a new Claude cache version
+  is linked by `embeddings install`
+- no summary description is the `"completed"` stub; installed `recall.js`
+  injects the harbor-kite UUID and skips stub / empty-key poison rows
 
 ### `memoree doctor` (after a real promote)
 
@@ -267,14 +294,14 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Claude SessionStart inject + placeholder summary | S | V | L | Auto-mine/backfill spawn is unit-locked and wired |
 | Claude session-start-setup (async) | S | V | L | Runs in plugin; validate also invokes the bundle |
 | Claude UserPromptSubmit capture | S | V | L | |
-| Claude UserPromptSubmit recall.js | S | V | L | Threshold 0.4 in live env; telemetry file uses `homedir()`. Skip `"completed"` / `"in progress"` stubs. Empty `project_key` rows are admitted only as a cold-start fallback when the current project has no embedded summaries. |
+| Claude UserPromptSubmit recall.js | S | V | L | Threshold 0.4 in live env; telemetry file uses `homedir()`. Skip `"completed"` / `"in progress"` stubs. Empty `project_key` rows are admitted only as a cold-start fallback when the current project has no embedded summaries. Validate and live seed a stub + empty-key competitor and drive `recall.js` (not only VFS grep). |
 | Claude PreToolUse VFS (Bash/Read/Grep/Glob) | S | V | L | Live exercises `cat`/`printf` on the mount |
 | Claude PostToolUse / Stop / SubagentStop capture | S | V | L | SubagentStop is source-tested; live is main session |
 | Claude SessionEnd wiki + plugin-cache-gc + graph-on-stop | S | V | L | Wiki worker uses `MEMOREE_VALIDATION_CLAUDE_HOME` |
 | Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume\|clear\|compact`; `codex exec` may still skip it |
 | Codex capture (UserPromptSubmit / PostToolUse / Stop / SubagentStop) | S | V | L | Stop needs a real session file; no `--ephemeral`; SubagentStop is source + validate |
 | Codex UserPromptSubmit recall.js | S | V | L | Same recall.js bundle as Claude; Codex documents additionalContext as developer context |
-| Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude. `memoree status`/`doctor` via the Codex shim read the named+versioned `bundle/package.json` or `.memoree_version` stamp (not `0.0.0`). Doctor checks the installed Claude cache, not `pkgRoot()/harnesses/claude-code/bundle`. |
+| Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude. After isolated `codex install`, **installed** `~/.codex/memoree/bundle` (not checkout `harnesses/codex/bundle`) must answer `memoree status`/`--version` with a real semver and `memoree doctor` must not `FAIL  hook bundles:`. |
 | Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock. Usage recap parses Codex rollouts (`function_call` / `exec_command_*`), not Claude `tool_use` transcripts. Wiki `execFileSync` budget is 180s; a tmp file that already contains `## What Happened` is uploaded after timeout only when it *changed* from the pre-seeded resume copy (stubs and unchanged finalized files are skipped so the offset does not skip unsummarized events). |
 | Antigravity install/uninstall + named hooks + MCP | S | V | — | Plugin at `~/.gemini/config/plugins/memoree`; merges `memoree` into `~/.gemini/config/hooks.json` and the legacy `~/.gemini/antigravity-cli/hooks.json` (CLI#49). `memoree install` detects Antigravity only when `~/.gemini/antigravity-cli` or `~/.gemini/antigravity` exists — a Gemini CLI-only `~/.gemini` is skipped. |
 | Antigravity PreInvocation inject + recall | S | V | L | First `invocationNum` 0/1 claims wake lock; `injectSteps`. Hook JSON is parsed without waiting for stdin EOF (`agy -p` keeps the pipe open) |
@@ -300,7 +327,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `memory backfill` | S | — | dry-run | |
 | `memory flush` | S | — | — | |
 | `sessions prune` | S | — | L | |
-| `backend check` / embeddings status | S | V | L | `findMemoreeInstalls` skips Claude cache dirs with `.orphaned_at`. `memoree install` relinks embeddings after harness wiring. |
+| `backend check` / embeddings status | S | V | L | `findMemoreeInstalls` skips Claude cache dirs with `.orphaned_at`. `memoree install` relinks embeddings after harness wiring. Validate/live create an unlinked `claude (9.9.9)` cache after `codex install` and require `embeddings install` to link it. |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
 | `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime. Embeddings install runs before wiring (shared deps) and again after so a new Claude cache version is linked. Codex/Antigravity `bundle/package.json` is `{name,version,type:module}`. |
 | `npx @sskarz/memoree uninstall` / `--purge` | S | — | — | Default uninstall unwires harnesses and keeps `~/.memoree` plus leftover plugin copies. `--purge --yes` deletes staged pkg, leftover plugin dirs, Memoree-managed skills (including local-mined skill directories, not just `SKILL.md`), embeddings, and `~/.memoree`. Leftover `rm` failures warn and continue so `~/.memoree` is still attempted. Isolated-HOME install/uninstall/purge; TTY confirm defaults to No; non-TTY requires `--yes`. Does not drop PostgreSQL schemas or `memoree-runtime`. |
@@ -337,6 +364,25 @@ grep (the discovery, create, and search jobs). head/tail/wc/find/jq/mv/rm stay
 on the Node MCP client so a single model turn is not required to hit every
 alias.
 
+## What live LLM turns do not prove
+
+Cheap `claude -p` / `codex exec` turns prove unaided capture, identifier
+echo, and VFS grep. They are the wrong tool for the failure modes below.
+Each row is now fail-closed in source tests plus a deterministic
+`runtime:validate` / `live:e2e` fixture (no extra model call).
+
+| Incident | Why a live turn missed it | Gate that must catch it |
+|---|---|---|
+| Codex `memoree status` = `0.0.0` | Live never ran `memoree status`/`--version`. Validate drove **checkout** `harnesses/codex/bundle`, not `~/.codex/memoree/bundle`. | After isolated `codex install`, drive the **installed** `command/memoree.js --version` and PreToolUse `memoree status`. Checkout `harnesses/*/bundle/package.json` must stay unnamed. |
+| Doctor `FAIL  hook bundles:` from the Codex shim | Isolated HOME has no Claude cache; doctor used to look at `pkgRoot()/harnesses/claude-code/bundle`. Live never ran doctor. | Installed-plugin `memoree doctor` must not print `FAIL  hook bundles:`. Source: `tests/shared/doctor.test.ts`. |
+| Index description `"completed"` on a SessionStart stub | Wiki usually succeeded in live, so the stub was overwritten. `MEMOREE_SUMMARY_EVERY_N_MSGS=1000` skips first-wiki-at-10. | `assertNoCompletedSummaryStubs` on the isolated DB. Source: `upload-summary` + `decideWikiUpload`. |
+| Recall injected `"completed"` / `"in progress"` | Live recall is `grep ~/.memoree/memory/`, not `recall.js` additionalContext. | Seed a high-ranking stub row, drive `recall.js`, require the real identifier and no stub excerpt. `recallTopHit` must fall through the stub. |
+| Empty `project_key` summaries mixed into a project that already has embeddings | Isolated DB has only this run's keys. | Seed an empty-key competitor with the donor embedding; recall must not inject its token. |
+| New Claude cache version unlinked after harness wiring | `embeddings status` ran **before** `codex install`. Live does not run full `memoree install`. | Create `~/.claude/plugins/cache/memoree/memoree/9.9.9`, assert `✗ not linked`, run `embeddings install`, assert `✓ linked`. Source: `runInstall` calls `installEmbeddings` twice. |
+| Wiki timeout salvaging an unchanged pre-seed | Live wiki budget is 180s and usually finishes. Cannot afford a forced 180s hang. | Source only: `decideWikiUpload` skip-unchanged vs rewritten salvage. Do not claim live covers this. |
+
+Source lock: `tests/scripts/harness-incident-gates.test.ts`.
+
 ## Known gaps, overlap, and follow-ups
 
 Not missing from the product on purpose, but not fully live-proven:
@@ -362,6 +408,8 @@ Follow-ups that would make the PR loop tighter (do not block docs):
 - Honor `MEMOREE_STATE_DIR` in `src/hooks/shared/recall-events.ts`
 - Optional `MEMOREE_RUNTIME_DIR` mode that installs Codex hooks from the PR
   checkout into the **isolated** `CODEX_HOME` only, without `npm link`
+- Wiki `ETIMEDOUT` salvage remains source-tested (`decideWikiUpload`); do not
+  add a 180s hang to live gates
 
 ## Adding a new agent later
 

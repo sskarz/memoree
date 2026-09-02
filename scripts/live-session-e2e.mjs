@@ -39,6 +39,14 @@ import {
   antigravityLivePrompt,
   assertAntigravityLiveUsedMcp,
   codexExecLiveArgs,
+  assertInstalledCodexShimHealth,
+  assertEmbeddingsStatusLinked,
+  seedUnlinkedClaudeCacheVersion,
+  embeddingsStatusReportsLink,
+  assertNoCompletedSummaryStubs,
+  seedRecallIncidentRows,
+  clearRecallIncidentRows,
+  assertRecallSkippedIncidentRows,
 } from "./runtime-validate.mjs";
 
 function claudeLivePrompt(harborId, ruleId) {
@@ -152,6 +160,20 @@ export async function runLiveSessionE2E() {
 
     status("installing Codex hooks into the isolated profile");
     run(process.execPath, [cli, "codex", "install"], { cwd: repository, env });
+    status("checking installed Codex shim status/doctor (not checkout bundles)");
+    assertInstalledCodexShimHealth(isolatedHome, { cwd: repository, env });
+    status("checking embeddings relink after Codex install");
+    const embeddingsAfterCodex = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assertEmbeddingsStatusLinked(embeddingsAfterCodex, "codex", "live e2e embeddings after Codex install");
+    const claudeCache = seedUnlinkedClaudeCacheVersion(isolatedHome);
+    const embeddingsBeforeRelink = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assert(
+      embeddingsStatusReportsLink(embeddingsBeforeRelink, claudeCache.agentId, "✗ not linked"),
+      `new Claude cache ${claudeCache.agentId} should start unlinked; stdout=${JSON.stringify(embeddingsBeforeRelink).slice(0, 800)}`,
+    );
+    run(process.execPath, [cli, "embeddings", "install"], { cwd: repository, env });
+    const embeddingsAfterRelink = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assertEmbeddingsStatusLinked(embeddingsAfterRelink, claudeCache.agentId, "live e2e embeddings after relink");
 
     status("building graph and seeding docs/rules/goals/kpis/skillify CLI");
     run(process.execPath, [cli, "graph", "build"], { cwd: repository, env });
@@ -192,6 +214,25 @@ export async function runLiveSessionE2E() {
 
     status("waiting for unaided capture + wiki summary");
     await waitForCapture(databasePath, harborId, { requireSummary: true, timeoutMs: 180_000 });
+    assertNoCompletedSummaryStubs(databasePath);
+
+    status("seeding recall stub and empty-key competitors");
+    seedRecallIncidentRows(databasePath);
+    const installedRecall = join(isolatedHome, ".codex", "memoree", "bundle", "recall.js");
+    const recallHook = run(process.execPath, [installedRecall], {
+      cwd: repository,
+      env,
+      input: `${JSON.stringify({
+        session_id: crypto.randomUUID(),
+        cwd: repository,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Remember the harbor kite from prior Memoree work. What exact identifier did we record?",
+      })}\n`,
+      timeout: 30_000,
+    });
+    assert(recallHook.includes(harborId), `installed Codex recall.js did not inject harbor kite; stdout=${JSON.stringify(recallHook).slice(0, 1200)}`);
+    assertRecallSkippedIncidentRows(recallHook, "live e2e installed Codex recall.js");
+    clearRecallIncidentRows(databasePath);
 
     status("running a live Claude recall session");
     const recallOut = run("claude", claudeLiveCliArgs(claudeRecallPrompt(), [

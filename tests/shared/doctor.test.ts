@@ -150,6 +150,23 @@ describe("memoree doctor", () => {
     expect(fixture.lines.join("\n")).not.toContain("Antigravity");
   });
 
+  it("does not FAIL hook bundles when Claude cache and checkout harnesses are both absent", async () => {
+    const fixture = baseDeps(sqlite);
+    const code = await runDoctor({
+      ...fixture.deps,
+      pkgRoot: () => "/home/alice/.codex/memoree/bundle",
+      existsSync: path => {
+        const value = String(path);
+        if (value.includes("harnesses/claude-code")) return false;
+        if (value.includes("plugins/cache/memoree")) return false;
+        return true;
+      },
+    });
+    expect(code).toBe(0);
+    expect(fixture.lines.join("\n")).toContain("Claude plugin cache not installed");
+    expect(fixture.lines.join("\n")).not.toContain("FAIL  hook bundles:");
+  });
+
   it("reports Antigravity binary and hook bundle failures when installed", async () => {
     const fixture = baseDeps(sqlite);
     const code = await runDoctor({

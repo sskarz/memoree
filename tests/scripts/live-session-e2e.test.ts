@@ -57,4 +57,13 @@ describe("live session e2e harness", () => {
     expect(source).toContain("inspectCaptureDatabase");
     expect(source).toContain("removeValidationWorkspace");
   });
+
+  it("proves the installed Codex shim, post-install embeddings relink, and stub-summary gates", () => {
+    expect(source).toContain("assertInstalledCodexShimHealth");
+    expect(source).toContain("seedUnlinkedClaudeCacheVersion");
+    expect(source).toContain("assertNoCompletedSummaryStubs");
+    expect(source).toContain("seedRecallIncidentRows");
+    expect(source).toContain("assertRecallSkippedIncidentRows");
+    expect(source).not.toMatch(/["']--bare["']/);
+  });
 });

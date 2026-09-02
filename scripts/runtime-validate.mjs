@@ -379,6 +379,232 @@ export function hookBodyContains(stdout, needle) {
   return `${command}\n${fileBody}`.includes(needle);
 }
 
+/** Fixture paths seeded to prove recall skips stubs and empty-key competitors. */
+export const RECALL_POISON_STUB_PATH = "/summaries/poison-stub/session.md";
+export const RECALL_POISON_EMPTY_KEY_PATH = "/summaries/poison-empty/session.md";
+export const RECALL_POISON_EMPTY_KEY_TOKEN = "empty-key-poison-harbor-kite";
+
+/**
+ * Checkout esbuild outdirs must stay unnamed {type:module} stubs. A named
+ * bundle package.json makes pkgRoot() stop at harnesses/<agent>/bundle, which
+ * breaks graph/query and reports memoree 0.0.0 from checkout hooks.
+ */
+export function assertCheckoutHarnessPackageJsonUnnamed(runtimeDir) {
+  for (const harness of ["claude-code", "codex", "antigravity"]) {
+    const pkgPath = join(runtimeDir, "harnesses", harness, "bundle", "package.json");
+    if (!existsSync(pkgPath)) continue;
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    assert(
+      !pkg.name,
+      `checkout ${harness} bundle/package.json must stay unnamed so pkgRoot walks to the package root; got name=${JSON.stringify(pkg.name)}`,
+    );
+    assert(pkg.type === "module", `checkout ${harness} bundle/package.json must be {type:module}`);
+  }
+}
+
+/** Installed Codex/Antigravity plugin copies must be named+versioned, not 0.0.0. */
+export function assertInstalledPluginBundleIdentity(pluginDir, label) {
+  const pkgPath = join(pluginDir, "bundle", "package.json");
+  assert(existsSync(pkgPath), `${label} install did not write bundle/package.json`);
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  assert(
+    pkg.name === "memoree" || pkg.name === "@sskarz/memoree" || pkg.name === "memoree-codex",
+    `${label} bundle/package.json must be a named Memoree package; got ${JSON.stringify(pkg.name)}`,
+  );
+  assert(
+    typeof pkg.version === "string" && pkg.version !== "0.0.0" && /^\d+\.\d+\.\d+/.test(pkg.version),
+    `${label} bundle/package.json version must be a real semver, not 0.0.0; got ${JSON.stringify(pkg.version)}`,
+  );
+}
+
+export function runInstalledPluginMemoree(pluginDir, args, options = {}) {
+  const entry = join(pluginDir, "bundle", "command", "memoree.js");
+  assert(existsSync(entry), `installed plugin command entry missing: ${entry}`);
+  const result = spawnSync(process.execPath, [entry, ...args], {
+    cwd: options.cwd,
+    env: options.env,
+    encoding: "utf8",
+    timeout: options.timeout ?? 30_000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+}
+
+/**
+ * Drive the *installed* Codex plugin (not checkout harnesses/codex/bundle).
+ * That is the path Codex PreToolUse actually execs, and the one that used to
+ * report 0.0.0 / FAIL hook bundles when bundle/package.json was an unnamed stub.
+ */
+export function assertInstalledCodexShimHealth(isolatedHome, options) {
+  const pluginDir = join(isolatedHome, ".codex", "memoree");
+  assertInstalledPluginBundleIdentity(pluginDir, "Codex");
+  const version = runInstalledPluginMemoree(pluginDir, ["--version"], options);
+  const versionText = version.stdout.trim();
+  assert(version.status === 0, `installed Codex memoree --version exited ${version.status}: ${version.stderr}`);
+  assert(
+    versionText !== "0.0.0" && /^\d+\.\d+\.\d+/.test(versionText),
+    `installed Codex memoree --version was ${JSON.stringify(versionText)}`,
+  );
+
+  const installedPreTool = join(pluginDir, "bundle", "pre-tool-use.js");
+  assert(existsSync(installedPreTool), "codex install did not write pre-tool-use.js");
+  const statusResult = runHookResult(installedPreTool, {
+    session_id: crypto.randomUUID(),
+    tool_name: "shell",
+    tool_use_id: "installed-codex-shim",
+    cwd: options.cwd,
+    hook_event_name: "pre_tool_use",
+    model: "runtime-validation",
+    tool_input: { command: "memoree status" },
+  }, { cwd: options.cwd, env: options.env });
+  assert(statusResult.status === 0, `installed Codex memoree status hook exited ${statusResult.status}: ${statusResult.stderr}`);
+  assert(
+    !hookBodyContains(statusResult.stdout, "0.0.0"),
+    `installed Codex memoree status reported 0.0.0; stdout=${JSON.stringify(statusResult.stdout).slice(0, 800)}`,
+  );
+  assert(
+    /memoree\s+\d+\.\d+\.\d+/.test(`${hookUpdatedInput(statusResult.stdout).command ?? ""}\n${statusResult.stdout}`),
+    `installed Codex memoree status missing a real version; stdout=${JSON.stringify(statusResult.stdout).slice(0, 800)}`,
+  );
+
+  const doctor = runInstalledPluginMemoree(pluginDir, ["doctor"], options);
+  const doctorText = `${doctor.stdout}\n${doctor.stderr}`;
+  assert(
+    /hook bundles/i.test(doctorText),
+    `installed Codex memoree doctor did not report hook bundles; stdout=${JSON.stringify(doctorText).slice(0, 1200)}`,
+  );
+  assert(
+    !/FAIL\s+hook bundles:/i.test(doctorText),
+    `installed Codex memoree doctor FAILed Claude hook bundles from the plugin pkgRoot; stdout=${JSON.stringify(doctorText).slice(0, 1200)}`,
+  );
+}
+
+export function embeddingsStatusReportsLink(statusText, agentId, label) {
+  const escaped = agentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${escaped}\\s+${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(statusText);
+}
+
+export function assertEmbeddingsStatusLinked(statusText, agentId, phase) {
+  assert(
+    embeddingsStatusReportsLink(statusText, agentId, "✓ linked → shared"),
+    `${phase} did not show ${agentId} linked to shared embed-deps; stdout=${JSON.stringify(statusText).slice(0, 1200)}`,
+  );
+}
+
+/**
+ * Prove a newly appeared Claude marketplace cache is unlinked until
+ * `embeddings install` runs again — the failure mode of wiring a new
+ * cache version after the first embeddings pass.
+ */
+export function seedUnlinkedClaudeCacheVersion(isolatedHome, version = "9.9.9") {
+  const pluginDir = join(isolatedHome, ".claude", "plugins", "cache", "memoree", "memoree", version);
+  const bundle = join(pluginDir, "bundle");
+  mkdirSync(bundle, { recursive: true, mode: 0o700 });
+  for (const file of ["session-start.js", "capture.js", "recall.js", "session-end.js"]) {
+    writeFileSync(join(bundle, file), "// runtime-validate embeddings relink fixture\n");
+  }
+  return { pluginDir, agentId: `claude (${version})` };
+}
+
+export function assertNoCompletedSummaryStubs(databasePath) {
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const rows = db.prepare(
+      "SELECT path, description, summary FROM memory WHERE path LIKE '/summaries/%'",
+    ).all();
+    for (const row of rows) {
+      const path = String(row.path ?? "");
+      const description = String(row.description ?? "").trim();
+      const summary = String(row.summary ?? "");
+      assert(
+        description.toLowerCase() !== "completed",
+        `Summary ${path} still uses the completed stub description`,
+      );
+      if (!/##\s*What Happened/i.test(summary)) {
+        assert(
+          description === "in progress" || description === "",
+          `Unfinalized summary ${path} has description ${JSON.stringify(description)} instead of in progress`,
+        );
+      }
+    }
+  } finally {
+    db.close();
+  }
+}
+
+export function seedRecallIncidentRows(databasePath) {
+  const db = new DatabaseSync(databasePath);
+  try {
+    const donor = db.prepare(
+      "SELECT * FROM memory WHERE path LIKE '/summaries/%' AND summary_embedding IS NOT NULL LIMIT 1",
+    ).get();
+    assert(donor, "Cannot seed recall incident rows without an embedded summary");
+    const columns = Object.keys(donor).filter(name => name.toLowerCase() !== "rowid");
+    const insert = db.prepare(
+      `INSERT INTO memory (${columns.map(name => `"${name}"`).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+    );
+    const stamp = "2099-01-01T00:00:00.000Z";
+    function insertClone(overrides) {
+      insert.run(...columns.map(name => (Object.hasOwn(overrides, name) ? overrides[name] : donor[name])));
+    }
+    insertClone({
+      id: crypto.randomUUID(),
+      path: RECALL_POISON_STUB_PATH,
+      filename: "session.md",
+      description: "completed",
+      summary: "# Placeholder\n\nNo wiki yet.\n",
+      author: "poison-stub",
+      last_update_date: stamp,
+      creation_date: stamp,
+    });
+    insertClone({
+      id: crypto.randomUUID(),
+      path: RECALL_POISON_EMPTY_KEY_PATH,
+      filename: "session.md",
+      project_key: "",
+      description: `EMPTY KEY POISON ${RECALL_POISON_EMPTY_KEY_TOKEN}`,
+      summary: `## What Happened\n${RECALL_POISON_EMPTY_KEY_TOKEN}\n\n## Key Facts\n- ${RECALL_POISON_EMPTY_KEY_TOKEN}\n`,
+      author: "poison-empty",
+      last_update_date: stamp,
+      creation_date: stamp,
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export function clearRecallIncidentRows(databasePath) {
+  const db = new DatabaseSync(databasePath);
+  try {
+    db.prepare("DELETE FROM memory WHERE path IN (?, ?)").run(
+      RECALL_POISON_STUB_PATH,
+      RECALL_POISON_EMPTY_KEY_PATH,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+export function assertRecallSkippedIncidentRows(stdout, phase) {
+  const text = String(stdout ?? "");
+  assert(
+    !/excerpt:\s*"completed"/i.test(text),
+    `${phase} injected a completed stub excerpt; stdout=${JSON.stringify(text).slice(0, 800)}`,
+  );
+  assert(
+    !/excerpt:\s*"in progress"/i.test(text),
+    `${phase} injected an in-progress stub excerpt; stdout=${JSON.stringify(text).slice(0, 800)}`,
+  );
+  assert(
+    !text.includes(RECALL_POISON_EMPTY_KEY_TOKEN),
+    `${phase} injected the empty-key poison summary; stdout=${JSON.stringify(text).slice(0, 800)}`,
+  );
+  assert(
+    !text.includes("poison-stub") && !text.includes("poison-empty"),
+    `${phase} injected a poison recall fixture; stdout=${JSON.stringify(text).slice(0, 800)}`,
+  );
+}
+
 function assertHookContains(result, needle, phase) {
   assert(result.status === 0, `${phase} hook exited ${result.status}: ${result.stderr}`);
   assert(
@@ -519,7 +745,7 @@ export function inspectCaptureDatabase(databasePath, options = {}) {
     const integrity = db.prepare("PRAGMA integrity_check").get()?.integrity_check;
     const journal = db.prepare("PRAGMA journal_mode").get()?.journal_mode;
     const events = db.prepare("SELECT message, message_embedding FROM sessions ORDER BY creation_date").all();
-    const summaries = db.prepare("SELECT summary, summary_embedding FROM memory WHERE path LIKE '/summaries/%'").all();
+    const summaries = db.prepare("SELECT path, summary, description, summary_embedding FROM memory WHERE path LIKE '/summaries/%'").all();
     assert(String(integrity).toLowerCase() === "ok", "SQLite integrity_check failed");
     assert(String(journal).toLowerCase() === "wal", "SQLite is not in WAL mode");
     assert(events.length > 0, options.emptyEventsMessage ?? "No session events were captured");
@@ -544,6 +770,14 @@ export function inspectCaptureDatabase(databasePath, options = {}) {
         .some(value => vectorLength(value) === 768),
       "No 768-element embedding was captured",
     );
+    for (const row of summaries) {
+      const path = String(row.path ?? "");
+      const description = String(row.description ?? "").trim();
+      assert(
+        description.toLowerCase() !== "completed",
+        `Summary ${path} still uses the completed stub description`,
+      );
+    }
     return { events: events.length, summaries: summaries.length };
   } finally {
     db.close();
@@ -612,6 +846,7 @@ export async function validateRuntime(options = {}) {
   for (const bundle of requiredBundles) {
     assert(existsSync(bundle), `Installed runtime bundle is missing: ${bundle}`);
   }
+  assertCheckoutHarnessPackageJsonUnnamed(runtimeDir);
 
   const root = createValidationWorkspace();
   const repository = join(root, "repo");
@@ -699,6 +934,21 @@ export async function validateRuntime(options = {}) {
 
     status("installing the promoted Codex runtime into a clean profile");
     run(process.execPath, [cli, "codex", "install"], { cwd: repository, env });
+    status("checking installed Codex shim status/doctor (not checkout bundles)");
+    assertInstalledCodexShimHealth(isolatedHome, { cwd: repository, env });
+    status("checking embeddings relink after Codex install");
+    const embeddingsAfterCodex = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assertEmbeddingsStatusLinked(embeddingsAfterCodex, "codex", "embeddings status after Codex install");
+    const claudeCache = seedUnlinkedClaudeCacheVersion(isolatedHome);
+    const embeddingsBeforeRelink = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assert(
+      embeddingsStatusReportsLink(embeddingsBeforeRelink, claudeCache.agentId, "✗ not linked"),
+      `new Claude cache ${claudeCache.agentId} should start unlinked; stdout=${JSON.stringify(embeddingsBeforeRelink).slice(0, 1200)}`,
+    );
+    status("relinking embeddings after a new Claude marketplace cache version");
+    run(process.execPath, [cli, "embeddings", "install"], { cwd: repository, env });
+    const embeddingsAfterRelink = run(process.execPath, [cli, "embeddings", "status"], { cwd: repository, env });
+    assertEmbeddingsStatusLinked(embeddingsAfterRelink, claudeCache.agentId, "embeddings status after relink");
 
     const codexPreTool = join(codexBundle, "pre-tool-use.js");
     const vfsHookOptions = { cwd: repository, env: { ...env, MEMOREE_CAPTURE: "false" } };
@@ -1208,6 +1458,7 @@ export async function validateRuntime(options = {}) {
     // the value. The unique UUID is the durable, non-derivable proof that the
     // generated summary retained the captured fact.
     await waitForCapture(databasePath, semanticIdentifier, { requireSummary: true });
+    assertNoCompletedSummaryStubs(databasePath);
     {
       const db = new DatabaseSync(databasePath, { readOnly: true });
       try {
@@ -1257,6 +1508,9 @@ export async function validateRuntime(options = {}) {
       `memoree memory backfill --dry-run produced no output`,
     );
 
+    status("seeding recall stub and empty-key competitors");
+    seedRecallIncidentRows(databasePath);
+
     status("checking Claude proactive recall hook");
     /** @type {{ status: number | null, stdout: string, stderr: string }} */
     let recallResult = { status: 1, stdout: "", stderr: "" };
@@ -1277,6 +1531,7 @@ export async function validateRuntime(options = {}) {
       recallResult.stdout.includes(semanticIdentifier),
       `Claude recall did not inject the captured identifier; stdout=${JSON.stringify(recallResult.stdout).slice(0, 1200)}`,
     );
+    assertRecallSkippedIncidentRows(recallResult.stdout, "Claude recall");
 
     status("checking Codex proactive recall hook");
     /** @type {{ status: number | null, stdout: string, stderr: string }} */
@@ -1296,6 +1551,8 @@ export async function validateRuntime(options = {}) {
       codexRecallResult.stdout.includes(semanticIdentifier),
       `Codex recall did not inject the captured identifier; stdout=${JSON.stringify(codexRecallResult.stdout).slice(0, 1200)}`,
     );
+    assertRecallSkippedIncidentRows(codexRecallResult.stdout, "Codex recall");
+    clearRecallIncidentRows(databasePath);
 
     status("checking Claude Grep and Glob intercepts");
     retryHookUntilContains(
