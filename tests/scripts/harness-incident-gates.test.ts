@@ -66,19 +66,21 @@ describe("harness incident gates — script locks", () => {
 
 describe("harness incident gates — helpers", () => {
   it("rejects a named checkout harness package.json", () => {
-    root = mkdtempSync(join(tmpdir(), "incident-unnamed-"));
-    const bundle = join(root, "harnesses", "codex", "bundle");
+    const dir = mkdtempSync(join(tmpdir(), "incident-unnamed-"));
+    root = dir;
+    const bundle = join(dir, "harnesses", "codex", "bundle");
     mkdirSync(bundle, { recursive: true });
     writeFileSync(join(bundle, "package.json"), JSON.stringify({ name: "memoree", version: "0.7.152", type: "module" }));
-    expect(() => assertCheckoutHarnessPackageJsonUnnamed(root)).toThrow(/must stay unnamed/);
+    expect(() => assertCheckoutHarnessPackageJsonUnnamed(dir)).toThrow(/must stay unnamed/);
   });
 
   it("accepts unnamed checkout harness package.json stubs", () => {
-    root = mkdtempSync(join(tmpdir(), "incident-unnamed-ok-"));
-    const bundle = join(root, "harnesses", "codex", "bundle");
+    const dir = mkdtempSync(join(tmpdir(), "incident-unnamed-ok-"));
+    root = dir;
+    const bundle = join(dir, "harnesses", "codex", "bundle");
     mkdirSync(bundle, { recursive: true });
     writeFileSync(join(bundle, "package.json"), JSON.stringify({ type: "module" }));
-    expect(() => assertCheckoutHarnessPackageJsonUnnamed(root)).not.toThrow();
+    expect(() => assertCheckoutHarnessPackageJsonUnnamed(dir)).not.toThrow();
   });
 
   it("requires the installed plugin bundle to be named and versioned", () => {

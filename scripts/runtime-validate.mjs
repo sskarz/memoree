@@ -538,14 +538,15 @@ export function seedRecallIncidentRows(databasePath) {
     const donor = db.prepare(
       "SELECT * FROM memory WHERE path LIKE '/summaries/%' AND summary_embedding IS NOT NULL LIMIT 1",
     ).get();
-    assert(donor, "Cannot seed recall incident rows without an embedded summary");
-    const columns = Object.keys(donor).filter(name => name.toLowerCase() !== "rowid");
+    if (!donor) throw new Error("Cannot seed recall incident rows without an embedded summary");
+    const sourceRow = donor;
+    const columns = Object.keys(sourceRow).filter(name => name.toLowerCase() !== "rowid");
     const insert = db.prepare(
       `INSERT INTO memory (${columns.map(name => `"${name}"`).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
     );
     const stamp = "2099-01-01T00:00:00.000Z";
     function insertClone(overrides) {
-      insert.run(...columns.map(name => (Object.hasOwn(overrides, name) ? overrides[name] : donor[name])));
+      insert.run(...columns.map(name => (Object.hasOwn(overrides, name) ? overrides[name] : sourceRow[name])));
     }
     insertClone({
       id: crypto.randomUUID(),
