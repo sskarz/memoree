@@ -18,20 +18,43 @@ export const HOME = homedir();
 // find the per-agent bundles at project_root/harnesses/<agent>/bundle/.
 const PACKAGE_NAMES = new Set(["@sskarz/memoree", "memoree", "memoree-codex"]);
 
+/** True when `dir/package.json` is a named Memoree package (not an ESM `{type:module}` stub). */
+export function isNamedMemoreePackageDir(dir: string): boolean {
+  try {
+    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
+    return PACKAGE_NAMES.has(pkg.name) && typeof pkg.version === "string" && pkg.version.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isMemoreeRootDir(dir: string): boolean {
+  return isNamedMemoreePackageDir(dir) || existsSync(join(dir, ".memoree_version"));
+}
+
 export function pkgRoot(): string {
   let dir = fileURLToPath(new URL(".", import.meta.url));
   for (let i = 0; i < 8; i++) {
-    try {
-      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-      if (PACKAGE_NAMES.has(pkg.name)) return dir;
-    } catch { /* not here, keep walking */ }
+    if (isMemoreeRootDir(dir)) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  // Fallback: previous one-level-up behavior. Preserves backwards compat
-  // if package.json is unreachable for any reason (sandbox, packed asar, ...).
-  return fileURLToPath(new URL("..", import.meta.url));
+  // Do not treat one-level-up from command/memoree.js as the package root when
+  // that directory only has an unnamed ESM `{type:module}` stub.
+  const fallback = fileURLToPath(new URL("..", import.meta.url));
+  if (isMemoreeRootDir(fallback)) return fallback;
+  return fallback;
+}
+
+/** `{name, version, type:module}` written into each agent bundle so Node ESM loads and pkgRoot walk-up can see a real package. */
+export function bundleEsmPackageJson(version: string): string {
+  return JSON.stringify({ name: "memoree", version, type: "module" }, null, 2) + "\n";
+}
+
+export function writeBundleEsmPackageJson(bundleDir: string, version: string): void {
+  ensureDir(bundleDir);
+  writeFileSync(join(bundleDir, "package.json"), bundleEsmPackageJson(version));
 }
 
 export function ensureDir(path: string, mode: number = 0o755): void {

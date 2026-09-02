@@ -6,6 +6,9 @@ import { tmpdir, homedir } from "node:os";
 import {
   HOME,
   pkgRoot,
+  isNamedMemoreePackageDir,
+  bundleEsmPackageJson,
+  writeBundleEsmPackageJson,
   ensureDir,
   copyDir,
   symlinkForce,
@@ -47,6 +50,37 @@ describe("pkgRoot", () => {
     // The package.json at pkgRoot's parent or pkgRoot itself describes the
     // memoree package — installers read it via getVersion().
     expect(existsSync(join(root, "package.json")) || existsSync(join(root, "..", "package.json"))).toBe(true);
+  });
+});
+
+describe("isNamedMemoreePackageDir / bundleEsmPackageJson", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = join(tmpdir(), `hm-pkg-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("rejects an unnamed ESM stub", () => {
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ type: "module" }));
+    expect(isNamedMemoreePackageDir(dir)).toBe(false);
+  });
+
+  it("accepts a named package with a version", () => {
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "memoree", version: "0.7.151" }));
+    expect(isNamedMemoreePackageDir(dir)).toBe(true);
+  });
+
+  it("writes a named+versioned bundle package.json", () => {
+    writeBundleEsmPackageJson(join(dir, "bundle"), "0.7.151");
+    expect(JSON.parse(readFileSync(join(dir, "bundle", "package.json"), "utf-8"))).toEqual({
+      name: "memoree",
+      version: "0.7.151",
+      type: "module",
+    });
+    expect(bundleEsmPackageJson("1.2.3")).toContain('"type": "module"');
   });
 });
 

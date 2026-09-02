@@ -1,9 +1,9 @@
-import { existsSync, lstatSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, rmSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import {
   HOME, pkgRoot, ensureDir, copyDir, writeJson, writeJsonIfChanged,
-  writeVersionStamp, symlinkForce, log, warn,
+  writeVersionStamp, writeBundleEsmPackageJson, symlinkForce, log, warn,
 } from "./util.js";
 import { getVersion } from "./version.js";
 
@@ -94,12 +94,6 @@ export function stripMcpServer(existing: Record<string, unknown>): Record<string
   return next;
 }
 
-const ESM_PACKAGE_JSON = '{"type":"module"}\n';
-
-function writeBundleEsmMarker(pluginDir: string): void {
-  writeFileSync(join(pluginDir, "bundle", "package.json"), ESM_PACKAGE_JSON);
-}
-
 /** Register with `agy` from the package harness, never the destination. */
 function tryAgyPluginInstall(sourceDir: string): void {
   if (resolve(sourceDir) === resolve(ANTIGRAVITY_PLUGIN_DIR)) return;
@@ -176,7 +170,7 @@ export function installAntigravity(options: { packageRoot?: string } = {}): void
   }
 
   writeVersionStamp(ANTIGRAVITY_PLUGIN_DIR, getVersion());
-  writeBundleEsmMarker(ANTIGRAVITY_PLUGIN_DIR);
+  writeBundleEsmPackageJson(join(ANTIGRAVITY_PLUGIN_DIR, "bundle"), getVersion());
   log(`  Antigravity    installed -> ${ANTIGRAVITY_PLUGIN_DIR}`);
 }
 

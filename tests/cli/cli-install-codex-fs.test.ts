@@ -83,6 +83,11 @@ describe("installCodex — happy path", () => {
     expect(existsSync(join(pluginDir, "bundle", "capture.js"))).toBe(true);
     expect(existsSync(join(pluginDir, "skills", "memoree-memory", "SKILL.md"))).toBe(true);
     expect(readFileSync(join(pluginDir, ".memoree_version"), "utf-8")).toBe("1.2.3");
+    expect(JSON.parse(readFileSync(join(pluginDir, "bundle", "package.json"), "utf-8"))).toEqual({
+      name: "memoree",
+      version: "1.2.3",
+      type: "module",
+    });
   });
 
   it("writes a hooks.json with the shared Claude/Codex product events", async () => {

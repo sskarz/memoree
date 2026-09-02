@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { HOME, pkgRoot, ensureDir, copyDir, writeJson, writeJsonIfChanged, symlinkForce, writeVersionStamp, log, warn } from "./util.js";
+import { HOME, pkgRoot, ensureDir, copyDir, writeJson, writeJsonIfChanged, symlinkForce, writeVersionStamp, writeBundleEsmPackageJson, log, warn } from "./util.js";
 import { getVersion } from "./version.js";
 import { upsertMarkedBlock, stripMarkedBlock, MEMOREE_BLOCK_START, MEMOREE_BLOCK_END } from "./agents-md.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../hooks/shared/memory-command-contract.js";
@@ -323,6 +323,7 @@ export function installCodex(options: { packageRoot?: string } = {}): void {
 
   ensureDir(PLUGIN_DIR);
   copyDir(srcBundle, join(PLUGIN_DIR, "bundle"));
+  writeBundleEsmPackageJson(join(PLUGIN_DIR, "bundle"), getVersion());
   if (existsSync(srcSkills)) copyDir(srcSkills, join(PLUGIN_DIR, "skills"));
 
   tryEnableCodexHooks();
