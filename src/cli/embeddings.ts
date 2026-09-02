@@ -61,6 +61,7 @@ export function findMemoreeInstalls(home: string = HOME): AgentInstall[] {
     for (const ver of entries) {
       const dir = join(ccCache, ver);
       try { if (!statSync(dir).isDirectory()) continue; } catch { continue; }
+      if (existsSync(join(dir, ".orphaned_at"))) continue;
       // Bundle layout differs slightly: marketplace installs put it directly
       // under <ver>/bundle, while local-clone-style layouts use <ver>/harnesses/claude-code/bundle.
       const candidates = [join(dir, "bundle"), join(dir, "harnesses", "claude-code", "bundle")];
