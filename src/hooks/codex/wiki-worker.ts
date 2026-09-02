@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { finalizeSummary, releaseLock, readState } from "../summary-state.js";
 import { capLinesByBytes, newRowsFromWindow, stampOffset, WIKI_FALLBACK_MAX_ROWS, WIKI_JSONL_MAX_BYTES } from "../wiki-offset.js";
 import { redactSecrets } from "../shared/redact.js";
-import { uploadSummary } from "../upload-summary.js";
+import { uploadSummary, decideWikiUpload, WIKI_EXEC_TIMEOUT_MS } from "../upload-summary.js";
 import { log as _log } from "../../utils/debug.js";
 import { EmbedClient } from "../../embeddings/client.js";
 import { embeddingsDisabled } from "../../embeddings/disable.js";
@@ -203,7 +203,6 @@ async function main(): Promise<void> {
 
     wlog("running codex exec");
     let execSucceeded = false;
-    const summaryBeforeExec = existsSync(tmpSummary) ? readFileSync(tmpSummary, "utf-8") : null;
     try {
       const inv = buildTrailingPromptInvocation(cfg.codexBin, [
         "exec",
@@ -211,7 +210,7 @@ async function main(): Promise<void> {
       ], prompt);
       execFileSync(inv.file, inv.args, {
         ...inv.options,
-        timeout: 120_000,
+        timeout: WIKI_EXEC_TIMEOUT_MS,
         // codex exec streams its reasoning to stdout, which execFileSync
         // buffers. The Node default (1 MB) overflows to ENOBUFS on a verbose
         // run, killing the summary. The summary is written to a file, not read
@@ -226,58 +225,63 @@ async function main(): Promise<void> {
       wlog(`codex exec failed: ${detail}`);
     }
 
-    // 4. Upload summary to memory table
-    if (existsSync(tmpSummary)) {
-      const raw = readFileSync(tmpSummary, "utf-8");
-      const summaryChanged = summaryBeforeExec === null ? raw.trim().length > 0 : raw !== summaryBeforeExec;
+    // 4. Upload summary to memory table. Salvage a tmp file that already has
+    // ## What Happened even when execFileSync times out; skip stubs so a
+    // killed rewrite cannot stamp offset onto a placeholder.
+    const raw = existsSync(tmpSummary) ? readFileSync(tmpSummary, "utf-8") : "";
+    const decision = decideWikiUpload(raw);
+    if (decision !== "upload") {
       if (!execSucceeded) {
-        wlog(summaryChanged
-          ? "codex exec failed after a partial summary write; skipping upload to avoid advancing the offset"
-          : "codex exec failed without producing a new summary; skipping upload");
-        return;
-      }
-      if (raw.trim()) {
-        // Stamp the offset ourselves so the persisted summary is authoritative
-        // and never depends on the LLM echoing the bookkeeping line.
-        const text = redactSecrets(stampOffset(raw, jsonlLines));
-        const fname = `${cfg.sessionId}.md`;
-        const vpath = `/summaries/${cfg.userName}/${fname}`;
-        // Embed the summary so it ranks in the semantic retrieval branch.
-        // Skipped when globally disabled or the daemon is unreachable —
-        // uploadSummary() writes SQL NULL in that case.
-        let embedding: number[] | null = null;
-        if (!embeddingsDisabled()) {
-          try {
-            const daemonEntry = join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
-            embedding = await new EmbedClient({ daemonEntry }).embed(text, "document");
-          } catch (e: any) {
-            wlog(`summary embedding failed, writing NULL: ${e.message}`);
-          }
-        }
-        const result = await uploadSummary(query, {
-          tableName: cfg.memoryTable,
-          vpath, fname,
-          userName: cfg.userName,
-          project: cfg.project,
-          projectKey: cfg.projectKey,
-          agent: "codex",
-          sessionId: cfg.sessionId,
-          text,
-          embedding,
-          dialect: cfg.storage?.kind ?? "sqlite",
-          pluginVersion: cfg.pluginVersion ?? "",
-        });
-        wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);
-
-        try {
-          finalizeSummary(cfg.sessionId, jsonlLines);
-          wlog(`sidecar updated: lastSummaryCount=${jsonlLines}`);
-        } catch (e: any) {
-          wlog(`sidecar update failed: ${e.message}`);
-        }
+        wlog(decision === "skip-missing"
+          ? "codex exec failed without producing a new summary; skipping upload"
+          : "codex exec failed after a stub write without ## What Happened; skipping upload");
+      } else if (decision === "skip-missing") {
+        wlog("no summary file generated");
+      } else {
+        wlog("codex exec succeeded but summary is still a stub; skipping upload");
       }
     } else {
-      wlog("no summary file generated");
+      if (!execSucceeded) {
+        wlog("codex exec failed/timed out but summary contains ## What Happened; salvaging upload");
+      }
+      // Stamp the offset ourselves so the persisted summary is authoritative
+      // and never depends on the LLM echoing the bookkeeping line.
+      const text = redactSecrets(stampOffset(raw, jsonlLines));
+      const fname = `${cfg.sessionId}.md`;
+      const vpath = `/summaries/${cfg.userName}/${fname}`;
+      // Embed the summary so it ranks in the semantic retrieval branch.
+      // Skipped when globally disabled or the daemon is unreachable —
+      // uploadSummary() writes SQL NULL in that case.
+      let embedding: number[] | null = null;
+      if (!embeddingsDisabled()) {
+        try {
+          const daemonEntry = join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
+          embedding = await new EmbedClient({ daemonEntry }).embed(text, "document");
+        } catch (e: any) {
+          wlog(`summary embedding failed, writing NULL: ${e.message}`);
+        }
+      }
+      const result = await uploadSummary(query, {
+        tableName: cfg.memoryTable,
+        vpath, fname,
+        userName: cfg.userName,
+        project: cfg.project,
+        projectKey: cfg.projectKey,
+        agent: "codex",
+        sessionId: cfg.sessionId,
+        text,
+        embedding,
+        dialect: cfg.storage?.kind ?? "sqlite",
+        pluginVersion: cfg.pluginVersion ?? "",
+      });
+      wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);
+
+      try {
+        finalizeSummary(cfg.sessionId, jsonlLines);
+        wlog(`sidecar updated: lastSummaryCount=${jsonlLines}`);
+      } catch (e: any) {
+        wlog(`sidecar update failed: ${e.message}`);
+      }
     }
 
     wlog("done");

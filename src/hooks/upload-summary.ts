@@ -75,12 +75,6 @@ export function esc(s: string): string {
 
 const WHAT_HAPPENED_RE = /## What Happened\n([\s\S]*?)(?=\n##|$)/;
 
-/** Derive the short description from the "## What Happened" section of a wiki summary. */
-export function extractDescription(text: string): string {
-  const match = text.match(WHAT_HAPPENED_RE);
-  return match ? match[1].trim().slice(0, 300) : "completed";
-}
-
 /**
  * The SessionStart placeholder sentinel. A row with this description (and no
  * real summary/embedding) is an unfinalized stub created at SessionStart that
@@ -89,8 +83,26 @@ export function extractDescription(text: string): string {
 export const PLACEHOLDER_DESCRIPTION = "in progress";
 
 /**
+ * Legacy `extractDescription` fallback. Never a finalize signal — a stub that
+ * lacked `## What Happened` used to land this word in `description` / index.md
+ * while the markdown body still said in-progress.
+ */
+export const STALE_COMPLETED_SENTINEL = "completed";
+
+/** Codex/Claude/Antigravity wiki `execFileSync` budget. */
+export const WIKI_EXEC_TIMEOUT_MS = 180_000;
+
+/** Derive the short description from the "## What Happened" section of a wiki summary. */
+export function extractDescription(text: string): string {
+  const match = text.match(WHAT_HAPPENED_RE);
+  const body = match ? match[1].trim().slice(0, 300) : "";
+  return body || PLACEHOLDER_DESCRIPTION;
+}
+
+/**
  * Is `desc` a finalized (real) description? A finalized row has a description
- * that is non-empty and is NOT the SessionStart placeholder sentinel.
+ * that is non-empty and is NOT the SessionStart placeholder sentinel (or the
+ * legacy `"completed"` stub word).
  *
  * Proactive recall only surfaces rows where `description <> 'in progress'`
  * AND `summary <> ''`, so "finalized" here matches exactly what recall needs.
@@ -98,7 +110,7 @@ export const PLACEHOLDER_DESCRIPTION = "in progress";
 export function isFinalizedDescription(desc: unknown): boolean {
   if (typeof desc !== "string") return false;
   const d = desc.trim();
-  return d !== "" && d !== PLACEHOLDER_DESCRIPTION;
+  return d !== "" && d !== PLACEHOLDER_DESCRIPTION && d.toLowerCase() !== STALE_COMPLETED_SENTINEL;
 }
 
 /**
@@ -119,14 +131,25 @@ export function isFinalizedRow(summary: unknown, description: unknown): boolean 
  * The wiki worker's prompt always emits a populated "## What Happened" section;
  * the SessionStart placeholder never does. So the presence of a non-empty
  * "## What Happened" body is the reliable signal that this write carries a real
- * summary. `extractDescription`'s "completed" fallback alone is NOT a reliable
- * signal, because a content-free stub also lands "completed" and would
- * otherwise masquerade as finalized and clobber a real row.
+ * summary. A missing `## What Happened` is always a stub — never treat
+ * `"completed"` as a finalize signal.
  */
 export function isFinalizedSummaryText(text: unknown): boolean {
   if (typeof text !== "string" || text.trim() === "") return false;
   const match = text.match(WHAT_HAPPENED_RE);
   return match ? match[1].trim() !== "" : false;
+}
+
+export type WikiUploadDecision = "upload" | "skip-missing" | "skip-stub";
+
+/**
+ * After wiki `execFileSync` (including timeout), upload only when the tmp
+ * summary already contains a populated `## What Happened`. Skip empty files
+ * and SessionStart stubs so a killed-but-valid partial can still land.
+ */
+export function decideWikiUpload(raw: string | null | undefined): WikiUploadDecision {
+  if (typeof raw !== "string" || raw.trim() === "") return "skip-missing";
+  return isFinalizedSummaryText(raw) ? "upload" : "skip-stub";
 }
 
 /**
@@ -212,22 +235,16 @@ export async function uploadSummary(query: QueryFn, params: UploadParams): Promi
     return { path: "skip", sql: insertSql, descLength: desc.length, summaryLength: text.length };
   }
 
+  if (!isFinalizedSummaryText(text)) {
+    // Stubs stay SessionStart placeholders. Stamping JSONL offset onto a stub
+    // used to UPDATE description to the old `"completed"` fallback.
+    return { path: "skip", sql: "", descLength: desc.length, summaryLength: text.length };
+  }
+
   if (existing.length > 0) {
     // FINALIZE-WINS: a finalized row (real summary + non-placeholder
     // description) must never be clobbered back to a placeholder/stub.
-    //
-    // Production failure mode this prevents (org sskarz, ~56% of summaries
-    // stuck at 'in progress'): a stale/duplicate writer — a resumed session,
-    // or a late wiki worker that produced empty / content-free text —
-    // overwrites a real summary with a stub, making the row invisible to
-    // proactive recall again. The incoming write is "finalized" iff it carries
-    // a real summary body (a populated "## What Happened"); a non-finalized
-    // (stub) write is rejected when the existing row is already finalized.
-    const incomingFinalized = isFinalizedSummaryText(text);
-    const existingFinalized = isFinalizedRow(existing[0]["summary"], existing[0]["description"]);
-    if (!incomingFinalized && existingFinalized) {
-      return { path: "skip", sql: "", descLength: desc.length, summaryLength: text.length };
-    }
+    // Incoming writes without `## What Happened` are rejected above.
 
     // Only include plugin_version in the SET clause when the caller
     // explicitly provided a value (including ''). A legacy spawner that

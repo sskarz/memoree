@@ -21,7 +21,7 @@ import { readSessionEventCache } from "./session-event-cache.js";
 import { buildSessionPath } from "../utils/session-path.js";
 import { capLinesByBytes, newRowsFromWindow, stampOffset, WIKI_FALLBACK_MAX_ROWS, WIKI_JSONL_MAX_BYTES } from "./wiki-offset.js";
 import { redactSecrets } from "./shared/redact.js";
-import { uploadSummary } from "./upload-summary.js";
+import { uploadSummary, decideWikiUpload, WIKI_EXEC_TIMEOUT_MS } from "./upload-summary.js";
 import { embedSummaryWithWarmup } from "../embeddings/embed-summary.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
 
@@ -286,12 +286,11 @@ async function main(): Promise<void> {
 
     wlog("running claude -p");
     let execSucceeded = false;
-    const summaryBeforeExec = existsSync(tmpSummary) ? readFileSync(tmpSummary, "utf-8") : null;
     try {
       const inv = buildClaudeInvocation(cfg.claudeBin, prompt);
       execFileSync(inv.file, inv.args, {
         ...inv.options,
-        timeout: 120_000,
+        timeout: WIKI_EXEC_TIMEOUT_MS,
         // claude -p streams to stdout, which execFileSync buffers. The Node
         // default (1 MB) overflows to ENOBUFS on a verbose run, killing the
         // summary. The summary is written to a file, not read from stdout, so
@@ -305,61 +304,63 @@ async function main(): Promise<void> {
       wlog(`claude -p failed: ${e.status ?? e.message}`);
     }
 
-    // 4. Upload summary to memory table. Only advance the offset (stamp +
-    // finalize) when claude actually produced a summary — otherwise a failed
-    // run on a resumed session would re-upload the pre-seeded old summary and
-    // slice away the new rows forever.
-    if (existsSync(tmpSummary)) {
-      const raw = readFileSync(tmpSummary, "utf-8");
-      const summaryChanged = summaryBeforeExec === null ? raw.trim().length > 0 : raw !== summaryBeforeExec;
+    // 4. Upload summary to memory table. Salvage a tmp file that already has
+    // ## What Happened even when execFileSync times out; skip stubs so a
+    // killed rewrite cannot stamp offset onto a placeholder.
+    const raw = existsSync(tmpSummary) ? readFileSync(tmpSummary, "utf-8") : "";
+    const decision = decideWikiUpload(raw);
+    if (decision !== "upload") {
       if (!execSucceeded) {
-        wlog(summaryChanged
-          ? "claude -p failed after a partial summary write; skipping upload to avoid advancing the offset"
-          : "claude -p failed without producing a new summary; skipping upload");
-        return;
-      }
-      if (raw.trim()) {
-        // Stamp the offset ourselves so the persisted summary is authoritative
-        // and never depends on the LLM echoing the bookkeeping line.
-        const text = redactSecrets(stampOffset(raw, jsonlLines));
-        const fname = `${cfg.sessionId}.md`;
-        const vpath = `/summaries/${cfg.userName}/${fname}`;
-        // Embed the summary so it ranks in the semantic retrieval branch.
-        // Skipped when globally disabled. The wiki-worker is a detached
-        // background process, so we warm the daemon and retry once (via
-        // embedSummaryWithWarmup) instead of the hot-path fire-and-forget
-        // embed() — that single cold-start race was stranding most ENABLED
-        // users' summaries with a permanent NULL embedding (no later backfill
-        // exists), the dominant fixable cause of low embedding coverage.
-        let embedding: number[] | null = null;
-        if (!embeddingsDisabled()) {
-          const daemonEntry = join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
-          embedding = await embedSummaryWithWarmup(text, "document", { daemonEntry, log: wlog });
-        }
-        const result = await uploadSummary(query, {
-          tableName: cfg.memoryTable,
-          vpath, fname,
-          userName: cfg.userName,
-          project: cfg.project,
-          projectKey: cfg.projectKey,
-          agent: cfg.agent ?? "claude_code",
-          sessionId: cfg.sessionId,
-          text,
-          embedding,
-          dialect: cfg.storage?.kind ?? "sqlite",
-          pluginVersion: cfg.pluginVersion ?? "",
-        });
-        wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);
-
-        try {
-          finalizeSummary(cfg.sessionId, jsonlLines);
-          wlog(`sidecar updated: lastSummaryCount=${jsonlLines}`);
-        } catch (e: any) {
-          wlog(`sidecar update failed: ${e.message}`);
-        }
+        wlog(decision === "skip-missing"
+          ? "claude -p failed without producing a new summary; skipping upload"
+          : "claude -p failed after a stub write without ## What Happened; skipping upload");
+      } else if (decision === "skip-missing") {
+        wlog("no summary file generated");
+      } else {
+        wlog("claude -p succeeded but summary is still a stub; skipping upload");
       }
     } else {
-      wlog("no summary file generated");
+      if (!execSucceeded) {
+        wlog("claude -p failed/timed out but summary contains ## What Happened; salvaging upload");
+      }
+      // Stamp the offset ourselves so the persisted summary is authoritative
+      // and never depends on the LLM echoing the bookkeeping line.
+      const text = redactSecrets(stampOffset(raw, jsonlLines));
+      const fname = `${cfg.sessionId}.md`;
+      const vpath = `/summaries/${cfg.userName}/${fname}`;
+      // Embed the summary so it ranks in the semantic retrieval branch.
+      // Skipped when globally disabled. The wiki-worker is a detached
+      // background process, so we warm the daemon and retry once (via
+      // embedSummaryWithWarmup) instead of the hot-path fire-and-forget
+      // embed() — that single cold-start race was stranding most ENABLED
+      // users' summaries with a permanent NULL embedding (no later backfill
+      // exists), the dominant fixable cause of low embedding coverage.
+      let embedding: number[] | null = null;
+      if (!embeddingsDisabled()) {
+        const daemonEntry = join(dirname(fileURLToPath(import.meta.url)), "embeddings", "embed-daemon.js");
+        embedding = await embedSummaryWithWarmup(text, "document", { daemonEntry, log: wlog });
+      }
+      const result = await uploadSummary(query, {
+        tableName: cfg.memoryTable,
+        vpath, fname,
+        userName: cfg.userName,
+        project: cfg.project,
+        projectKey: cfg.projectKey,
+        agent: cfg.agent ?? "claude_code",
+        sessionId: cfg.sessionId,
+        text,
+        embedding,
+        dialect: cfg.storage?.kind ?? "sqlite",
+        pluginVersion: cfg.pluginVersion ?? "",
+      });
+      wlog(`uploaded ${vpath} (summary=${result.summaryLength}, desc=${result.descLength})`);
+
+      try {
+        finalizeSummary(cfg.sessionId, jsonlLines);
+        wlog(`sidecar updated: lastSummaryCount=${jsonlLines}`);
+      } catch (e: any) {
+        wlog(`sidecar update failed: ${e.message}`);
+      }
     }
 
     wlog("done");
