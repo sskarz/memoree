@@ -11,7 +11,7 @@
 
 import { serializeFloat4Array } from "../../shell/grep-core.js";
 import { sqlStr } from "../../utils/sql.js";
-import type { RecallHit } from "./recall-format.js";
+import { isInjectableRecallHit, type RecallHit } from "./recall-format.js";
 import { scoreVectorRows, vectorScanLimit } from "../../storage/vector-search.js";
 
 // `summary` is selected alongside `description` so recall can inject a
@@ -63,10 +63,12 @@ export interface RecallQueryOptions {
 type QueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
 
 /**
- * Return the single best-scoring summary for `queryEmbedding`, or null when
- * the table has no embedded rows / the query yields nothing. The caller
- * applies the relevance threshold (passesThreshold) — this returns the raw
- * top hit so telemetry can record near-misses.
+ * Return the best-scoring *injectable* summary for `queryEmbedding`, or null
+ * when the table has no embedded rows. SessionStart stubs (`completed` /
+ * `in progress`, empty wiki bodies) are skipped so a placeholder sitting at
+ * the top of the LIMIT window cannot hide a real prior-work hit. If every
+ * candidate is a stub, the raw top row is still returned so telemetry can
+ * record a near-miss instead of `none`.
  */
 export async function recallTopHit(
   query: QueryFn,
@@ -92,7 +94,7 @@ export async function recallTopHit(
     `ORDER BY score DESC, ${TIE_BREAK} LIMIT ${Math.max(1, opts.limit ?? 3)}`;
 
   try {
-    return mapTopRow(await query(sql), "semantic");
+    return pickRecallHit(await query(sql), "semantic");
   } catch (error) {
     // SQLite and vanilla PostgreSQL intentionally have no vector operator.
     // Preserve Memoree's server path, but fall back to a bounded candidate
@@ -111,13 +113,14 @@ export async function recallTopHit(
         String(b.row.last_update_date ?? "").localeCompare(String(a.row.last_update_date ?? "")) ||
         String(a.row.path ?? "").localeCompare(String(b.row.path ?? "")));
     if (scored.length === 0) return null;
-    return mapTopRow([{ ...scored[0].row, score: scored[0].score }], "semantic");
+    return pickRecallHit(
+      scored.map(item => ({ ...item.row, score: item.score })),
+      "semantic",
+    );
   }
 }
 
-function mapTopRow(rows: Array<Record<string, unknown>>, mode: "semantic"): RecallHit | null {
-  if (!rows.length) return null;
-  const r = rows[0];
+function mapRow(r: Record<string, unknown>, mode: "semantic"): RecallHit {
   const score = Number(r["score"]);
   return {
     path: String(r["path"] ?? ""),
@@ -129,4 +132,11 @@ function mapTopRow(rows: Array<Record<string, unknown>>, mode: "semantic"): Reca
     score: Number.isFinite(score) ? score : 0,
     mode,
   };
+}
+
+/** Prefer the first injectable row; fall back to the raw top hit for telemetry. */
+function pickRecallHit(rows: Array<Record<string, unknown>>, mode: "semantic"): RecallHit | null {
+  if (!rows.length) return null;
+  const hits = rows.map(row => mapRow(row, mode));
+  return hits.find(hit => isInjectableRecallHit(hit)) ?? hits[0] ?? null;
 }

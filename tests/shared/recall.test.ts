@@ -527,6 +527,55 @@ describe("recallTopHit — focused semantic query", () => {
     );
     expect(hit?.score).toBe(0);
   });
+
+  it("skips a completed stub when a later row is injectable", async () => {
+    const hit = await recallTopHit(
+      async () => [
+        {
+          path: "/summaries/poison-stub/session.md",
+          author: "poison-stub",
+          project: "indra",
+          summary: "# Placeholder\n",
+          description: "completed",
+          last_update_date: "2099-01-01",
+          score: 0.99,
+        },
+        {
+          path: "/summaries/levon/s1.md",
+          author: "levon",
+          project: "indra",
+          summary: "## What Happened\nFixed auth token drift.\n## Key Facts\n- token-abc\n",
+          description: "fixed auth token drift",
+          last_update_date: "2026-06-18",
+          score: 0.8,
+        },
+      ],
+      "t",
+      vec,
+      {},
+    );
+    expect(hit?.path).toBe("/summaries/levon/s1.md");
+    expect(hit?.description).toBe("fixed auth token drift");
+  });
+
+  it("returns the raw top stub when every candidate is a placeholder", async () => {
+    const hit = await recallTopHit(
+      async () => [{
+        path: "/summaries/alice/placeholder.md",
+        author: "alice",
+        project: "indra",
+        summary: "# Session\n",
+        description: "in progress",
+        last_update_date: "2026-06-18",
+        score: 0.9,
+      }],
+      "t",
+      vec,
+      {},
+    );
+    expect(hit?.description).toBe("in progress");
+    expect(hit?.path).toBe("/summaries/alice/placeholder.md");
+  });
 });
 
 describe("extractKeywords — lexical fallback keyword extraction", () => {
