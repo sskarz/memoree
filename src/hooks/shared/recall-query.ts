@@ -11,7 +11,6 @@
 
 import { serializeFloat4Array } from "../../shell/grep-core.js";
 import { sqlStr } from "../../utils/sql.js";
-import { projectKeyScopeSql } from "../../utils/repo-identity.js";
 import type { RecallHit } from "./recall-format.js";
 import { scoreVectorRows, vectorScanLimit } from "../../storage/vector-search.js";
 
@@ -28,12 +27,31 @@ const SELECT_COLS = "path, author, project, summary, description, last_update_da
 // as a final total order so the same prompt always recalls the same row.
 const TIE_BREAK = "last_update_date DESC, path ASC";
 
+/**
+ * Restrict recall to this project's summaries. Empty `project_key` rows are
+ * admitted only as a cold-start fallback — once the current key has any
+ * embedded `/summaries/%` row, they stay out of the candidate pool.
+ */
+export function recallProjectKeySql(
+  table: string,
+  projectKey: string,
+  embeddedRowPredicate: string,
+): string {
+  const key = sqlStr(projectKey);
+  return (
+    `(project_key = '${key}' OR (project_key = '' AND NOT EXISTS (` +
+    `SELECT 1 FROM "${table}" AS _pk WHERE _pk.path LIKE '/summaries/%' ` +
+    `AND ${embeddedRowPredicate} AND _pk.project_key = '${key}')))`
+  );
+}
+
 export interface RecallQueryOptions {
   /** Restrict to this project basename when set. Prefer `projectKey`. */
   project?: string;
   /**
    * Stable git-remote (or abs-cwd) key. When set, recall only sees this
-   * project's summaries plus legacy rows whose `project_key` is empty.
+   * project's summaries. Legacy empty `project_key` rows are admitted only
+   * when this key has no embedded summaries yet (cold-start fallback).
    */
   projectKey?: string;
   /** Exclude this exact summary path (e.g. the current session's own row). */
@@ -62,8 +80,9 @@ export async function recallTopHit(
   // Only session SUMMARIES — the memory table also holds notes/goals/files;
   // a non-summary row must never be injected as "prior work".
   const filters = [`path LIKE '/summaries/%'`, `ARRAY_LENGTH(summary_embedding, 1) > 0`];
-  if (opts.projectKey) filters.push(projectKeyScopeSql(opts.projectKey));
-  else if (opts.project) filters.push(`project = '${sqlStr(opts.project)}'`);
+  if (opts.projectKey) {
+    filters.push(recallProjectKeySql(memoryTable, opts.projectKey, "ARRAY_LENGTH(_pk.summary_embedding, 1) > 0"));
+  } else if (opts.project) filters.push(`project = '${sqlStr(opts.project)}'`);
   if (opts.excludePath) filters.push(`path <> '${sqlStr(opts.excludePath)}'`);
 
   const sql =
@@ -79,8 +98,9 @@ export async function recallTopHit(
     // Preserve Memoree's server path, but fall back to a bounded candidate
     // scan when the provider rejects `<#>`.
     const localFilters = [`path LIKE '/summaries/%'`, `summary_embedding IS NOT NULL`];
-    if (opts.projectKey) localFilters.push(projectKeyScopeSql(opts.projectKey));
-    else if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);
+    if (opts.projectKey) {
+      localFilters.push(recallProjectKeySql(memoryTable, opts.projectKey, "_pk.summary_embedding IS NOT NULL"));
+    } else if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);
     if (opts.excludePath) localFilters.push(`path <> '${sqlStr(opts.excludePath)}'`);
     const rows = await query(
       `SELECT ${SELECT_COLS}, summary_embedding FROM "${memoryTable}" ` +

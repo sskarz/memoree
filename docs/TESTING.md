@@ -267,15 +267,15 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Claude SessionStart inject + placeholder summary | S | V | L | Auto-mine/backfill spawn is unit-locked and wired |
 | Claude session-start-setup (async) | S | V | L | Runs in plugin; validate also invokes the bundle |
 | Claude UserPromptSubmit capture | S | V | L | |
-| Claude UserPromptSubmit recall.js | S | V | L | Threshold 0.4 in live env; telemetry file uses `homedir()` |
+| Claude UserPromptSubmit recall.js | S | V | L | Threshold 0.4 in live env; telemetry file uses `homedir()`. Skip `"completed"` / `"in progress"` stubs. Empty `project_key` rows are admitted only as a cold-start fallback when the current project has no embedded summaries. |
 | Claude PreToolUse VFS (Bash/Read/Grep/Glob) | S | V | L | Live exercises `cat`/`printf` on the mount |
 | Claude PostToolUse / Stop / SubagentStop capture | S | V | L | SubagentStop is source-tested; live is main session |
 | Claude SessionEnd wiki + plugin-cache-gc + graph-on-stop | S | V | L | Wiki worker uses `MEMOREE_VALIDATION_CLAUDE_HOME` |
 | Codex SessionStart + setup | S | V | — | Matcher is `startup\|resume\|clear\|compact`; `codex exec` may still skip it |
 | Codex capture (UserPromptSubmit / PostToolUse / Stop / SubagentStop) | S | V | L | Stop needs a real session file; no `--ephemeral`; SubagentStop is source + validate |
 | Codex UserPromptSubmit recall.js | S | V | L | Same recall.js bundle as Claude; Codex documents additionalContext as developer context |
-| Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude |
-| Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock. Usage recap parses Codex rollouts (`function_call` / `exec_command_*`), not Claude `tool_use` transcripts |
+| Codex PreToolUse Bash VFS + compatibility broker | S | V | L | Live uses read-only sandbox; writes go through Claude. `memoree status`/`doctor` via the Codex shim read the named+versioned `bundle/package.json` or `.memoree_version` stamp (not `0.0.0`). Doctor checks the installed Claude cache, not `pkgRoot()/harnesses/claude-code/bundle`. |
+| Codex SessionEnd wiki | S | V | L | Advisory, max 3s; wiki spawn is a fast detach. Stop still spawns wiki under the same lock. Usage recap parses Codex rollouts (`function_call` / `exec_command_*`), not Claude `tool_use` transcripts. Wiki `execFileSync` budget is 180s; a tmp file that already contains `## What Happened` is uploaded after timeout (stubs are skipped). |
 | Antigravity install/uninstall + named hooks + MCP | S | V | — | Plugin at `~/.gemini/config/plugins/memoree`; merges `memoree` into `~/.gemini/config/hooks.json` and the legacy `~/.gemini/antigravity-cli/hooks.json` (CLI#49). `memoree install` detects Antigravity only when `~/.gemini/antigravity-cli` or `~/.gemini/antigravity` exists — a Gemini CLI-only `~/.gemini` is skipped. |
 | Antigravity PreInvocation inject + recall | S | V | L | First `invocationNum` 0/1 claims wake lock; `injectSteps`. Hook JSON is parsed without waiting for stdin EOF (`agy -p` keeps the pipe open) |
 | Antigravity no PreToolUse (MCP is the VFS) | S | V | — | Not registered. agy cannot rewrite tool input; a `*` deny/ask gate is hostile UX. Memory is MCP + PreInvocation/skills. Installer must omit `memoree.PreToolUse`. |
@@ -285,7 +285,7 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | Rules CLI + `rules/{active,done}` lifecycle | S | V | L | |
 | Goals CLI + `goal/<owner>/{opened,in_progress,closed}` | S | V | L | |
 | KPI CLI + `kpi/<goal>/<kpi>.md` | S | V | L | |
-| `index.md` / `summaries/` / `sessions/` | S | V | L | Recall, VFS grep, `ls`/`find`, exact-path reads, and index listings scope to `project_key` (git remote SHA or abs path) plus legacy empty keys |
+| `index.md` / `summaries/` / `sessions/` | S | V | L | Recall, VFS grep, `ls`/`find`, exact-path reads, and index listings scope to `project_key` (git remote SHA or abs path) plus legacy empty keys. Index `description` stays `in progress` until a wiki body has `## What Happened` — never the `"completed"` stub word. |
 | Session/summary `project_key` scope | S | — | — | Two remotes named `api` stay isolated; a subdirectory of the same remote shares history |
 | Graph `build` + `history` | S | V | L | `graph build` and SessionEnd `graph-on-stop` refuse a non-git cwd (no filesystem walk). Empty git repos (no HEAD) still build |
 | Graph build git-only (no disk walk) | S | — | — | Non-git temp dir errors without writing a snapshot; tiny git repo still builds. `git ls-files` failure after the worktree check also errors and does not stamp last-build |
@@ -300,9 +300,9 @@ Legend: **S** = source/unit/integration Vitest; **V** = `runtime:validate`;
 | `memory backfill` | S | — | dry-run | |
 | `memory flush` | S | — | — | |
 | `sessions prune` | S | — | L | |
-| `backend check` / embeddings status | S | V | L | |
+| `backend check` / embeddings status | S | V | L | `findMemoreeInstalls` skips Claude cache dirs with `.orphaned_at`. `memoree install` relinks embeddings after harness wiring. |
 | PostgreSQL backend | S | — | — | Opt-in; not in default live |
-| `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime |
+| `npx @sskarz/memoree install` / durable package stage | S | — | — | Pack includes `scripts/ensure-tree-sitter.mjs`; postinstall no-ops without `src/` unless `MEMOREE_STRICT_POSTINSTALL` / `MEMOREE_HEAL_TREE_SITTER`; fake-HOME Claude/Codex-only/neither; live still uses promoted runtime. Embeddings install runs before wiring (shared deps) and again after so a new Claude cache version is linked. Codex/Antigravity `bundle/package.json` is `{name,version,type:module}`. |
 | `npx @sskarz/memoree uninstall` / `--purge` | S | — | — | Default uninstall unwires harnesses and keeps `~/.memoree` plus leftover plugin copies. `--purge --yes` deletes staged pkg, leftover plugin dirs, Memoree-managed skills (including local-mined skill directories, not just `SKILL.md`), embeddings, and `~/.memoree`. Leftover `rm` failures warn and continue so `~/.memoree` is still attempted. Isolated-HOME install/uninstall/purge; TTY confirm defaults to No; non-TTY requires `--yes`. Does not drop PostgreSQL schemas or `memoree-runtime`. |
 | npm publish from `main` (OIDC trusted publisher) | S | — | — | `publish.yml` uses Node 24, environment `memoree github actions`, no `registry-url` / `NODE_AUTH_TOKEN`. `release-from-main.mjs` strips classic tokens. Users upgrade with `npx -y @sskarz/memoree install` |
 | Interactive TUI (`claude` / `codex` without `-p`/`exec`) | — | — | — | Live is headless only |

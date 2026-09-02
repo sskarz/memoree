@@ -49,7 +49,7 @@ import {
 import { recallTopHit } from "./shared/recall-query.js";
 import { entrypointPassesOnlyCliGate } from "./shared/capture-gate.js";
 import { deriveProjectKey } from "../utils/repo-identity.js";
-import { formatRecallContext, type RecallHit } from "./shared/recall-format.js";
+import { formatRecallContext, isInjectableRecallHit, type RecallHit } from "./shared/recall-format.js";
 import { withDeadline } from "./shared/with-deadline.js";
 import { recordRecallEvent } from "./shared/recall-events.js";
 
@@ -159,7 +159,9 @@ async function findHit(
       const vec = await embedSummaryWithWarmup(prompt, "query", { client, log });
       if (vec) {
         semanticHit = await recallTopHit(q, config.tableName, vec, opts);
-        if (semanticHit && passesThreshold(semanticHit.score)) return { kind: "hit", hit: semanticHit };
+        if (semanticHit && passesThreshold(semanticHit.score) && isInjectableRecallHit(semanticHit)) {
+          return { kind: "hit", hit: semanticHit };
+        }
       }
     }
 
@@ -232,9 +234,9 @@ async function main(): Promise<void> {
   const hit = res.hit;
   const teammate = hit.author !== config.userName;
   const bar = `thr=${RECALL_THRESHOLD}`;
-  if (!hitPasses(hit)) {
-    log(`searched mode=${hit.mode} hit=below score=${hit.score} ${bar} author=${hit.author}`);
-    recordRecallEvent({ event: "below", gate: reason, mode: hit.mode, score: hit.score, author: hit.author, teammate, project: hit.project, session });
+  if (!hitPasses(hit) || !isInjectableRecallHit(hit)) {
+    log(`searched mode=${hit.mode} hit=${hitPasses(hit) ? "stub" : "below"} score=${hit.score} ${bar} author=${hit.author}`);
+    recordRecallEvent({ event: hitPasses(hit) ? "none" : "below", gate: reason, mode: hit.mode, score: hit.score, author: hit.author, teammate, project: hit.project, session });
     return;
   }
 

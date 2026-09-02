@@ -29,7 +29,7 @@ import {
   RECALL_THRESHOLD,
 } from "../shared/recall-gate.js";
 import { recallTopHit } from "../shared/recall-query.js";
-import { formatRecallContext } from "../shared/recall-format.js";
+import { formatRecallContext, isInjectableRecallHit } from "../shared/recall-format.js";
 import { withDeadline } from "../shared/with-deadline.js";
 import { MEMORY_COMMAND_GUIDANCE } from "../shared/memory-command-contract.js";
 import { deriveProjectKey } from "../../utils/repo-identity.js";
@@ -75,7 +75,7 @@ async function recallSnippet(prompt: string, cwd: string): Promise<string> {
         projectKey: deriveProjectKey(cwd).key,
       });
     })(), RECALL_BUDGET_MS, null);
-    if (!hit || !passesThreshold(hit.score, RECALL_THRESHOLD)) return "";
+    if (!hit || !passesThreshold(hit.score, RECALL_THRESHOLD) || !isInjectableRecallHit(hit)) return "";
     return formatRecallContext({ hit, currentUser: config.userName, memoryRoot: config.memoryPath, now: Date.now() });
   } catch (error: any) {
     log(`recall skipped: ${error.message}`);

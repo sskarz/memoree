@@ -93,6 +93,28 @@ export function pickExcerpt(hit: Pick<RecallHit, "summary" | "description">): st
   return hit.description ?? "";
 }
 
+const STUB_EXCERPTS = new Set(["", "completed", "in progress"]);
+
+/**
+ * True when a recall hit is safe to inject. Skips the `"completed"` /
+ * `"in progress"` description fallback and bodies that have neither fact
+ * sections nor a populated `## What Happened` (SessionStart stubs).
+ * Legacy description-only rows with a real gist still inject.
+ */
+export function isInjectableRecallHit(hit: Pick<RecallHit, "summary" | "description">): boolean {
+  const excerpt = pickExcerpt(hit).trim().toLowerCase();
+  if (STUB_EXCERPTS.has(excerpt)) return false;
+  const summary = (hit.summary ?? "").trim();
+  if (!summary) return excerpt.length > 0;
+  const hasFacts = FACT_SECTIONS.some(section => {
+    const body = extractSection(summary, section);
+    return Boolean(body) && body.toLowerCase() !== "none";
+  });
+  if (hasFacts) return true;
+  const happened = extractSection(summary, "What Happened");
+  return happened.trim().length > 0;
+}
+
 /** Extract the author + session id encoded in a summary path. */
 export function parseSummaryPath(path: string): { author: string; session: string } | null {
   // /summaries/<author>/<session>.md  (author segment may itself be absent on
