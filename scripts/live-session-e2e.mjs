@@ -45,6 +45,7 @@ import {
   embeddingsStatusReportsLink,
   assertNoCompletedSummaryStubs,
   seedRecallIncidentRows,
+  validationProjectKey,
   clearRecallIncidentRows,
   assertRecallSkippedIncidentRows,
 } from "./runtime-validate.mjs";
@@ -217,7 +218,7 @@ export async function runLiveSessionE2E() {
     assertNoCompletedSummaryStubs(databasePath);
 
     status("seeding recall stub and empty-key competitors");
-    seedRecallIncidentRows(databasePath);
+    seedRecallIncidentRows(databasePath, validationProjectKey(repository));
     const installedRecall = join(isolatedHome, ".codex", "memoree", "bundle", "recall.js");
     const recallHook = run(process.execPath, [installedRecall], {
       cwd: repository,
