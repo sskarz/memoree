@@ -1,8 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 // Root vitest config. `npm test` runs `vitest run` from the repo root, so
-// this is the file that actually gets picked up. The one in harnesses/claude-code/
-// is a historical leftover and is not used by the root test script.
+// this is the file that actually gets picked up.
 //
 // Coverage thresholds are enforced per-file on the files touched by each
 // PR. New files/PRs should add their paths to the `thresholds` block so
@@ -112,6 +111,9 @@ export default defineConfig({
         "src/hooks/antigravity/pre-invocation.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/cli/install-antigravity.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/utils/stdin.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/utils/bundle-dir.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/hooks/shared/wiki-spawn.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/hooks/shared/wiki-prompt.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
       },
     },
   },
