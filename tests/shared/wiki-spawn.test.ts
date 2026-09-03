@@ -47,7 +47,7 @@ describe("spawnWikiWorkerCore", () => {
       wikiLog: "/tmp/hooks/memoree-wiki.log",
       extraConfig: { claudeBin: "/usr/bin/claude", agent: "claude_code" },
       log: (msg) => logs.push(msg),
-      spawnFn: (worker, args) => {
+      spawnFn: (worker, args = []) => {
         spawned.push({ worker, args });
       },
     });
