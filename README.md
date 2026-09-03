@@ -151,6 +151,10 @@ npm ci
 npm run build
 ```
 
+How the tree is laid out, and what each `src/` module does, is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How to test it is in
+[docs/TESTING.md](docs/TESTING.md).
+
 Memoree uses these separate locations:
 
 | Location | Purpose |
