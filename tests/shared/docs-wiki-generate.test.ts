@@ -21,19 +21,7 @@ import {
   wikiGroupEligible,
   type WikiFileSource,
 } from "../../src/docs/wiki-generate.js";
-import type { GraphNode, GraphSnapshot } from "../../src/graph/types.js";
-
-function node(id: string, file: string, loc: string): GraphNode {
-  return { id, label: id, kind: "function", source_file: file, source_location: loc, language: "typescript", exported: true };
-}
-function snap(nodes: GraphNode[]): GraphSnapshot {
-  return { nodes, links: [] } as unknown as GraphSnapshot;
-}
-function mockQuery() {
-  const calls: string[] = [];
-  const query = vi.fn(async (sql: string) => { calls.push(sql); return []; });
-  return { calls, query };
-}
+import { docsGraphNode as node, docsGraphSnap as snap, docsMockQuery as mockQuery } from "./helpers/docs-fixtures.js";
 
 const src = (file: string, content: string): WikiFileSource => ({ file, content });
 
