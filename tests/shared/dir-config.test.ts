@@ -79,4 +79,19 @@ describe("directory configuration", () => {
     expect(result.collect).toBe(false);
     expect(result.config.workspaceId).toBe("read-only");
   });
+
+  it("remaps a plugin-install cwd before walking for .memoree", () => {
+    const repo = directory("repo");
+    writeConfig(repo, ".memoree", { repositoryKey: "from-workspace" });
+    const plugin = directory(".claude", "plugins", "cache", "memoree", "memoree", "0.7.153");
+    const prev = process.env.CLAUDE_PROJECT_DIR;
+    try {
+      process.env.CLAUDE_PROJECT_DIR = repo;
+      const result = resolveDirConfig(base(), plugin);
+      expect(result.config.workspaceId).toBe("from-workspace");
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_PROJECT_DIR;
+      else process.env.CLAUDE_PROJECT_DIR = prev;
+    }
+  });
 });

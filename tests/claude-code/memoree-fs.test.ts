@@ -59,13 +59,14 @@ function makeClient(seed: Record<string, Buffer> = {}) {
         }
         return [];
       }
-      // Virtual index: SELECT path, project, description, creation_date, last_update_date FROM ... WHERE path LIKE '/summaries/%'
+      // Virtual index: SELECT path, project, description, creation_date, last_update_date, summary
       if (sql.includes("SELECT path, project, description, creation_date, last_update_date")) {
         return rows
           .filter(r => r.path.startsWith("/summaries/"))
           .map(r => ({
             path: r.path, project: r.project, description: r.description,
             creation_date: r.creation_date, last_update_date: r.last_update_date,
+            summary: r.summary,
           }));
       }
       // BM25 / ILIKE for grep
@@ -1215,6 +1216,34 @@ describe("virtual index.md", () => {
     const entries = await fs.readdir("/");
     const indexEntries = entries.filter(e => e === "index.md");
     expect(indexEntries.length).toBe(1);
+  });
+
+  it("virtual index omits MCP capture-digest summaries", async () => {
+    const { fs } = await makeFsWithSummaries([
+      {
+        id: "wiki-1",
+        userName: "alice",
+        project: "ghostty-dots",
+        description: "Fixed glass titlebar",
+        creationDate: "2026-09-03T10:00:00.000Z",
+        lastUpdateDate: "2026-09-03T11:00:00.000Z",
+        content: "## What Happened\nApplied macos-glass-regular.",
+      },
+      {
+        id: "mcp-34421",
+        userName: "alice",
+        project: "ghostty-dots",
+        description: "Antigravity MCP capture digest (4 tool events).",
+        creationDate: "2026-09-03T12:00:00.000Z",
+        lastUpdateDate: "2026-09-03T12:00:00.000Z",
+        content: "<!-- memoree-mcp-summary -->\n## Key Facts\n- memoree_read\n",
+      },
+    ]);
+    const content = await fs.readFile("/index.md");
+    expect(content).toContain("wiki-1");
+    expect(content).toContain("Fixed glass titlebar");
+    expect(content).not.toContain("mcp-34421");
+    expect(content).not.toContain("memoree_read");
   });
 
   it("virtual index uses summaries/username/id.md links for new paths", async () => {

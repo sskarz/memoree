@@ -44,11 +44,16 @@ Format: **entity** (type) — what was done with it, its current state>
 <Every decision made and WHY. Not just "did X" but "did X because Y, considered Z but rejected it because W">
 
 ## Key Facts
-<Bullet list of atomic facts that could answer future questions. Each fact should stand alone and include the EXACT, VERBATIM value where one exists — never replace a concrete identifier/value with a vague gist. Quote literal values inline.
+<Bullet list of VERIFIED atomic facts only — things this session observed or proved. Each fact should stand alone and include the EXACT, VERBATIM value where one exists — never replace a concrete identifier/value with a vague gist. Quote literal values inline.
+Do NOT put untested advice, proposed config changes, or "the fix is X" here unless that change was applied and confirmed in this session. Unverified recommendations belong in Next Steps.
+Record OS/app versions next to environment-specific claims (e.g. "Ghostty 1.3.1 on macOS 27").
 Examples:
 "- The memory table uses DELETE+INSERT, not UPDATE (WASM doesn't support upsert)"
 "- The staging verification token is QX7341-ZULU-STAGING (set in config key auth.staging_token)"
 "- MEMOREE_SNAPSHOT_RESTORE_ON_CLAIM was flipped from 1 to 0 to stop the eviction race">
+
+## Corrections
+<If this session overturned a prior recalled conclusion, one bullet per correction: "Previously recalled X; this session found Y because Z." Include the OS/app version when that is why the old claim failed. If none: none>
 
 ## Files Modified
 <bullet list: path (new/modified/deleted) — what changed>
@@ -103,7 +108,12 @@ Format: **entity** (type) — what was done with it, its current state>
 <Every decision made and WHY.>
 
 ## Key Facts
-<Bullet list of atomic facts that could answer future questions. Each fact should stand alone and include the EXACT, VERBATIM value where one exists — never replace a concrete identifier/value with a vague gist.>
+<Bullet list of VERIFIED atomic facts only — things this session observed or proved. Each fact should stand alone and include the EXACT, VERBATIM value where one exists — never replace a concrete identifier/value with a vague gist.
+Do NOT put untested advice or proposed fixes here unless they were applied and confirmed. Unverified recommendations belong in Next Steps.
+Record OS/app versions next to environment-specific claims.>
+
+## Corrections
+<If this session overturned a prior recalled conclusion, one bullet per correction: "Previously recalled X; this session found Y because Z." If none: none>
 
 ## Files Modified
 <bullet list: path (new/modified/deleted) — what changed>

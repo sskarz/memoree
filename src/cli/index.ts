@@ -4,6 +4,7 @@ import { uninstallAntigravity } from "./install-antigravity.js";
 import { disableEmbeddings, enableEmbeddings, installEmbeddings, statusEmbeddings, uninstallEmbeddings } from "./embeddings.js";
 import { detectPlatforms, log, warn, type PlatformId } from "./util.js";
 import { getVersion } from "./version.js";
+import { VERSION_PROBE_ENV, formatVersionReport } from "./install-versions.js";
 import { runBackendCommand } from "../commands/backend.js";
 import { runDoctor } from "../commands/doctor.js";
 import { runSkillifyCommand } from "../commands/skillify.js";
@@ -61,10 +62,18 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
   if (!command || ["help", "--help", "-h"].includes(command)) { log(USAGE); return; }
-  if (["version", "--version", "-v"].includes(command)) { log(getVersion()); return; }
+  if (["version", "--version", "-v"].includes(command)) {
+    if (process.env[VERSION_PROBE_ENV] === "1") { log(getVersion()); return; }
+    log(formatVersionReport());
+    return;
+  }
   if (command === "install") { requireNode(); await runInstall(args.slice(1)); return; }
   if (command === "doctor") { process.exitCode = await runDoctor(); return; }
-  if (command === "status") { log(`memoree ${getVersion()}\n${detectPlatforms().map(p => `${p.id}: ${p.markerDir}`).join("\n") || "No integrations detected"}`); return; }
+  if (command === "status") {
+    if (process.env[VERSION_PROBE_ENV] === "1") { log(getVersion()); return; }
+    log(`${formatVersionReport()}\n${detectPlatforms().map(p => `${p.id}: ${p.markerDir}`).join("\n") || "No integrations detected"}`);
+    return;
+  }
   if (command === "backend") { process.exitCode = await runBackendCommand(args.slice(1)); return; }
   if (command === "skillify") { runSkillifyCommand(args.slice(1)); return; }
   if (command === "rules") { await runRulesCommand(args.slice(1)); return; }

@@ -9,7 +9,7 @@ import { searchMemoreeTables } from "../../src/shell/grep-core.js";
 import { recallTopHit } from "../../src/hooks/shared/recall-query.js";
 import { readVirtualPathContents, listVirtualPathRows, findVirtualPaths } from "../../src/hooks/virtual-table-query.js";
 import { MemoreeFs } from "../../src/shell/memoree-fs.js";
-import { deriveProjectKey } from "../../src/utils/repo-identity.js";
+import { deriveProjectKey, PLUGIN_INSTALL_PROJECT_KEY } from "../../src/utils/repo-identity.js";
 import { embeddingSqlLiteral } from "../../src/embeddings/sql.js";
 
 const TABLES = {
@@ -110,6 +110,21 @@ describe("project_key scopes session grep, recall, index.md, ls, and find", () =
       pluginVersion: "test",
       timestamp: now,
     }, "sqlite"));
+    await api.query(buildDirectSessionInsertSql("sessions", {
+      id: "sess-plugin",
+      sessionPath: "/sessions/alice/plugin-silo.jsonl",
+      filename: "plugin-silo.jsonl",
+      jsonForSql: JSON.stringify({ type: "user_message", content: "plugin-silo-uuid" }),
+      embeddingSql: "NULL",
+      userName: "alice",
+      sizeBytes: 20,
+      projectName: "unknown",
+      projectKey: PLUGIN_INSTALL_PROJECT_KEY,
+      description: "UserPromptSubmit",
+      agent: "claude_code",
+      pluginVersion: "test",
+      timestamp: now,
+    }, "sqlite"));
 
     const emb = embeddingSqlLiteral(vec, "sqlite");
     await api.query(
@@ -132,6 +147,7 @@ describe("project_key scopes session grep, recall, index.md, ls, and find", () =
     expect(grepPathsA.some(p => p.includes("alpha"))).toBe(true);
     expect(grepPathsA.some(p => p.includes("beta"))).toBe(false);
     expect(grepPathsA.some(p => p.includes("legacy"))).toBe(true);
+    expect(grepPathsA.some(p => p.includes("plugin-silo"))).toBe(false);
 
     const grepSub = await searchMemoreeTables(api, "memory", "sessions", {
       pathFilter: "",

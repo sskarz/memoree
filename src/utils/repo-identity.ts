@@ -14,6 +14,14 @@ import { createHash } from "node:crypto";
 import { basename, resolve } from "node:path";
 import { realpathSync } from "node:fs";
 import { sqlStr } from "./sql.js";
+import { isPluginInstallCwd, resolveWorkspaceCwd, type WorkspaceEnv } from "./workspace-cwd.js";
+
+/**
+ * Rows captured while cwd was an unremappable plugin-install directory.
+ * Distinct from legacy empty `project_key` so index/grep/recall that admit
+ * `''` as a cold-start fallback do not mix these into every real project.
+ */
+export const PLUGIN_INSTALL_PROJECT_KEY = "__plugin_cwd__";
 
 /**
  * Default port per scheme. If the URL carries `:<defaultPort>` explicitly,
@@ -83,8 +91,20 @@ export function normalizeGitRemoteUrl(url: string): string {
  * (already location-independent: the remote URL is the same wherever you run
  * `git config` from inside the repo). CodeRabbit P1 fix.
  */
-export function deriveProjectKey(cwd: string): { key: string; project: string } {
-  const absCwd = canonicalPath(cwd);
+export function deriveProjectKey(
+  cwd: string,
+  env: WorkspaceEnv = process.env,
+  fallback: string = process.cwd(),
+): { key: string; project: string } {
+  const workspace = resolveWorkspaceCwd(cwd, env, fallback);
+  // A plugin-install cwd we could not remap must not hash to a unique silo
+  // (invisible from the real repo) and must not use '' (visible in every
+  // project's index via projectKeyScopeSql). Quarantine under a sentinel
+  // that scope/recall never OR in with a real key.
+  if (isPluginInstallCwd(workspace, env)) {
+    return { key: PLUGIN_INSTALL_PROJECT_KEY, project: "unknown" };
+  }
+  const absCwd = canonicalPath(workspace);
   const project = basename(absCwd) || "unknown";
   let signature: string | null = null;
   try {

@@ -119,6 +119,25 @@ describe("buildPlaceholderInsertSql — atomic, finalize-safe placeholder write"
     const { sql } = buildPlaceholderInsertSql(BASE);
     expect(sql).toContain("project, project_key, description");
   });
+
+  it("does not stamp a Claude plugin-cache version as the project name", () => {
+    const cache = "/Users/me/.claude/plugins/cache/memoree/memoree/0.7.153";
+    const keys = ["CLAUDE_PROJECT_DIR", "CURSOR_PROJECT_DIR", "CURSOR_WORKSPACE", "PWD", "CLAUDE_PLUGIN_ROOT"] as const;
+    const prev = Object.fromEntries(keys.map(k => [k, process.env[k]]));
+    try {
+      for (const k of keys) delete process.env[k];
+      process.env.CLAUDE_PROJECT_DIR = "/work/ghostty-dots";
+      const { sql } = buildPlaceholderInsertSql({ ...BASE, cwd: cache });
+      expect(sql).toContain("ghostty-dots");
+      expect(sql).not.toContain("'0.7.153'");
+      expect(sql).not.toMatch(/\*\*Project\*\*: 0\.7\.153/);
+    } finally {
+      for (const k of keys) {
+        if (prev[k] === undefined) delete process.env[k];
+        else process.env[k] = prev[k];
+      }
+    }
+  });
 });
 
 describe("createPlaceholderSummary — fast-path skip", () => {

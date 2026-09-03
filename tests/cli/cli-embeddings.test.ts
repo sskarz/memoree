@@ -6,6 +6,7 @@ import {
   disableEmbeddings,
   enableEmbeddings,
   findMemoreeInstalls,
+  formatAgentInstallLines,
   installEmbeddings,
   isSharedDepsInstalled,
   killEmbedDaemon,
@@ -117,6 +118,12 @@ describe("findMemoreeInstalls", () => {
     mkDir(join(cache, "0.7.0")); // dir, but no bundle
     expect(findMemoreeInstalls(tmpHome)).toEqual([]);
   });
+
+  it("records claudeVersion on versioned cache installs", () => {
+    const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
+    fakeBundleAt(join(cache, "0.7.153"));
+    expect(findMemoreeInstalls(tmpHome)[0]?.claudeVersion).toBe("0.7.153");
+  });
 });
 
 // ── isSharedDepsInstalled ─────────────────────────────────────────────────
@@ -182,6 +189,31 @@ describe("linkStateFor", () => {
     mkDir(join(pluginDir, "node_modules"));
     const state = linkStateFor({ id: "codex", pluginDir });
     expect(state.kind).toBe("owns-own-node-modules");
+  });
+});
+
+describe("formatAgentInstallLines", () => {
+  it("marks the active Claude cache version", () => {
+    const pluginDir = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree", "0.7.153");
+    fakeBundleAt(pluginDir);
+    const lines = formatAgentInstallLines([
+      { id: "claude (0.7.151)", pluginDir: "/old", claudeVersion: "0.7.151" },
+      { id: "claude (0.7.153)", pluginDir, claudeVersion: "0.7.153" },
+    ], "0.7.153");
+    expect(lines.some(l => l.includes("claude (0.7.153)") && l.includes("(active plugin)"))).toBe(true);
+    expect(lines.some(l => l.includes("claude (0.7.151)") && l.includes("(active plugin)"))).toBe(false);
+  });
+
+  it("lists leftover cache versions without calling them the active plugin", () => {
+    const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
+    fakeBundleAt(join(cache, "0.7.145"));
+    fakeBundleAt(join(cache, "0.7.153"));
+    writeFileSync(join(cache, "0.7.145", ".orphaned_at"), "2026-09-01T00:00:00Z");
+    const installs = findMemoreeInstalls(tmpHome);
+    const lines = formatAgentInstallLines(installs, "0.7.153");
+    expect(lines.join("\n")).toContain("claude (0.7.153)");
+    expect(lines.join("\n")).toContain("(active plugin)");
+    expect(lines.join("\n")).not.toContain("0.7.145");
   });
 });
 

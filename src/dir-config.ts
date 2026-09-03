@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { loadConfig, type Config } from "./config.js";
+import { resolveWorkspaceCwd } from "./utils/workspace-cwd.js";
 
 export const DIR_CONFIG_FILENAMES = [".memoree.local", ".memoree"] as const;
 
@@ -43,7 +44,7 @@ export function findDirConfig(startDir: string, stopAt?: string): FoundDirConfig
 }
 
 export function resolveDirConfig(base: Config, cwd: string): ResolvedDirConfig {
-  const found = findDirConfig(cwd);
+  const found = findDirConfig(resolveWorkspaceCwd(cwd));
   if (!found) return { config: base, collect: true, found: null };
   const repositoryKey = found.raw.repositoryKey ?? base.workspaceId;
   const storage = { ...base.storage, workspaceId: repositoryKey };
