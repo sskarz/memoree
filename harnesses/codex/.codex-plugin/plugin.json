@@ -1,6 +1,6 @@
 {
   "name": "memoree",
-  "version": "0.7.152",
+  "version": "0.7.153",
   "description": "Cloud-backed persistent memory powered by Memoree — read, write, and share memory across Codex sessions and agents",
   "author": {
     "name": "sskarz",
