@@ -4,6 +4,9 @@ import { normalizeContent, emptySessionBodyNotice } from "../shell/grep-core.js"
 import { nullExpression, textExpression } from "../storage/sql-dialect.js";
 import { projectKeyScopeSql } from "../utils/repo-identity.js";
 
+/** Keep in sync with `MCP_DIGEST_MARKER` in upload-summary.ts. */
+const MCP_DIGEST_MARKER = "<!-- memoree-mcp-summary -->";
+
 type Row = Record<string, unknown>;
 
 function normalizeSessionPart(path: string, content: string): string {
@@ -20,6 +23,21 @@ function normalizeSessionPart(path: string, content: string): string {
  * remain reachable via Grep.
  */
 export const INDEX_LIMIT_PER_SECTION = 50;
+
+/** Fetch extra summary rows so MCP capture digests can be dropped without under-filling the cap. */
+export const INDEX_SUMMARY_FETCH_LIMIT = INDEX_LIMIT_PER_SECTION * 3 + 1;
+
+export function isMcpDigestIndexRow(row: Row): boolean {
+  const summary = String(row["summary"] ?? "");
+  if (summary.includes(MCP_DIGEST_MARKER)) return true;
+  const description = String(row["description"] ?? "");
+  return description.startsWith("Antigravity MCP tools ran")
+    || description.startsWith("Antigravity MCP capture digest");
+}
+
+export function filterIndexSummaryRows(rows: Row[]): Row[] {
+  return rows.filter(row => !isMcpDigestIndexRow(row));
+}
 
 /**
  * Pure renderer for the virtual /index.md. Single source of truth shared by
@@ -233,20 +251,22 @@ export async function readVirtualPathContents(
     // aggregates per path because the sessions table stores one row per
     // event — without GROUP BY a single conversation appeared dozens of
     // times in the index.
-    const fetchLimit = INDEX_LIMIT_PER_SECTION + 1;
+    const fetchLimit = INDEX_SUMMARY_FETCH_LIMIT;
+    const sessionFetchLimit = INDEX_LIMIT_PER_SECTION + 1;
     const keyScope = projectKeyScopeSql(projectKey);
     const keyFilter = keyScope ? ` AND ${keyScope}` : "";
-    const [summaryRows, sessionRows] = await Promise.all([
+    const [rawSummaryRows, sessionRows] = await Promise.all([
       api.query(
-        `SELECT path, project, description, creation_date, last_update_date FROM "${memoryTable}" ` +
+        `SELECT path, project, description, creation_date, last_update_date, summary FROM "${memoryTable}" ` +
         `WHERE path LIKE '/summaries/%'${keyFilter} ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
       ).catch(() => [] as Row[]),
       api.query(
         `SELECT path, MAX(description) AS description, MIN(creation_date) AS creation_date, MAX(last_update_date) AS last_update_date ` +
         `FROM "${sessionsTable}" WHERE path LIKE '/sessions/%'${keyFilter} ` +
-        `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${fetchLimit}`
+        `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${sessionFetchLimit}`
       ).catch(() => [] as Row[]),
     ]);
+    const summaryRows = filterIndexSummaryRows(rawSummaryRows);
     const summaryTruncated = summaryRows.length > INDEX_LIMIT_PER_SECTION;
     const sessionTruncated = sessionRows.length > INDEX_LIMIT_PER_SECTION;
     result.set(

@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { basename, resolve } from "node:path";
 import { realpathSync } from "node:fs";
 import { sqlStr } from "./sql.js";
+import { isPluginInstallCwd, resolveWorkspaceCwd, type WorkspaceEnv } from "./workspace-cwd.js";
 
 /**
  * Default port per scheme. If the URL carries `:<defaultPort>` explicitly,
@@ -83,8 +84,19 @@ export function normalizeGitRemoteUrl(url: string): string {
  * (already location-independent: the remote URL is the same wherever you run
  * `git config` from inside the repo). CodeRabbit P1 fix.
  */
-export function deriveProjectKey(cwd: string): { key: string; project: string } {
-  const absCwd = canonicalPath(cwd);
+export function deriveProjectKey(
+  cwd: string,
+  env: WorkspaceEnv = process.env,
+  fallback: string = process.cwd(),
+): { key: string; project: string } {
+  const workspace = resolveWorkspaceCwd(cwd, env, fallback);
+  // A plugin-install cwd that we could not remap would hash to a unique
+  // silo and hide the session from the real repo. Leave project_key empty
+  // so index/recall treat it like a legacy unscoped row instead.
+  if (isPluginInstallCwd(workspace)) {
+    return { key: "", project: "unknown" };
+  }
+  const absCwd = canonicalPath(workspace);
   const project = basename(absCwd) || "unknown";
   let signature: string | null = null;
   try {

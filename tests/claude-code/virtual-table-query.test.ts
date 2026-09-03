@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildVirtualIndexContent,
+  filterIndexSummaryRows,
   findVirtualPaths,
   listVirtualPathRowsForDirs,
   listVirtualPathRows,
@@ -34,6 +35,23 @@ describe("virtual-table-query", () => {
     ]);
     expect(content).toContain("[s2](summaries/alice/s2.md)");
     expect(content).toContain("# Session Index");
+  });
+
+  it("drops MCP capture-digest rows from the index listing", () => {
+    const kept = filterIndexSummaryRows([
+      { path: "/summaries/a/wiki.md", description: "real wiki", summary: "## What Happened\nDid work." },
+      {
+        path: "/summaries/a/mcp-34421.md",
+        description: "Antigravity MCP capture digest (2 tool events).",
+        summary: "<!-- memoree-mcp-summary -->\n## Key Facts\n- memoree_read",
+      },
+      {
+        path: "/summaries/a/legacy-digest.md",
+        description: "Antigravity MCP tools ran: memoree_read, memoree_grep",
+        summary: "## What Happened\nmemoree_read",
+      },
+    ]);
+    expect(kept.map(r => r.path)).toEqual(["/summaries/a/wiki.md"]);
   });
 
   it("prefers a memory-table hit for exact path reads", async () => {
@@ -450,6 +468,7 @@ describe("virtual-table-query", () => {
       expect(summarySql).toContain("ORDER BY last_update_date DESC");
       expect(summarySql).toMatch(/LIMIT \d+/);
       expect(summarySql).toContain("last_update_date");
+      expect(summarySql).toContain(", summary FROM");
 
       expect(sessionsSql).toContain('FROM "sessions"');
       expect(sessionsSql).toContain("path LIKE '/sessions/%'");
@@ -486,6 +505,34 @@ describe("virtual-table-query", () => {
       expect(indexContent).toContain("[s1](summaries/alice/s1.md)");
       // sessions table is down → renders the empty notice instead of crashing
       expect(indexContent).toContain("_(empty — no session records ingested yet)_");
+    });
+
+    it("omits MCP capture digests from the synthesized /index.md", async () => {
+      const api = {
+        query: vi.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              path: "/summaries/alice/wiki.md",
+              project: "ghostty-dots",
+              description: "Fixed glass titlebar",
+              summary: "## What Happened\nApplied macos-glass-regular.",
+            },
+            {
+              path: "/summaries/alice/mcp-34421.md",
+              project: "ghostty-dots",
+              description: "Antigravity MCP capture digest (4 tool events).",
+              summary: "<!-- memoree-mcp-summary -->\n## Key Facts\n- memoree_read\n",
+            },
+          ])
+          .mockResolvedValueOnce([]),
+      } as any;
+
+      const result = await readVirtualPathContents(api, "memory", "sessions", ["/index.md"]);
+      const indexContent = result.get("/index.md") ?? "";
+      expect(indexContent).toContain("[wiki](summaries/alice/wiki.md)");
+      expect(indexContent).not.toContain("mcp-34421");
+      expect(indexContent).not.toContain("memoree_read");
     });
   });
 });

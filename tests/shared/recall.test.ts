@@ -12,6 +12,7 @@ import {
   daysAgo,
   formatRecallContext,
   pickExcerpt,
+  pickInjectableRecallHit,
   extractSection,
   isInjectableRecallHit,
   type RecallHit,
@@ -184,6 +185,7 @@ describe("formatRecallContext", () => {
   it("attributes a teammate's hit with relative date + project", () => {
     const out = formatRecallContext({ hit: base, currentUser: "sasun", memoryRoot: "~/.memoree/memory", now });
     expect(out).toContain("MEMOREE RECALL");
+    expect(out).toContain("Dated technical claims may be stale");
     expect(out).toContain("levon"); // teammate name surfaced
     expect(out).toContain("2d ago");
     expect(out).toContain("indra");
@@ -320,7 +322,7 @@ describe("pickExcerpt — verbatim facts over the gist description (RECALL_LOSSY
       "**auth** (service)",
     ].join("\n");
     const excerpt = pickExcerpt({ summary, description: "d" });
-    // Key Facts first (highest signal), then Decisions, then Entities.
+    // Key Facts before Decisions/Entities; Corrections (when present) rank higher.
     expect(excerpt.indexOf("Key Facts")).toBeLessThan(excerpt.indexOf("Decisions"));
     expect(excerpt).toContain("token=QX7341-ZULU-STAGING");
     expect(excerpt).toContain("Entities");
@@ -341,6 +343,18 @@ describe("pickExcerpt — verbatim facts over the gist description (RECALL_LOSSY
     const excerpt = pickExcerpt({ summary, description: "d" });
     expect(excerpt).not.toContain("Key Facts: none");
     expect(excerpt).toContain("Entities");
+  });
+
+  it("surfaces Corrections before Key Facts when a later session overturned a claim", () => {
+    const summary = [
+      "## Key Facts",
+      "- macos-titlebar-style = tabs matches opacity",
+      "## Corrections",
+      "- Previously recalled tabs; this session found it collapses on macOS 27",
+    ].join("\n");
+    const excerpt = pickExcerpt({ summary, description: "d" });
+    expect(excerpt.indexOf("Corrections")).toBeLessThan(excerpt.indexOf("Key Facts"));
+    expect(excerpt).toContain("macOS 27");
   });
 });
 
@@ -367,6 +381,52 @@ describe("isInjectableRecallHit", () => {
       summary: "## What Happened\nDid a thing.\n## Key Facts\n- token=ABC\n",
       description: "Did a thing.",
     })).toBe(true);
+  });
+
+  it("rejects an Antigravity MCP capture digest", () => {
+    expect(isInjectableRecallHit({
+      summary: "# Session x\n<!-- memoree-mcp-summary -->\n## What Happened\nAntigravity MCP capture digest.\n## Key Facts\n- memoree_read\n",
+      description: "Antigravity MCP capture digest.",
+    })).toBe(false);
+  });
+});
+
+describe("pickInjectableRecallHit", () => {
+  const base: RecallHit = {
+    path: "/summaries/a/old.md",
+    author: "a",
+    project: "memoree",
+    summary: "## Key Facts\n- use tabs\n",
+    description: "use tabs",
+    lastUpdate: "2026-09-03T19:00:00.000Z",
+    score: 0.81,
+    mode: "semantic",
+  };
+
+  it("prefers the newer of two near-tied hits", () => {
+    const newer: RecallHit = {
+      ...base,
+      path: "/summaries/a/new.md",
+      lastUpdate: "2026-09-03T20:10:00.000Z",
+      score: 0.80,
+      summary: "## Corrections\n- tabs collapses on macOS 27\n## Key Facts\n- use glass\n",
+      description: "use glass",
+    };
+    const picked = pickInjectableRecallHit([base, newer]);
+    expect(picked?.path).toBe("/summaries/a/new.md");
+  });
+
+  it("skips an MCP capture digest even when it outranks a real wiki", () => {
+    const digest: RecallHit = {
+      ...base,
+      path: "/summaries/a/mcp-34421.md",
+      score: 0.99,
+      summary: "# Session\n<!-- memoree-mcp-summary -->\n## What Happened\nAntigravity MCP capture digest.\n## Key Facts\n- memoree_read\n",
+      description: "Antigravity MCP capture digest (3 tool events).",
+    };
+    const picked = pickInjectableRecallHit([digest, base]);
+    expect(picked?.path).toBe(base.path);
+    expect(picked?.description).not.toContain("memoree_read");
   });
 });
 
@@ -556,6 +616,35 @@ describe("recallTopHit — focused semantic query", () => {
     );
     expect(hit?.path).toBe("/summaries/levon/s1.md");
     expect(hit?.description).toBe("fixed auth token drift");
+  });
+
+  it("skips an MCP capture digest when a later wiki row is injectable", async () => {
+    const hit = await recallTopHit(
+      async () => [
+        {
+          path: "/summaries/agy/mcp-34421.md",
+          author: "agy",
+          project: "memoree",
+          summary: "# Session\n<!-- memoree-mcp-summary -->\n## Key Facts\n- memoree_read\n- memoree_grep\n",
+          description: "Antigravity MCP capture digest (2 tool events).",
+          last_update_date: "2099-01-01",
+          score: 0.99,
+        },
+        {
+          path: "/summaries/levon/s1.md",
+          author: "levon",
+          project: "indra",
+          summary: "## What Happened\nFixed auth token drift.\n## Key Facts\n- token-abc\n",
+          description: "fixed auth token drift",
+          last_update_date: "2026-06-18",
+          score: 0.8,
+        },
+      ],
+      "t",
+      vec,
+      {},
+    );
+    expect(hit?.path).toBe("/summaries/levon/s1.md");
   });
 
   it("returns the raw top stub when every candidate is a placeholder", async () => {

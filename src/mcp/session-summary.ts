@@ -145,8 +145,8 @@ export function buildMcpSessionSummaryMarkdown(opts: {
 }): string {
   const lines = opts.events.map(formatMcpEventLine).filter(line => line.length > 2).slice(-MAX_EVENTS);
   const happened = lines.length > 0
-    ? `Antigravity MCP tools ran in this session.\n${lines.join("\n")}`
-    : "Antigravity MCP tools ran in this session.";
+    ? `Antigravity MCP capture digest (${lines.length} tool events). Not a wiki; conclusions belong in a later wiki summary if one is written.`
+    : "Antigravity MCP capture digest. Not a wiki; conclusions belong in a later wiki summary if one is written.";
   return [
     `# Session ${opts.sessionId}`,
     `- **Source**: ${opts.sessionPath}`,
@@ -157,7 +157,10 @@ export function buildMcpSessionSummaryMarkdown(opts: {
     happened,
     "",
     "## Key Facts",
-    lines.length > 0 ? lines.join("\n") : "- MCP tool activity was captured for this session.",
+    "- This row is an MCP capture digest, not verified session conclusions.",
+    "",
+    "## Tool activity",
+    lines.length > 0 ? lines.join("\n") : "- (no tool events)",
     "",
   ].join("\n");
 }

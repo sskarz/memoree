@@ -65,6 +65,52 @@ describe("harness incident gates — script locks", () => {
   });
 });
 
+describe("harness incident gates — source locks for memory labeling / recall", () => {
+  const readSrc = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
+
+  it("capture/placeholder/recall derive project identity through workspace-cwd remap", () => {
+    for (const rel of [
+      "src/hooks/capture.ts",
+      "src/hooks/codex/capture.ts",
+      "src/hooks/antigravity/capture.ts",
+      "src/hooks/shared/placeholder-summary.ts",
+      "src/hooks/shared/wiki-spawn.ts",
+    ]) {
+      const src = readSrc(rel);
+      expect(src, rel).toContain("projectNameFromCwd");
+      expect(src, rel).toContain("deriveProjectKey");
+    }
+    expect(readSrc("src/hooks/recall.ts")).toContain("deriveProjectKey");
+    expect(readSrc("src/utils/repo-identity.ts")).toContain("resolveWorkspaceCwd");
+    expect(readSrc("src/utils/project-name.ts")).toContain("isPluginInstallCwd");
+  });
+
+  it("status and --version print hook stamp vs PATH CLI instead of a single semver", () => {
+    const cli = readSrc("src/cli/index.ts");
+    expect(cli).toContain("formatVersionReport");
+    expect(readSrc("src/cli/install-versions.ts")).toContain("hook stamp:");
+    expect(readSrc("src/cli/install-versions.ts")).toContain("PATH CLI:");
+  });
+
+  it("wiki Key Facts stay verified-only and recall rejects MCP digests", () => {
+    const wiki = readSrc("src/hooks/shared/wiki-prompt.ts");
+    expect(wiki).toMatch(/VERIFIED atomic facts/);
+    expect(wiki).toContain("## Corrections");
+    expect(wiki).toMatch(/Unverified recommendations belong in Next Steps/);
+    expect(readSrc("src/hooks/shared/recall-format.ts")).toContain("memoree-mcp-summary");
+    expect(readSrc("src/hooks/shared/recall-format.ts")).toContain("Dated technical claims may be stale");
+    expect(readSrc("src/mcp/session-summary.ts")).toContain("## Tool activity");
+    expect(readSrc("src/hooks/virtual-table-query.ts")).toContain("filterIndexSummaryRows");
+  });
+
+  it("embeddings status labels the active Claude plugin and skips orphaned cache dirs", () => {
+    const embeddings = readSrc("src/cli/embeddings.ts");
+    expect(embeddings).toContain("(active plugin)");
+    expect(embeddings).toContain("readCurrentVersionFromManifest");
+    expect(embeddings).toContain(".orphaned_at");
+  });
+});
+
 describe("harness incident gates — helpers", () => {
   it("rejects a named checkout harness package.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "incident-unnamed-"));

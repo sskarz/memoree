@@ -13,7 +13,7 @@ import { EmbedClient } from "../embeddings/client.js";
 import { embeddingSqlLiteral } from "../embeddings/sql.js";
 import { escapedStringPrefix } from "../storage/sql-dialect.js";
 import { embeddingsDisabled } from "../embeddings/disable.js";
-import { buildVirtualIndexContent, INDEX_LIMIT_PER_SECTION } from "../hooks/virtual-table-query.js";
+import { buildVirtualIndexContent, INDEX_LIMIT_PER_SECTION, INDEX_SUMMARY_FETCH_LIMIT, filterIndexSummaryRows } from "../hooks/virtual-table-query.js";
 import {
   classifyPath,
   composeRulePath,
@@ -812,13 +812,15 @@ export class MemoreeFs implements IFileSystem {
     // Memory (summaries) section — high-level wikipage per session. Fetch
     // one extra row beyond the cap so the renderer can emit the "showing N
     // most-recent of many" notice.
-    const fetchLimit = INDEX_LIMIT_PER_SECTION + 1;
+    const fetchLimit = INDEX_SUMMARY_FETCH_LIMIT;
+    const sessionFetchLimit = INDEX_LIMIT_PER_SECTION + 1;
     const keyScope = projectKeyScopeSql(this.projectKey);
     const keyFilter = keyScope ? ` AND ${keyScope}` : "";
-    const summaryRows = await this.client.query(
-      `SELECT path, project, description, creation_date, last_update_date FROM "${this.table}" ` +
+    const rawSummaryRows = await this.client.query(
+      `SELECT path, project, description, creation_date, last_update_date, summary FROM "${this.table}" ` +
       `WHERE path LIKE '${esc("/summaries/")}%'${keyFilter} ORDER BY last_update_date DESC LIMIT ${fetchLimit}`
     );
+    const summaryRows = filterIndexSummaryRows(rawSummaryRows);
 
     // Sessions section — raw session records (dialogue / events). Pulled
     // directly from the sessions table so the index is never empty just
@@ -830,7 +832,7 @@ export class MemoreeFs implements IFileSystem {
         sessionRows = await this.client.query(
           `SELECT path, MAX(description) AS description, MIN(creation_date) AS creation_date, MAX(last_update_date) AS last_update_date ` +
           `FROM "${this.sessionsTable}" WHERE path LIKE '${esc("/sessions/")}%'${keyFilter} ` +
-          `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${fetchLimit}`
+          `GROUP BY path ORDER BY MAX(last_update_date) DESC LIMIT ${sessionFetchLimit}`
         );
       } catch {
         // sessions table absent or schema mismatch — leave empty, emit memory-only index.

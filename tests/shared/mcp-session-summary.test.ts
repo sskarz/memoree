@@ -45,6 +45,10 @@ describe("MCP session summary markdown", () => {
     expect(text).toContain(MCP_SUMMARY_MARKER);
     expect(isFinalizedSummaryText(text)).toBe(true);
     expect(text).toContain("memoree_write");
+    expect(text).toContain("## Tool activity");
+    expect(text).toContain("MCP capture digest");
+    const facts = text.split("## Key Facts")[1]?.split("##")[0] ?? "";
+    expect(facts).not.toContain("memoree_write");
     expect(formatMcpEventLine({ type: "tool_call" })).toBe("- tool_call");
   });
 });

@@ -3,13 +3,13 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkTarballListing } from "../../scripts/pack-check.mjs";
+import { checkTarballListing, REQUIRED_ARTIFACT_FILES } from "../../scripts/pack-check.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
-const cliBuilt = existsSync(join(repoRoot, "bundle", "cli.js"));
+const artifactsBuilt = REQUIRED_ARTIFACT_FILES.every(rel => existsSync(join(repoRoot, rel)));
 
 describe("npm pack layout", () => {
-  it.skipIf(!cliBuilt)("packs the durable install layout without source or experimental/pi", () => {
+  it.skipIf(!artifactsBuilt)("packs the durable install layout without source or experimental/pi", () => {
     const dest = mkdtempSync(join(tmpdir(), "memoree-npm-pack-"));
     try {
       const packed = execFileSync("npm", ["pack", "--ignore-scripts", "--pack-destination", dest, "--json"], {

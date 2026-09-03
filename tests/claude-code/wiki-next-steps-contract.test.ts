@@ -89,5 +89,13 @@ describe("wiki exact-identifier preservation contract", () => {
       expect(template).toMatch(/preserve VERBATIM any precise, non-derivable identifier/i);
       expect(template).toMatch(/include the EXACT, VERBATIM value/i);
     });
+
+    it(`${agent} keeps Key Facts verified-only and records Corrections`, () => {
+      expect(template).toMatch(/VERIFIED atomic facts/i);
+      expect(template).toContain("## Corrections");
+      expect(template).toMatch(/overturned a prior recalled conclusion/i);
+      expect(template).toMatch(/Unverified recommendations belong in Next Steps/i);
+      expect(template).toMatch(/OS\/app versions/);
+    });
   }
 });

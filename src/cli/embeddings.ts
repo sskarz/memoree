@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { HOME, ensureDir, log, pkgRoot, symlinkForce, warn, writeJson } from "./util.js";
 import { pidPathFor, socketPathFor } from "../embeddings/protocol.js";
 import { getEmbeddingsEnabled, setEmbeddingsEnabled } from "../user-config.js";
+import { DEFAULT_MANIFEST_PATH, readCurrentVersionFromManifest } from "../utils/plugin-cache.js";
 
 /**
  * Shared-deps location for the embedding daemon's runtime dependencies.
@@ -24,6 +25,8 @@ export const TRANSFORMERS_RANGE = "^3.0.0";
 export interface AgentInstall {
   id: string;
   pluginDir: string;
+  /** Claude marketplace cache version, when `id` is `claude (<ver>)`. */
+  claudeVersion?: string;
 }
 
 /**
@@ -66,7 +69,7 @@ export function findMemoreeInstalls(home: string = HOME): AgentInstall[] {
       // under <ver>/bundle, while local-clone-style layouts use <ver>/harnesses/claude-code/bundle.
       const candidates = [join(dir, "bundle"), join(dir, "harnesses", "claude-code", "bundle")];
       if (candidates.some(p => existsSync(p))) {
-        out.push({ id: `claude (${ver})`, pluginDir: dir });
+        out.push({ id: `claude (${ver})`, pluginDir: dir, claudeVersion: ver });
       }
     }
   }
@@ -320,7 +323,30 @@ export function _isDaemonAliveOnSocket(sockPath: string, timeoutMs: number = 200
   }
 }
 
-export function statusEmbeddings(): void {
+export function formatAgentInstallLines(
+  installs: AgentInstall[],
+  activeClaudeVersion: string | null = null,
+): string[] {
+  const lines: string[] = [];
+  for (const inst of installs) {
+    const state = linkStateFor(inst);
+    let label: string;
+    switch (state.kind) {
+      case "linked-to-shared":      label = "✓ linked → shared"; break;
+      case "no-node-modules":       label = "✗ not linked"; break;
+      case "owns-own-node-modules": label = "△ has its own node_modules (not shared)"; break;
+      case "linked-elsewhere":      label = `△ linked → ${state.target}`; break;
+    }
+    const active = inst.claudeVersion && inst.claudeVersion === activeClaudeVersion
+      ? "  (active plugin)"
+      : "";
+    lines.push(`  ${inst.id.padEnd(20)} ${label}${active}`);
+    lines.push(`  ${" ".repeat(20)}   ${inst.pluginDir}`);
+  }
+  return lines;
+}
+
+export function statusEmbeddings(home: string = HOME): void {
   const enabled = getEmbeddingsEnabled();
   log(`Config:        ~/.memoree/config.json embeddings.enabled = ${enabled}`);
   log(`Shared deps:   ${SHARED_DIR}`);
@@ -337,21 +363,14 @@ export function statusEmbeddings(): void {
   }
   log("");
   log(`Agent installs:`);
-  const installs = findMemoreeInstalls();
+  const installs = findMemoreeInstalls(home);
   if (installs.length === 0) {
     log(`  (none detected)`);
     return;
   }
-  for (const inst of installs) {
-    const state = linkStateFor(inst);
-    let label: string;
-    switch (state.kind) {
-      case "linked-to-shared":      label = "✓ linked → shared"; break;
-      case "no-node-modules":       label = "✗ not linked"; break;
-      case "owns-own-node-modules": label = "△ has its own node_modules (not shared)"; break;
-      case "linked-elsewhere":      label = `△ linked → ${state.target}`; break;
-    }
-    log(`  ${inst.id.padEnd(20)} ${label}`);
-    log(`  ${" ".repeat(20)}   ${inst.pluginDir}`);
-  }
+  const manifest = home === HOME
+    ? DEFAULT_MANIFEST_PATH
+    : join(home, ".claude", "plugins", "installed_plugins.json");
+  const activeClaude = readCurrentVersionFromManifest(manifest);
+  for (const line of formatAgentInstallLines(installs, activeClaude)) log(line);
 }

@@ -11,7 +11,7 @@
 
 import { serializeFloat4Array } from "../../shell/grep-core.js";
 import { sqlStr } from "../../utils/sql.js";
-import { isInjectableRecallHit, type RecallHit } from "./recall-format.js";
+import { pickInjectableRecallHit, type RecallHit } from "./recall-format.js";
 import { scoreVectorRows, vectorScanLimit } from "../../storage/vector-search.js";
 
 // `summary` is selected alongside `description` so recall can inject a
@@ -137,6 +137,5 @@ function mapRow(r: Record<string, unknown>, mode: "semantic"): RecallHit {
 /** Prefer the first injectable row; fall back to the raw top hit for telemetry. */
 function pickRecallHit(rows: Array<Record<string, unknown>>, mode: "semantic"): RecallHit | null {
   if (!rows.length) return null;
-  const hits = rows.map(row => mapRow(row, mode));
-  return hits.find(hit => isInjectableRecallHit(hit)) ?? hits[0] ?? null;
+  return pickInjectableRecallHit(rows.map(row => mapRow(row, mode)));
 }

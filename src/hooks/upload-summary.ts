@@ -175,7 +175,7 @@ export function decideWikiUpload(
  */
 export const MCP_DIGEST_MARKER = "<!-- memoree-mcp-summary -->";
 
-function isMcpDigestSummary(summary: unknown): boolean {
+export function isMcpDigestSummary(summary: unknown): boolean {
   return typeof summary === "string" && summary.includes(MCP_DIGEST_MARKER);
 }
 
