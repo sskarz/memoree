@@ -6,8 +6,7 @@
  * Recursion: MEMOREE_SKILLIFY_WORKER=1 (same guard as the session miner).
  */
 
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { writeFileSync, mkdirSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnDetachedNodeWorker } from "../utils/spawn-detached.js";
@@ -85,6 +84,4 @@ export function maybeSpawnHygieneWorker(opts: HygieneSpawnOptions): HygieneSpawn
   }
 }
 
-export function bundleDirFromImportMeta(importMetaUrl: string): string {
-  return dirname(fileURLToPath(importMetaUrl));
-}
+export { bundleDirFromImportMeta } from "../utils/bundle-dir.js";

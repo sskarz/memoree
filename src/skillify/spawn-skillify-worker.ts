@@ -7,7 +7,6 @@
  * skill write) happens in the detached child.
  */
 
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { writeFileSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -87,6 +86,4 @@ export function spawnSkillifyWorker(opts: SkillifySpawnOptions): void {
   skillifyLog(`${reason}: spawned skillify worker for ${projectKey}`);
 }
 
-export function bundleDirFromImportMeta(importMetaUrl: string): string {
-  return dirname(fileURLToPath(importMetaUrl));
-}
+export { bundleDirFromImportMeta } from "../utils/bundle-dir.js";

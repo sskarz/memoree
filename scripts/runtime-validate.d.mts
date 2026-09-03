@@ -100,7 +100,8 @@ export function seedUnlinkedClaudeCacheVersion(
   version?: string,
 ): { pluginDir: string; agentId: string };
 export function assertNoCompletedSummaryStubs(databasePath: string): void;
-export function seedRecallIncidentRows(databasePath: string): void;
+export function validationProjectKey(cwd: string): string;
+export function seedRecallIncidentRows(databasePath: string, projectKey?: string): void;
 export function clearRecallIncidentRows(databasePath: string): void;
 export function assertRecallSkippedIncidentRows(stdout: string, phase: string): void;
 export function run(

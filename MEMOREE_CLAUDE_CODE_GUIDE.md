@@ -5,32 +5,41 @@ stores captured events, session summaries, rules, goals, skills, documents, and
 graph snapshots in `~/.memoree/memoree.sqlite3`. No account or credentials are
 required.
 
-## Install from a checkout
+Everyday install (not from a development clone):
+
+```sh
+npm view @sskarz/memoree repository.url
+npx -y @sskarz/memoree install
+```
+
+The repository URL must be `git+https://github.com/sskarz/memoree.git`. Then
+restart Claude Code (or `/reload-plugins`) and run `npx @sskarz/memoree doctor`.
+
+`memoree install` initializes SQLite, installs the local embedding runtime by
+default, stages a durable plugin copy, and wires every detected harness
+(Claude Code, Codex, Antigravity). Use `--no-embeddings` for lexical-only
+retrieval. That opt-out does not affect capture or summaries.
+
+## Install from a checkout (Memoree development only)
 
 ```sh
 git clone https://github.com/sskarz/memoree.git
 cd memoree
 npm ci
 npm run build
-npm link
-memoree install
-memoree doctor
+node bundle/cli.js install
+node bundle/cli.js doctor
 ```
 
-`memoree install` initializes SQLite, installs the local embedding runtime and
-default model, registers this checkout as a Claude Code marketplace, and enables
-`memoree@memoree` at user scope. Restart Claude Code after installation.
-
-Use `memoree install --no-embeddings` for lexical-only retrieval. That opt-out
-does not affect capture or summaries. Use `memoree install --all` only when you
-want every detected agent integration; the default installs Claude Code alone.
+Never `npm link` a development checkout. Claude Code and Codex load Memoree
+globally; linking this tree replaces the code those sessions are already
+running. See [AGENTS.md](AGENTS.md) and [README.md](README.md).
 
 ## Verify and troubleshoot
 
-Run `memoree doctor` to check database integrity, all required schema tables,
+Run `memoree doctor` to check database integrity, required schema tables,
 the embedding runtime and model cache, the Claude executable, plugin
-registration, and hook bundles. A failing database or embedding setup makes
-installation exit nonzero and prints a command to retry or opt out.
+registration, and hook bundles.
 
 Useful paths:
 
@@ -39,9 +48,6 @@ Useful paths:
 - `~/.memoree/models/` — embedding model cache
 - `~/.memoree/embed-deps/` — shared embedding runtime
 - `~/.memoree/memory/` — virtual memory filesystem
-
-Existing data in other product directories is ignored. Memoree neither imports
-nor modifies it.
 
 ## Advanced PostgreSQL backend
 
@@ -52,9 +58,10 @@ the environment; Memoree never writes it to configuration or worker handoffs.
 export MEMOREE_BACKEND=postgres
 export MEMOREE_POSTGRES_URL='postgresql://user:password@host/database'
 export MEMOREE_POSTGRES_SCHEMA=memoree
-memoree install
-memoree doctor
+npx -y @sskarz/memoree install
+npx @sskarz/memoree doctor
 ```
 
 See [README.md](README.md) for privacy, captured data, removal, testing, and
-advanced integration commands.
+advanced integration commands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+for how hooks, storage, and the VFS fit together.

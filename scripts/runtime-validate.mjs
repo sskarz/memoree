@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -7,6 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -532,7 +534,17 @@ export function assertNoCompletedSummaryStubs(databasePath) {
   }
 }
 
-export function seedRecallIncidentRows(databasePath) {
+/**
+ * Same no-remote key `deriveProjectKey` uses: sha1(realpath(cwd))[:16].
+ * Validation workspaces are `git init` without origin, so this matches recall.js.
+ */
+export function validationProjectKey(cwd) {
+  let abs = resolve(cwd);
+  try { abs = realpathSync.native(abs); } catch { /* keep resolved path */ }
+  return createHash("sha1").update(abs).digest("hex").slice(0, 16);
+}
+
+export function seedRecallIncidentRows(databasePath, projectKey = "") {
   const db = new DatabaseSync(databasePath);
   try {
     const donor = db.prepare(
@@ -569,6 +581,16 @@ export function seedRecallIncidentRows(databasePath) {
       last_update_date: stamp,
       creation_date: stamp,
     });
+    // Unaided Claude may write summaries with an empty project_key (older
+    // installed plugin, or a SessionEnd payload without cwd). Recall then
+    // treats the DB as a cold start, admits the empty-key poison clone
+    // (same embedding, last_update 2099), and injects poison instead of
+    // the real fact. Stamp real rows so EXISTS(current key) can fire.
+    if (projectKey) {
+      db.prepare(
+        `UPDATE memory SET project_key = ? WHERE path LIKE '/summaries/%' AND path NOT IN (?, ?) AND (project_key IS NULL OR project_key = '')`,
+      ).run(projectKey, RECALL_POISON_STUB_PATH, RECALL_POISON_EMPTY_KEY_PATH);
+    }
   } finally {
     db.close();
   }
@@ -1510,7 +1532,7 @@ export async function validateRuntime(options = {}) {
     );
 
     status("seeding recall stub and empty-key competitors");
-    seedRecallIncidentRows(databasePath);
+    seedRecallIncidentRows(databasePath, validationProjectKey(repository));
 
     status("checking Claude proactive recall hook");
     /** @type {{ status: number | null, stdout: string, stderr: string }} */

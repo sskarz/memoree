@@ -18,14 +18,7 @@ import {
 } from "../../src/docs/wiki-update.js";
 import { appendFilesIndex, collectWikiAnchors } from "../../src/docs/wiki-generate.js";
 import type { DocRow } from "../../src/docs/read.js";
-import type { GraphNode, GraphSnapshot } from "../../src/graph/types.js";
-
-function node(id: string, file: string, loc: string): GraphNode {
-  return { id, label: id, kind: "function", source_file: file, source_location: loc, language: "typescript", exported: true };
-}
-function snap(nodes: GraphNode[]): GraphSnapshot {
-  return { nodes, links: [] } as unknown as GraphSnapshot;
-}
+import { docsGraphNode as node, docsGraphSnap as snap } from "./helpers/docs-fixtures.js";
 
 const noEscalation = { membershipChanged: false, signatureChanges: 0, patchCount: 0 };
 

@@ -108,16 +108,7 @@ export function writeJsonIfChanged(path: string, obj: unknown): boolean {
   return true;
 }
 
-export function writeVersionStamp(dir: string, version: string): void {
-  ensureDir(dir);
-  writeFileSync(join(dir, ".memoree_version"), version);
-}
-
-export function readVersionStamp(dir: string): string | null {
-  const p = join(dir, ".memoree_version");
-  if (!existsSync(p)) return null;
-  try { return readFileSync(p, "utf-8").trim(); } catch { return null; }
-}
+export { readVersionStamp, writeVersionStamp } from "../utils/version-check.js";
 
 export type PlatformId = "claude" | "codex" | "antigravity";
 
@@ -181,15 +172,3 @@ export function confirm(message: string, defaultYes = true): Promise<boolean> {
   });
 }
 
-// Free-text prompt. Returns the trimmed answer, or "" if the user just
-// pressed Enter. Same TTY caveat as confirm() — readline hangs on closed
-// stdin, so callers must gate on process.stdin.isTTY.
-export function promptLine(message: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  return new Promise(resolve => {
-    rl.question(message, answer => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}

@@ -67,6 +67,33 @@ re-prove ranking.
 You can run both from any session. You do not need to close Claude or Codex.
 That does **not** mean daily apps already load this code.
 
+## How the test suite is organized
+
+About 236 Vitest files / ~3,600 cases. Most of that is real surface area
+(VFS commands, three harnesses, docs/wiki pipeline, per-language graph
+extractors), not copy-paste. Do not merge files that lock different layers.
+
+| Directory | What it proves |
+|---|---|
+| `tests/shared/` | Agent-independent product behavior. New `src/` tests go here. |
+| `tests/shared/graph/` | Extractors, snapshot, VFS graph routes, hybrid query vs find |
+| `tests/shared/helpers/` | Shared fixtures (`docs-fixtures.ts`, SQL parity). Prefer these over new local `node()`/`snap()` copies. |
+| `tests/claude-code/` | Claude hooks plus older shared tests not yet moved (grep-core, memoree-fs, skillify). Moving those is path churn, not coverage. |
+| `tests/codex/` | Codex payload/hook branches. Parallel to Claude PreToolUse, not a duplicate. |
+| `tests/cli/` | Install/uninstall/doctor/stage |
+| `tests/scripts/` | runtime-validate, pack-check, live e2e script contracts |
+
+Keep these splits — they are different proofs, not redundancy:
+
+- `harness-wiring` (runtime routing) vs `harness-feature-parity` (manifests)
+- `docs-wiki-generate` / `update` / `refresh` (chunk vs patch vs lease)
+- `storage-sqlite` vs `storage-*-feature-parity` vs Postgres integration
+- `grep-core` vs `grep-direct` vs `grep-interceptor` (SQL vs hook vs shell)
+
+`npm run verify` uses `vitest.source.config.ts` (no bundle-dependent files).
+`npm test` is the full suite after `npm run build`. Coverage thresholds in
+`vitest.config.ts` apply only when you pass `--coverage`; CI verify does not.
+
 ## Gate matrix
 
 | Gate | Command | What it proves | Needs API keys | Changes daily runtime |

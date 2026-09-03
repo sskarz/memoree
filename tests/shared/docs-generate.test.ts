@@ -11,19 +11,7 @@ vi.mock("../../src/docs/stable-read.js", () => ({
 import { normalizeForHash, hashSource } from "../../src/docs/anchors.js";
 import { globToRegExp, selectTargets, generateDocs, DEFAULT_EXCLUDE_GLOBS, buildBatchGeneratePrompt, parseBatchDocs } from "../../src/docs/generate.js";
 import type { GenDocInput } from "../../src/docs/generate.js";
-import type { GraphNode, GraphSnapshot } from "../../src/graph/types.js";
-
-function node(id: string, file: string, loc: string, kind: GraphNode["kind"] = "function"): GraphNode {
-  return { id, label: id, kind, source_file: file, source_location: loc, language: "typescript", exported: true };
-}
-function snap(nodes: GraphNode[]): GraphSnapshot {
-  return { nodes, links: [] } as unknown as GraphSnapshot;
-}
-function mockQuery(rowsPerCall: Array<Record<string, unknown>> = []) {
-  const calls: string[] = [];
-  const query = vi.fn(async (sql: string) => { calls.push(sql); return rowsPerCall; });
-  return { calls, query };
-}
+import { docsGraphNode as node, docsGraphSnap as snap, docsMockQuery as mockQuery } from "./helpers/docs-fixtures.js";
 
 // ── normalizeForHash (the false-positive fix) ─────────────────────────────────
 

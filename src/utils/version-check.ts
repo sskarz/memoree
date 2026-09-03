@@ -7,8 +7,19 @@
  * Callers pass the plugin-manifest name explicitly.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+
+export function writeVersionStamp(dir: string, version: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o755 });
+  writeFileSync(join(dir, ".memoree_version"), version);
+}
+
+export function readVersionStamp(dir: string): string | null {
+  const p = join(dir, ".memoree_version");
+  if (!existsSync(p)) return null;
+  try { return readFileSync(p, "utf-8").trim(); } catch { return null; }
+}
 
 /**
  * Read the installed plugin version.
@@ -29,10 +40,8 @@ export function getInstalledVersion(bundleDir: string, pluginManifestDir: string
     const plugin = JSON.parse(readFileSync(pluginJson, "utf-8"));
     if (plugin.version) return plugin.version;
   } catch { /* fall through */ }
-  try {
-    const stamp = readFileSync(join(bundleDir, "..", ".memoree_version"), "utf-8").trim();
-    if (stamp) return stamp;
-  } catch { /* fall through */ }
+  const stamp = readVersionStamp(join(bundleDir, ".."));
+  if (stamp) return stamp;
   // Walk up from bundleDir looking for our package's package.json.
   // Recognized source package names.
   const MEMOREE_PKG_NAMES = new Set(["@sskarz/memoree", "memoree", "memoree-codex"]);

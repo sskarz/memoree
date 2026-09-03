@@ -13,7 +13,7 @@ import { appendFilesIndex, collectWikiAnchors } from "../../src/docs/wiki-genera
 import { docRowId } from "../../src/docs/write.js";
 import { readPrivateDoc } from "../../src/docs/private-store.js";
 import type { GitRunner } from "../../src/docs/candidates.js";
-import type { GraphNode, GraphSnapshot } from "../../src/graph/types.js";
+import { docsGraphNode as makeNode, docsGraphSnap as snap } from "./helpers/docs-fixtures.js";
 
 const P = "projkey";
 const T = "memoree_docs";
@@ -22,12 +22,7 @@ const PREV = "prevsha";
 const NOW = () => new Date("2026-07-08T12:00:00.000Z");
 const noSleep = () => Promise.resolve();
 
-function node(id: string, file: string): GraphNode {
-  return { id, label: id, kind: "function", source_file: file, source_location: "L1-L3", language: "typescript", exported: true };
-}
-function snap(nodes: GraphNode[]): GraphSnapshot {
-  return { nodes, links: [] } as unknown as GraphSnapshot;
-}
+const node = (id: string, file: string) => makeNode(id, file, "L1-L3");
 
 /**
  * Simulated backend: one `_meta` row + wiki page rows, driven by real SQL from

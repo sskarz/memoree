@@ -14,6 +14,7 @@ import {
   embeddingsStatusReportsLink,
   seedRecallIncidentRows,
   seedUnlinkedClaudeCacheVersion,
+  validationProjectKey,
 } from "../../scripts/runtime-validate.mjs";
 
 let root: string | undefined;
@@ -48,12 +49,12 @@ describe("harness incident gates — script locks", () => {
 
   it("rejects completed stub summaries and seeds recall competitors before hook recall", () => {
     expect(validate).toContain("assertNoCompletedSummaryStubs(databasePath)");
-    expect(validate).toContain("seedRecallIncidentRows(databasePath)");
+    expect(validate).toContain("seedRecallIncidentRows(databasePath, validationProjectKey(repository))");
     expect(validate).toContain("assertRecallSkippedIncidentRows(recallResult.stdout, \"Claude recall\")");
     expect(validate).toContain("assertRecallSkippedIncidentRows(codexRecallResult.stdout, \"Codex recall\")");
     expect(validate).toContain("clearRecallIncidentRows(databasePath)");
     expect(e2e).toContain("assertNoCompletedSummaryStubs(databasePath)");
-    expect(e2e).toContain("seedRecallIncidentRows(databasePath)");
+    expect(e2e).toContain("seedRecallIncidentRows(databasePath, validationProjectKey(repository))");
     expect(e2e).toContain(".codex\", \"memoree\", \"bundle\", \"recall.js\"");
     expect(e2e).toContain("assertRecallSkippedIncidentRows(recallHook");
     expect(validate).toContain("description.toLowerCase() !== \"completed\"");
@@ -140,6 +141,12 @@ describe("harness incident gates — helpers", () => {
     expect(() => assertNoCompletedSummaryStubs(databasePath)).not.toThrow();
   });
 
+  it("hashes cwd to a 16-char sha1 prefix (no-remote deriveProjectKey shape)", () => {
+    root = mkdtempSync(join(tmpdir(), "incident-project-key-"));
+    expect(validationProjectKey(root)).toMatch(/^[a-f0-9]{16}$/);
+    expect(validationProjectKey(root)).toBe(validationProjectKey(root));
+  });
+
   it("seeds and clears recall competitors against an embedded donor row", () => {
     root = mkdtempSync(join(tmpdir(), "incident-seed-"));
     const databasePath = join(root, "memoree.sqlite3");
@@ -159,21 +166,26 @@ describe("harness incident gates — helpers", () => {
       "[0.1,0.2]",
       "alice",
       "repo",
-      "abc123",
+      "",
       "real work",
       "2026-09-01T00:00:00.000Z",
       "2026-09-01T00:00:00.000Z",
     );
     db.close();
-    seedRecallIncidentRows(databasePath);
+    seedRecallIncidentRows(databasePath, "abc123def4567890");
     const after = new DatabaseSync(databasePath, { readOnly: true });
     const paths = after.prepare("SELECT path FROM memory ORDER BY path").all().map(row => row.path);
+    const keys = Object.fromEntries(
+      after.prepare("SELECT path, project_key FROM memory").all().map(row => [row.path, row.project_key]),
+    );
     after.close();
     expect(paths).toEqual([
       "/summaries/alice/real.md",
       "/summaries/poison-empty/session.md",
       "/summaries/poison-stub/session.md",
     ]);
+    expect(keys["/summaries/alice/real.md"]).toBe("abc123def4567890");
+    expect(keys["/summaries/poison-empty/session.md"]).toBe("");
     clearRecallIncidentRows(databasePath);
     const leftover = new DatabaseSync(databasePath, { readOnly: true });
     expect(leftover.prepare("SELECT COUNT(*) AS n FROM memory").get()?.n).toBe(1);
