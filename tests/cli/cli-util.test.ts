@@ -24,7 +24,6 @@ import {
   log,
   warn,
   confirm,
-  promptLine,
 } from "../../src/cli/util.js";
 import { Readable } from "node:stream";
 
@@ -372,36 +371,3 @@ describe("confirm", () => {
   });
 });
 
-describe("promptLine", () => {
-  let stdinBackup: NodeJS.ReadStream;
-
-  beforeEach(() => {
-    stdinBackup = process.stdin;
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process, "stdin", { value: stdinBackup, configurable: true });
-    vi.restoreAllMocks();
-  });
-
-  function stubStdin(input: string): void {
-    const stream = Readable.from([input]) as unknown as NodeJS.ReadStream;
-    Object.defineProperty(process, "stdin", { value: stream, configurable: true });
-  }
-
-  it("returns the trimmed input line", async () => {
-    stubStdin("  hello-token  \n");
-    expect(await promptLine("API key: ")).toBe("hello-token");
-  });
-
-  it("returns empty string on a bare Enter (signal to skip)", async () => {
-    stubStdin("\n");
-    expect(await promptLine("API key: ")).toBe("");
-  });
-
-  it("preserves internal whitespace in pasted tokens", async () => {
-    stubStdin("tok with spaces\n");
-    expect(await promptLine("API key: ")).toBe("tok with spaces");
-  });
-});
