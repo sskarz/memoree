@@ -182,6 +182,24 @@ describe("Claude Code and Codex hook feature parity", () => {
     expect(installSrc).toContain('hookCmd("session-end.js", 3)');
     expect(installSrc).toContain("SubagentStop");
   });
+
+  it("stamps a named+versioned Codex bundle package.json so status is not 0.0.0", () => {
+    expect(installSrc).toContain("writeBundleEsmPackageJson");
+    expect(esbuild).toContain('{"type":"module"}');
+    expect(esbuild).toContain("const esmPackageJson = '{\"type\":\"module\"}\\n'");
+    expect(esbuild).not.toMatch(/esmPackageJson = .*["']name["']/);
+    expect(esbuild).toContain("Install-time writeBundleEsmPackageJson()");
+  });
+
+  it("salvages wiki uploads after exec timeout when ## What Happened is present", () => {
+    const claudeWiki = readFileSync(join(ROOT, "src/hooks/wiki-worker.ts"), "utf-8");
+    const codexWiki = readFileSync(join(ROOT, "src/hooks/codex/wiki-worker.ts"), "utf-8");
+    const agyWiki = readFileSync(join(ROOT, "src/hooks/antigravity/wiki-worker.ts"), "utf-8");
+    for (const src of [claudeWiki, codexWiki, agyWiki]) {
+      expect(src).toContain("decideWikiUpload");
+      expect(src).toContain("WIKI_EXEC_TIMEOUT_MS");
+    }
+  });
 });
 
 interface AntigravityHooksFile {
@@ -290,7 +308,7 @@ describe("Antigravity product-capability parity with Claude Code and Codex", () 
     expect(esbuild).not.toContain('["src/hooks/antigravity/pre-tool-use"');
     expect(installSrc).toContain('"config", "plugins", "memoree"');
     expect(installSrc).toContain("antigravity-cli");
-    expect(installSrc).toContain('{"type":"module"}');
+    expect(installSrc).toContain("writeBundleEsmPackageJson");
     expect(installSrc).toContain("ANTIGRAVITY_LEGACY_HOOKS_PATH");
     expect(installSrc).toContain("ANTIGRAVITY_HOOK_JSON_PATHS");
     expect(installSrc).not.toContain('plugin", "install", ANTIGRAVITY_PLUGIN_DIR');

@@ -305,6 +305,12 @@ describe("runtime validation agent responses", () => {
     expect(source).toContain("SubagentStop");
     expect(source).toContain("Codex SessionEnd");
     expect(source).toContain("checking Codex proactive recall hook");
+    expect(source).toContain("assertInstalledCodexShimHealth");
+    expect(source).toContain("seedUnlinkedClaudeCacheVersion");
+    expect(source).toContain("assertNoCompletedSummaryStubs");
+    expect(source).toContain("seedRecallIncidentRows");
+    expect(source).toContain("assertRecallSkippedIncidentRows");
+    expect(source).toContain("assertCheckoutHarnessPackageJsonUnnamed");
     expect(source).toContain("Claude lexical Grep");
     expect(source).toContain("docs/src/snapshot.ts.md");
     expect(source).toContain("docs/find/persistGraph");

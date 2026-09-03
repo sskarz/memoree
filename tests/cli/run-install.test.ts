@@ -130,8 +130,23 @@ describe("runInstall", () => {
     }));
     expect(result.embeddingsEnabled).toBe(true);
     expect(writeUserConfig).toHaveBeenCalledWith({ embeddings: { enabled: true } });
+    expect(installEmbeddings).toHaveBeenCalledTimes(2);
     expect(installEmbeddings).toHaveBeenCalledWith({ quietNoInstalls: true });
     expect(preloadEmbeddingModel).toHaveBeenCalledOnce();
+  });
+
+  it("relinks embeddings after harness wiring so a new Claude cache version is linked", async () => {
+    const installEmbeddings = vi.fn();
+    const installClaude = vi.fn();
+    const preloadEmbeddingModel = vi.fn(async () => undefined);
+    await runInstall([], runtime({
+      installEmbeddings,
+      installClaude,
+      preloadEmbeddingModel,
+    }));
+    expect(installEmbeddings).toHaveBeenCalledTimes(2);
+    expect(installEmbeddings.mock.invocationCallOrder[0]).toBeLessThan(installClaude.mock.invocationCallOrder[0]);
+    expect(installClaude.mock.invocationCallOrder[0]).toBeLessThan(installEmbeddings.mock.invocationCallOrder[1]);
   });
 
   it("wraps embedding preload failures", async () => {

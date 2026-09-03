@@ -6,7 +6,9 @@ import {
   isFinalizedRow,
   isFinalizedDescription,
   isFinalizedSummaryText,
+  decideWikiUpload,
   PLACEHOLDER_DESCRIPTION,
+  WIKI_EXEC_TIMEOUT_MS,
   type QueryFn,
 } from "../../src/hooks/upload-summary.js";
 
@@ -132,14 +134,12 @@ describe("uploadSummary — Memoree single-UPDATE invariant", () => {
     expect(cx.calls[1]).toContain(`'codex'`);
   });
 
-  it("summary + description land atomically even when description extraction fails (no ## What Happened)", async () => {
-    // A summary that lacks the expected section — description must fall back to "completed"
-    // and STILL be in the same UPDATE as summary.
+  it("skips a stub that lacks ## What Happened instead of writing description 'completed'", async () => {
     const weird = "# Session xyz\n\nSome freeform content without structured sections.\n";
-    const { fn, calls } = makeSpyQuery([[{ path: BASE.vpath }]]);
-    await uploadSummary(fn, { ...BASE, text: weird });
-    expect(calls[1]).toMatch(/summary\s*=\s*E'/);
-    expect(calls[1]).toContain("description = E'completed'");
+    const { fn, calls } = makeSpyQuery([[{ path: BASE.vpath, summary: "# Session\n", description: PLACEHOLDER_DESCRIPTION }]]);
+    const result = await uploadSummary(fn, { ...BASE, text: weird });
+    expect(result.path).toBe("skip");
+    expect(calls.some(s => /^UPDATE/i.test(s) || /^INSERT/i.test(s))).toBe(false);
   });
 });
 
@@ -326,6 +326,26 @@ describe("uploadSummary — finalize-wins (placeholder must not clobber a real s
     expect(update).not.toContain(`description = E'${PLACEHOLDER_DESCRIPTION}'`);
   });
 
+  it("does NOT UPDATE a placeholder row with an offset-only stub", async () => {
+    const placeholderRow = {
+      path: BASE.vpath,
+      summary: "# Session sess-1\n- **Status**: in-progress\n",
+      description: PLACEHOLDER_DESCRIPTION,
+    };
+    const { fn, calls } = makeSpyQuery([[placeholderRow]]);
+    const stub = "# Session sess-1\n- **Status**: in-progress\n\nJSONL offset: 5\n";
+    const result = await uploadSummary(fn, { ...BASE, text: stub });
+    expect(result.path).toBe("skip");
+    expect(calls.some(s => /^UPDATE/i.test(s))).toBe(false);
+  });
+
+  it("does NOT INSERT a stub when no row exists", async () => {
+    const { fn, calls } = makeSpyQuery([[]]);
+    const result = await uploadSummary(fn, { ...BASE, text: "# Session\n- **Status**: in-progress\n" });
+    expect(result.path).toBe("skip");
+    expect(calls.some(s => /^INSERT/i.test(s))).toBe(false);
+  });
+
   it("INSERTs a finalized summary when no row exists yet", async () => {
     const { fn, calls } = makeSpyQuery([[]]);
     const result = await uploadSummary(fn, { ...BASE, text: TEXT_WITH_WHAT_HAPPENED });
@@ -338,6 +358,7 @@ describe("isFinalized* predicates", () => {
   it("isFinalizedDescription: placeholder sentinel is not finalized", () => {
     expect(isFinalizedDescription(PLACEHOLDER_DESCRIPTION)).toBe(false);
     expect(isFinalizedDescription("in progress")).toBe(false);
+    expect(isFinalizedDescription("completed")).toBe(false);
   });
   it("isFinalizedDescription: empty / non-string are not finalized", () => {
     expect(isFinalizedDescription("")).toBe(false);
@@ -370,14 +391,54 @@ describe("extractDescription", () => {
     expect(d.length).toBeLessThanOrEqual(300);
   });
 
-  it("returns 'completed' when the section is absent", () => {
-    expect(extractDescription("# Only header, nothing else.")).toBe("completed");
+  it("returns 'in progress' when the section is absent", () => {
+    expect(extractDescription("# Only header, nothing else.")).toBe(PLACEHOLDER_DESCRIPTION);
   });
 
   it("stops at the next ## heading", () => {
     const d = extractDescription(TEXT_WITH_WHAT_HAPPENED);
     expect(d).not.toContain("## People");
     expect(d).not.toContain("## Entities");
+  });
+});
+
+describe("decideWikiUpload / WIKI_EXEC_TIMEOUT_MS", () => {
+  const stub = "# Session\n- **Status**: in-progress\nJSONL offset: 5\n";
+
+  it("uploads a body that already contains ## What Happened on a successful exec", () => {
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, { execSucceeded: true })).toBe("upload");
+  });
+
+  it("salvages a rewritten ## What Happened body after exec timeout", () => {
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, {
+      execSucceeded: false,
+      previous: stub,
+    })).toBe("upload");
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, {
+      execSucceeded: false,
+      previous: null,
+    })).toBe("upload");
+  });
+
+  it("does not salvage an unchanged pre-seeded summary after exec timeout", () => {
+    expect(decideWikiUpload(TEXT_WITH_WHAT_HAPPENED, {
+      execSucceeded: false,
+      previous: TEXT_WITH_WHAT_HAPPENED,
+    })).toBe("skip-unchanged");
+  });
+
+  it("skips a missing or empty tmp file", () => {
+    expect(decideWikiUpload(null)).toBe("skip-missing");
+    expect(decideWikiUpload("")).toBe("skip-missing");
+    expect(decideWikiUpload("   ")).toBe("skip-missing");
+  });
+
+  it("skips a SessionStart stub without ## What Happened", () => {
+    expect(decideWikiUpload(stub, { execSucceeded: false, previous: stub })).toBe("skip-stub");
+  });
+
+  it("raises the wiki exec budget above the old 120s cap", () => {
+    expect(WIKI_EXEC_TIMEOUT_MS).toBe(180_000);
   });
 });
 

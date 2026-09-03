@@ -86,4 +86,30 @@ describe("getVersion (happy path via mocked seam)", () => {
     expect(getVersion()).toBe("0.0.0");
     vi.doUnmock("../../src/cli/util.js");
   });
+
+  it("falls back to .memoree_version when package.json has no version", async () => {
+    writeFileSync(join(tmp, "package.json"), JSON.stringify({ type: "module" }));
+    writeFileSync(join(tmp, ".memoree_version"), "0.7.151\n");
+    vi.resetModules();
+    vi.doMock("../../src/cli/util.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../../src/cli/util.js")>();
+      return { ...actual, pkgRoot: () => tmp };
+    });
+    const { getVersion } = await import("../../src/cli/version.js");
+    expect(getVersion()).toBe("0.7.151");
+    vi.doUnmock("../../src/cli/util.js");
+  });
+
+  it("ignores a 0.0.0 package.json version in favor of the stamp", async () => {
+    writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "memoree", version: "0.0.0" }));
+    writeFileSync(join(tmp, ".memoree_version"), "0.7.151");
+    vi.resetModules();
+    vi.doMock("../../src/cli/util.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../../src/cli/util.js")>();
+      return { ...actual, pkgRoot: () => tmp };
+    });
+    const { getVersion } = await import("../../src/cli/version.js");
+    expect(getVersion()).toBe("0.7.151");
+    vi.doUnmock("../../src/cli/util.js");
+  });
 });

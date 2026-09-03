@@ -172,6 +172,12 @@ export async function runInstall(
     );
   }
 
+  // Relink after harness wiring: Claude marketplace updates create a new
+  // versioned cache dir during wireClaude, so the first pass cannot see it.
+  if (!noEmbeddings) {
+    runtime.installEmbeddings({ quietNoInstalls: true });
+  }
+
   runtime.log("");
   runtime.log(`Staged plugin: ${stagedRoot}`);
   runtime.log(`Database: ${location}`);

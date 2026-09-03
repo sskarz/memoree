@@ -79,6 +79,30 @@ export function inspectCaptureDatabase(
     emptySummariesMessage?: string;
   },
 ): { events: number; summaries: number };
+export const RECALL_POISON_STUB_PATH: "/summaries/poison-stub/session.md";
+export const RECALL_POISON_EMPTY_KEY_PATH: "/summaries/poison-empty/session.md";
+export const RECALL_POISON_EMPTY_KEY_TOKEN: "empty-key-poison-harbor-kite";
+export function assertCheckoutHarnessPackageJsonUnnamed(runtimeDir: string): void;
+export function assertInstalledPluginBundleIdentity(pluginDir: string, label: string): void;
+export function runInstalledPluginMemoree(
+  pluginDir: string,
+  args: string[],
+  options?: { cwd?: string; env?: NodeJS.ProcessEnv; timeout?: number },
+): { status: number | null; stdout: string; stderr: string };
+export function assertInstalledCodexShimHealth(
+  isolatedHome: string,
+  options: { cwd: string; env?: NodeJS.ProcessEnv },
+): void;
+export function embeddingsStatusReportsLink(statusText: string, agentId: string, label: string): boolean;
+export function assertEmbeddingsStatusLinked(statusText: string, agentId: string, phase: string): void;
+export function seedUnlinkedClaudeCacheVersion(
+  isolatedHome: string,
+  version?: string,
+): { pluginDir: string; agentId: string };
+export function assertNoCompletedSummaryStubs(databasePath: string): void;
+export function seedRecallIncidentRows(databasePath: string): void;
+export function clearRecallIncidentRows(databasePath: string): void;
+export function assertRecallSkippedIncidentRows(stdout: string, phase: string): void;
 export function run(
   command: string,
   args: string[],

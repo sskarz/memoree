@@ -11,8 +11,7 @@
 
 import { serializeFloat4Array } from "../../shell/grep-core.js";
 import { sqlStr } from "../../utils/sql.js";
-import { projectKeyScopeSql } from "../../utils/repo-identity.js";
-import type { RecallHit } from "./recall-format.js";
+import { isInjectableRecallHit, type RecallHit } from "./recall-format.js";
 import { scoreVectorRows, vectorScanLimit } from "../../storage/vector-search.js";
 
 // `summary` is selected alongside `description` so recall can inject a
@@ -28,12 +27,31 @@ const SELECT_COLS = "path, author, project, summary, description, last_update_da
 // as a final total order so the same prompt always recalls the same row.
 const TIE_BREAK = "last_update_date DESC, path ASC";
 
+/**
+ * Restrict recall to this project's summaries. Empty `project_key` rows are
+ * admitted only as a cold-start fallback — once the current key has any
+ * embedded `/summaries/%` row, they stay out of the candidate pool.
+ */
+export function recallProjectKeySql(
+  table: string,
+  projectKey: string,
+  embeddedRowPredicate: string,
+): string {
+  const key = sqlStr(projectKey);
+  return (
+    `(project_key = '${key}' OR (project_key = '' AND NOT EXISTS (` +
+    `SELECT 1 FROM "${table}" AS _pk WHERE _pk.path LIKE '/summaries/%' ` +
+    `AND ${embeddedRowPredicate} AND _pk.project_key = '${key}')))`
+  );
+}
+
 export interface RecallQueryOptions {
   /** Restrict to this project basename when set. Prefer `projectKey`. */
   project?: string;
   /**
    * Stable git-remote (or abs-cwd) key. When set, recall only sees this
-   * project's summaries plus legacy rows whose `project_key` is empty.
+   * project's summaries. Legacy empty `project_key` rows are admitted only
+   * when this key has no embedded summaries yet (cold-start fallback).
    */
   projectKey?: string;
   /** Exclude this exact summary path (e.g. the current session's own row). */
@@ -45,10 +63,12 @@ export interface RecallQueryOptions {
 type QueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
 
 /**
- * Return the single best-scoring summary for `queryEmbedding`, or null when
- * the table has no embedded rows / the query yields nothing. The caller
- * applies the relevance threshold (passesThreshold) — this returns the raw
- * top hit so telemetry can record near-misses.
+ * Return the best-scoring *injectable* summary for `queryEmbedding`, or null
+ * when the table has no embedded rows. SessionStart stubs (`completed` /
+ * `in progress`, empty wiki bodies) are skipped so a placeholder sitting at
+ * the top of the LIMIT window cannot hide a real prior-work hit. If every
+ * candidate is a stub, the raw top row is still returned so telemetry can
+ * record a near-miss instead of `none`.
  */
 export async function recallTopHit(
   query: QueryFn,
@@ -62,8 +82,9 @@ export async function recallTopHit(
   // Only session SUMMARIES — the memory table also holds notes/goals/files;
   // a non-summary row must never be injected as "prior work".
   const filters = [`path LIKE '/summaries/%'`, `ARRAY_LENGTH(summary_embedding, 1) > 0`];
-  if (opts.projectKey) filters.push(projectKeyScopeSql(opts.projectKey));
-  else if (opts.project) filters.push(`project = '${sqlStr(opts.project)}'`);
+  if (opts.projectKey) {
+    filters.push(recallProjectKeySql(memoryTable, opts.projectKey, "ARRAY_LENGTH(_pk.summary_embedding, 1) > 0"));
+  } else if (opts.project) filters.push(`project = '${sqlStr(opts.project)}'`);
   if (opts.excludePath) filters.push(`path <> '${sqlStr(opts.excludePath)}'`);
 
   const sql =
@@ -73,14 +94,15 @@ export async function recallTopHit(
     `ORDER BY score DESC, ${TIE_BREAK} LIMIT ${Math.max(1, opts.limit ?? 3)}`;
 
   try {
-    return mapTopRow(await query(sql), "semantic");
+    return pickRecallHit(await query(sql), "semantic");
   } catch (error) {
     // SQLite and vanilla PostgreSQL intentionally have no vector operator.
     // Preserve Memoree's server path, but fall back to a bounded candidate
     // scan when the provider rejects `<#>`.
     const localFilters = [`path LIKE '/summaries/%'`, `summary_embedding IS NOT NULL`];
-    if (opts.projectKey) localFilters.push(projectKeyScopeSql(opts.projectKey));
-    else if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);
+    if (opts.projectKey) {
+      localFilters.push(recallProjectKeySql(memoryTable, opts.projectKey, "_pk.summary_embedding IS NOT NULL"));
+    } else if (opts.project) localFilters.push(`project = '${sqlStr(opts.project)}'`);
     if (opts.excludePath) localFilters.push(`path <> '${sqlStr(opts.excludePath)}'`);
     const rows = await query(
       `SELECT ${SELECT_COLS}, summary_embedding FROM "${memoryTable}" ` +
@@ -91,13 +113,14 @@ export async function recallTopHit(
         String(b.row.last_update_date ?? "").localeCompare(String(a.row.last_update_date ?? "")) ||
         String(a.row.path ?? "").localeCompare(String(b.row.path ?? "")));
     if (scored.length === 0) return null;
-    return mapTopRow([{ ...scored[0].row, score: scored[0].score }], "semantic");
+    return pickRecallHit(
+      scored.map(item => ({ ...item.row, score: item.score })),
+      "semantic",
+    );
   }
 }
 
-function mapTopRow(rows: Array<Record<string, unknown>>, mode: "semantic"): RecallHit | null {
-  if (!rows.length) return null;
-  const r = rows[0];
+function mapRow(r: Record<string, unknown>, mode: "semantic"): RecallHit {
   const score = Number(r["score"]);
   return {
     path: String(r["path"] ?? ""),
@@ -109,4 +132,11 @@ function mapTopRow(rows: Array<Record<string, unknown>>, mode: "semantic"): Reca
     score: Number.isFinite(score) ? score : 0,
     mode,
   };
+}
+
+/** Prefer the first injectable row; fall back to the raw top hit for telemetry. */
+function pickRecallHit(rows: Array<Record<string, unknown>>, mode: "semantic"): RecallHit | null {
+  if (!rows.length) return null;
+  const hits = rows.map(row => mapRow(row, mode));
+  return hits.find(hit => isInjectableRecallHit(hit)) ?? hits[0] ?? null;
 }

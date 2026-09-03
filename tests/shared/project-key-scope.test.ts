@@ -187,4 +187,30 @@ describe("project_key scopes session grep, recall, index.md, ls, and find", () =
 
     await api.close();
   });
+
+  it("recall does not admit empty-key summaries when the current project already has embeddings", async () => {
+    const root = mkdtempSync(join(tmpdir(), "project-key-recall-"));
+    dirs.push(root);
+    const repoA = join(root, "api");
+    initGitRepo(repoA, "https://github.com/acme/alpha.git");
+    const keyA = deriveProjectKey(repoA).key;
+    const dbPath = join(root, "memoree.sqlite3");
+    const api = new SqliteBackend(dbPath, "memory", TABLES);
+    await api.initializeSchema();
+    const vec = [1, 0, 0];
+    const now = "2026-09-01T00:00:00.000Z";
+    const later = "2026-09-02T00:00:00.000Z";
+    const emb = embeddingSqlLiteral(vec, "sqlite");
+    await api.query(
+      `INSERT INTO "memory" (id, path, filename, summary, summary_embedding, author, project, project_key, description, agent, creation_date, last_update_date) ` +
+      `VALUES ('sum-a', '/summaries/alice/alpha.md', 'alpha.md', '## What Happened\nAlpha work.\n## Key Facts\n- alpha-token', ${emb}, 'alice', 'api', '${keyA}', 'alpha work', 'claude_code', '${now}', '${now}')`,
+    );
+    await api.query(
+      `INSERT INTO "memory" (id, path, filename, summary, summary_embedding, author, project, project_key, description, agent, creation_date, last_update_date) ` +
+      `VALUES ('sum-legacy', '/summaries/alice/unknown.md', 'unknown.md', '## What Happened\npreview-v2 club-site.\n## Key Facts\n- club', ${emb}, 'alice', 'unknown', '', 'preview-v2 club-site', 'codex', '${later}', '${later}')`,
+    );
+    const hitA = await recallTopHit((sql) => api.query(sql), "memory", vec, { projectKey: keyA });
+    expect(hitA?.path).toBe("/summaries/alice/alpha.md");
+    await api.close();
+  });
 });

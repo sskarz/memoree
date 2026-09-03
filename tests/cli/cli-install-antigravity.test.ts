@@ -81,7 +81,11 @@ describe("installAntigravity", () => {
     expect(mcp.mcpServers.memoree.args[0]).not.toContain("$PLUGIN_ROOT");
     expect(ANTIGRAVITY_PLUGIN_DIR).toContain(join(".gemini", "config", "plugins", "memoree"));
     expect(existsSync(join(tmpHome, ".gemini", "antigravity-cli", "plugins"))).toBe(false);
-    expect(JSON.parse(readFileSync(join(ANTIGRAVITY_PLUGIN_DIR, "bundle", "package.json"), "utf-8"))).toEqual({ type: "module" });
+    expect(JSON.parse(readFileSync(join(ANTIGRAVITY_PLUGIN_DIR, "bundle", "package.json"), "utf-8"))).toEqual({
+      name: "memoree",
+      version: "1.2.3",
+      type: "module",
+    });
     const pluginInstall = execFileSyncMock.mock.calls.find(call => call[0] === "agy" && Array.isArray(call[1]) && call[1][0] === "plugin" && call[1][1] === "install");
     expect(pluginInstall?.[1]?.[2]).toBe(join(tmpPkg, "harnesses", "antigravity"));
     expect(pluginInstall?.[1]?.[2]).not.toBe(ANTIGRAVITY_PLUGIN_DIR);

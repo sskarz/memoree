@@ -132,6 +132,10 @@ Live is green only when all of these hold:
   (Claude recall + Codex `grep` of `~/.memoree/memory/`)
 - `runtime:validate` structured VFS: rule/goal/KPI edits persist; unsafe
   `rm -rf` on the mount is denied
+- after isolated `codex install`, the installed Codex plugin reports a real
+  version (not `0.0.0`) and doctor does not `FAIL  hook bundles:`
+- no `/summaries/%` description is the `"completed"` stub; recall.js still
+  injects the captured identifier after stub + empty-key competitors are seeded
 - `live:e2e` final line reports event and summary counts; on failure the
   workspace path is printed and kept
 

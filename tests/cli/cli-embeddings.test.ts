@@ -102,6 +102,14 @@ describe("findMemoreeInstalls", () => {
     expect(installs[0].id).toBe("claude (0.7.0)");
   });
 
+  it("skips Claude cache dirs marked .orphaned_at", () => {
+    const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
+    fakeBundleAt(join(cache, "0.7.145"));
+    fakeBundleAt(join(cache, "0.7.151"));
+    writeFileSync(join(cache, "0.7.145", ".orphaned_at"), "2026-09-01T00:00:00Z");
+    expect(findMemoreeInstalls(tmpHome).map(i => i.id)).toEqual(["claude (0.7.151)"]);
+  });
+
   it("skips entries in cache/memoree/memoree/ that aren't directories with bundles", () => {
     const cache = join(tmpHome, ".claude", "plugins", "cache", "memoree", "memoree");
     mkDir(cache);

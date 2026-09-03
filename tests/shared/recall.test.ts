@@ -13,6 +13,7 @@ import {
   formatRecallContext,
   pickExcerpt,
   extractSection,
+  isInjectableRecallHit,
   type RecallHit,
 } from "../../src/hooks/shared/recall-format.js";
 import { recallTopHit } from "../../src/hooks/shared/recall-query.js";
@@ -343,6 +344,32 @@ describe("pickExcerpt — verbatim facts over the gist description (RECALL_LOSSY
   });
 });
 
+describe("isInjectableRecallHit", () => {
+  it("rejects completed / in progress excerpts", () => {
+    expect(isInjectableRecallHit({ description: "completed" })).toBe(false);
+    expect(isInjectableRecallHit({ description: "in progress" })).toBe(false);
+    expect(isInjectableRecallHit({ summary: "# Session\n", description: "completed" })).toBe(false);
+  });
+
+  it("rejects a stub body with neither facts nor What Happened", () => {
+    expect(isInjectableRecallHit({
+      summary: "# Session\n- **Status**: in-progress\nJSONL offset: 5\n",
+      description: "completed",
+    })).toBe(false);
+  });
+
+  it("accepts a legacy description-only gist", () => {
+    expect(isInjectableRecallHit({ description: "Fixed the auth token drift" })).toBe(true);
+  });
+
+  it("accepts a real wiki body with Key Facts", () => {
+    expect(isInjectableRecallHit({
+      summary: "## What Happened\nDid a thing.\n## Key Facts\n- token=ABC\n",
+      description: "Did a thing.",
+    })).toBe(true);
+  });
+});
+
 describe("formatRecallContext — injects verbatim facts from the summary (RECALL_LOSSY fix)", () => {
   const now = Date.parse("2026-06-20T12:00:00Z");
   it("surfaces the exact token from the summary's Key Facts into the injected excerpt", () => {
@@ -484,10 +511,12 @@ describe("recallTopHit — focused semantic query", () => {
     expect(captured).not.toContain("path <>");
   });
 
-  it("scopes to project_key (plus legacy empty keys) when projectKey is set", async () => {
+  it("scopes to project_key with empty-key only as a cold-start fallback", async () => {
     let captured = "";
     await recallTopHit(async (sql) => { captured = sql; return []; }, "t", vec, { projectKey: "abc123def4567890" });
-    expect(captured).toContain("(project_key = 'abc123def4567890' OR project_key = '')");
+    expect(captured).toContain("project_key = 'abc123def4567890'");
+    expect(captured).toContain("project_key = ''");
+    expect(captured).toContain("NOT EXISTS");
     expect(captured).not.toContain("project =");
   });
 
@@ -497,6 +526,55 @@ describe("recallTopHit — focused semantic query", () => {
       "t", vec, {},
     );
     expect(hit?.score).toBe(0);
+  });
+
+  it("skips a completed stub when a later row is injectable", async () => {
+    const hit = await recallTopHit(
+      async () => [
+        {
+          path: "/summaries/poison-stub/session.md",
+          author: "poison-stub",
+          project: "indra",
+          summary: "# Placeholder\n",
+          description: "completed",
+          last_update_date: "2099-01-01",
+          score: 0.99,
+        },
+        {
+          path: "/summaries/levon/s1.md",
+          author: "levon",
+          project: "indra",
+          summary: "## What Happened\nFixed auth token drift.\n## Key Facts\n- token-abc\n",
+          description: "fixed auth token drift",
+          last_update_date: "2026-06-18",
+          score: 0.8,
+        },
+      ],
+      "t",
+      vec,
+      {},
+    );
+    expect(hit?.path).toBe("/summaries/levon/s1.md");
+    expect(hit?.description).toBe("fixed auth token drift");
+  });
+
+  it("returns the raw top stub when every candidate is a placeholder", async () => {
+    const hit = await recallTopHit(
+      async () => [{
+        path: "/summaries/alice/placeholder.md",
+        author: "alice",
+        project: "indra",
+        summary: "# Session\n",
+        description: "in progress",
+        last_update_date: "2026-06-18",
+        score: 0.9,
+      }],
+      "t",
+      vec,
+      {},
+    );
+    expect(hit?.description).toBe("in progress");
+    expect(hit?.path).toBe("/summaries/alice/placeholder.md");
   });
 });
 
