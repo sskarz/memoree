@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isPluginInstallCwd, resolveWorkspaceCwd } from "../../src/utils/workspace-cwd.js";
 import { projectNameFromCwd } from "../../src/utils/project-name.js";
-import { deriveProjectKey } from "../../src/utils/repo-identity.js";
+import { deriveProjectKey, PLUGIN_INSTALL_PROJECT_KEY } from "../../src/utils/repo-identity.js";
 
 const CLAUDE_CACHE = "/Users/me/.claude/plugins/cache/memoree/memoree/0.7.153";
 const CLAUDE_BUNDLE = `${CLAUDE_CACHE}/bundle`;
@@ -18,12 +18,21 @@ describe("isPluginInstallCwd", () => {
     expect(isPluginInstallCwd("/Users/me/.local/share/memoree-runtime")).toBe(true);
     expect(isPluginInstallCwd("/Users/me/.gemini/antigravity-cli/plugins/memoree")).toBe(true);
     expect(isPluginInstallCwd("/Users/me/.claude/plugins/cache/memoree/memoree/0.7.153/bundle")).toBe(true);
+    expect(isPluginInstallCwd(`${CLAUDE_CACHE}/harnesses/claude-code/bundle`)).toBe(true);
+    expect(isPluginInstallCwd(`${CODEX_PLUGIN}/hooks`)).toBe(true);
   });
 
   it("does not flag a normal workspace", () => {
     expect(isPluginInstallCwd("/Users/me/Documents/GitHub/memoree")).toBe(false);
     expect(isPluginInstallCwd("/tmp/some-project-name")).toBe(false);
+    expect(isPluginInstallCwd("/Users/me/src/memoree-runtime")).toBe(false);
+    expect(isPluginInstallCwd("/work/plugins/1.2.3/bundle")).toBe(false);
     expect(isPluginInstallCwd("")).toBe(false);
+  });
+
+  it("treats MEMOREE_RUNTIME_DIR as an install root", () => {
+    expect(isPluginInstallCwd("/opt/runtime/bundle", { MEMOREE_RUNTIME_DIR: "/opt/runtime" })).toBe(true);
+    expect(isPluginInstallCwd("/opt/other", { MEMOREE_RUNTIME_DIR: "/opt/runtime" })).toBe(false);
   });
 });
 
@@ -57,9 +66,10 @@ describe("projectNameFromCwd plugin remap", () => {
 });
 
 describe("deriveProjectKey plugin silo", () => {
-  it("does not hash an unremappable plugin cwd into a unique project_key", () => {
+  it("quarantines an unremappable plugin cwd under a sentinel, not an empty key", () => {
     const { key, project } = deriveProjectKey(CLAUDE_CACHE, { PWD: CLAUDE_CACHE }, CLAUDE_CACHE);
-    expect(key).toBe("");
+    expect(key).toBe(PLUGIN_INSTALL_PROJECT_KEY);
+    expect(key).not.toBe("");
     expect(project).toBe("unknown");
   });
 

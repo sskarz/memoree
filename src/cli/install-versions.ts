@@ -32,6 +32,7 @@ export function pathCliVersion(
     const raw = execFile("memoree", ["--version"], {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3_000,
       env: { ...process.env, [VERSION_PROBE_ENV]: "1" },
     });
     return parseSemver(String(raw));

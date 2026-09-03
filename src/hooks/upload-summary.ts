@@ -13,6 +13,7 @@ import { embeddingSqlLiteral } from "../embeddings/sql.js";
 import { redactSecrets } from "./shared/redact.js";
 import type { StorageDialect } from "../storage/schema.js";
 import { escapedStringPrefix } from "../storage/sql-dialect.js";
+import { MCP_DIGEST_MARKER, isMcpDigestText } from "./shared/mcp-digest.js";
 
 export type QueryFn = (sql: string) => Promise<Array<Record<string, unknown>>>;
 
@@ -171,12 +172,11 @@ export function decideWikiUpload(
 
 /**
  * Marker MCP digest rows carry so a later wiki write stays distinguishable.
- * Keep in sync with `MCP_SUMMARY_MARKER` in src/mcp/session-summary.ts.
  */
-export const MCP_DIGEST_MARKER = "<!-- memoree-mcp-summary -->";
+export { MCP_DIGEST_MARKER };
 
 export function isMcpDigestSummary(summary: unknown): boolean {
-  return typeof summary === "string" && summary.includes(MCP_DIGEST_MARKER);
+  return isMcpDigestText(summary);
 }
 
 /** SQL: row is an MCP digest or is not yet a finalized wiki write-up. */

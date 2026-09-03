@@ -7,33 +7,40 @@
 
 export type WorkspaceEnv = Record<string, string | undefined>;
 
-const SEMVER_DIR = /^\d+\.\d+\.\d+$/;
-
 function posix(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-/** True when `cwd` is a Memoree plugin/runtime install, not a user workspace. */
-export function isPluginInstallCwd(cwd: string | undefined | null): boolean {
+/**
+ * True when `cwd` is a Memoree plugin/runtime install, not a user workspace.
+ *
+ * Matchers are contained to known install roots so a real repo named
+ * `memoree-runtime` or a random `plugins/<semver>/bundle` tree is not flagged.
+ * Nested paths under those roots (hooks, harness bundle, skills) still match.
+ */
+export function isPluginInstallCwd(
+  cwd: string | undefined | null,
+  env: WorkspaceEnv = process.env,
+): boolean {
   if (!cwd) return false;
   const n = posix(cwd);
-  if (/\/plugins\/cache\/memoree\/memoree\/\d+\.\d+\.\d+(?:\/bundle)?$/.test(n)) return true;
-  if (/\/\.codex\/memoree(?:\/bundle)?$/.test(n)) return true;
-  if (/\/\.gemini\/(?:config|antigravity-cli)\/plugins\/memoree(?:\/bundle)?$/.test(n)) return true;
-  if (/\/memoree-runtime(?:\/bundle)?$/.test(n)) return true;
-  const parts = n.split("/");
-  const base = parts[parts.length - 1] ?? "";
-  const parent = parts[parts.length - 2] ?? "";
-  if (base === "bundle" && SEMVER_DIR.test(parent) && parts.includes("plugins")) return true;
-  if (SEMVER_DIR.test(base) && parent === "memoree" && n.includes("/plugins/cache/")) return true;
+  if (/\/\.claude\/plugins\/cache\/memoree\/memoree\/\d+\.\d+\.\d+(?:\/|$)/.test(n)) return true;
+  if (/\/\.codex\/memoree(?:\/|$)/.test(n)) return true;
+  if (/\/\.gemini\/(?:config|antigravity-cli)\/plugins\/memoree(?:\/|$)/.test(n)) return true;
+  if (/\/\.local\/share\/memoree-runtime(?:\/|$)/.test(n)) return true;
+  const runtimeDir = posix((env.MEMOREE_RUNTIME_DIR ?? "").trim());
+  if (runtimeDir && (n === runtimeDir || n.startsWith(`${runtimeDir}/`))) return true;
   return false;
 }
 
-function firstNonPlugin(candidates: Array<string | undefined | null>): string | null {
+function firstNonPlugin(
+  candidates: Array<string | undefined | null>,
+  env: WorkspaceEnv,
+): string | null {
   for (const c of candidates) {
     const v = (c ?? "").trim();
     if (!v) continue;
-    if (!isPluginInstallCwd(v)) return v;
+    if (!isPluginInstallCwd(v, env)) return v;
   }
   return null;
 }
@@ -52,7 +59,7 @@ export function resolveWorkspaceCwd(
   const pluginRoot = (env.CLAUDE_PLUGIN_ROOT ?? "").trim();
   const raw = (cwd ?? "").trim();
   const underPluginRoot = Boolean(pluginRoot && raw && posix(raw).startsWith(posix(pluginRoot)));
-  const hookCwd = raw && !isPluginInstallCwd(raw) && !underPluginRoot ? raw : undefined;
+  const hookCwd = raw && !isPluginInstallCwd(raw, env) && !underPluginRoot ? raw : undefined;
   const resolved = firstNonPlugin([
     hookCwd,
     env.CLAUDE_PROJECT_DIR,
@@ -60,6 +67,6 @@ export function resolveWorkspaceCwd(
     env.CURSOR_WORKSPACE,
     env.PWD,
     fallback,
-  ]);
+  ], env);
   return resolved ?? (raw || fallback);
 }

@@ -116,6 +116,7 @@ export default defineConfig({
         "src/hooks/shared/wiki-prompt.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/utils/workspace-cwd.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
         "src/cli/install-versions.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
+        "src/hooks/shared/mcp-digest.ts": { statements: 80, branches: 80, functions: 80, lines: 80 },
       },
     },
   },

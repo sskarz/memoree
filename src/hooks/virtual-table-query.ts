@@ -3,9 +3,7 @@ import { sqlLike, sqlStr } from "../utils/sql.js";
 import { normalizeContent, emptySessionBodyNotice } from "../shell/grep-core.js";
 import { nullExpression, textExpression } from "../storage/sql-dialect.js";
 import { projectKeyScopeSql } from "../utils/repo-identity.js";
-
-/** Keep in sync with `MCP_DIGEST_MARKER` in upload-summary.ts. */
-const MCP_DIGEST_MARKER = "<!-- memoree-mcp-summary -->";
+import { isMcpDigestText } from "./shared/mcp-digest.js";
 
 type Row = Record<string, unknown>;
 
@@ -28,11 +26,7 @@ export const INDEX_LIMIT_PER_SECTION = 50;
 export const INDEX_SUMMARY_FETCH_LIMIT = INDEX_LIMIT_PER_SECTION * 3 + 1;
 
 export function isMcpDigestIndexRow(row: Row): boolean {
-  const summary = String(row["summary"] ?? "");
-  if (summary.includes(MCP_DIGEST_MARKER)) return true;
-  const description = String(row["description"] ?? "");
-  return description.startsWith("Antigravity MCP tools ran")
-    || description.startsWith("Antigravity MCP capture digest");
+  return isMcpDigestText(row["summary"], row["description"]);
 }
 
 export function filterIndexSummaryRows(rows: Row[]): Row[] {

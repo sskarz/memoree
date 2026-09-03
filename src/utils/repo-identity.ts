@@ -17,6 +17,13 @@ import { sqlStr } from "./sql.js";
 import { isPluginInstallCwd, resolveWorkspaceCwd, type WorkspaceEnv } from "./workspace-cwd.js";
 
 /**
+ * Rows captured while cwd was an unremappable plugin-install directory.
+ * Distinct from legacy empty `project_key` so index/grep/recall that admit
+ * `''` as a cold-start fallback do not mix these into every real project.
+ */
+export const PLUGIN_INSTALL_PROJECT_KEY = "__plugin_cwd__";
+
+/**
  * Default port per scheme. If the URL carries `:<defaultPort>` explicitly,
  * we strip it so `https://host:443/x` collapses with `https://host/x`
  * (otherwise the two hash to different project keys despite being the same
@@ -90,11 +97,12 @@ export function deriveProjectKey(
   fallback: string = process.cwd(),
 ): { key: string; project: string } {
   const workspace = resolveWorkspaceCwd(cwd, env, fallback);
-  // A plugin-install cwd that we could not remap would hash to a unique
-  // silo and hide the session from the real repo. Leave project_key empty
-  // so index/recall treat it like a legacy unscoped row instead.
-  if (isPluginInstallCwd(workspace)) {
-    return { key: "", project: "unknown" };
+  // A plugin-install cwd we could not remap must not hash to a unique silo
+  // (invisible from the real repo) and must not use '' (visible in every
+  // project's index via projectKeyScopeSql). Quarantine under a sentinel
+  // that scope/recall never OR in with a real key.
+  if (isPluginInstallCwd(workspace, env)) {
+    return { key: PLUGIN_INSTALL_PROJECT_KEY, project: "unknown" };
   }
   const absCwd = canonicalPath(workspace);
   const project = basename(absCwd) || "unknown";

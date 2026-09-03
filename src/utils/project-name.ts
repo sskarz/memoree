@@ -24,11 +24,11 @@ export function projectNameFromCwd(
   if (!raw) {
     for (const key of ["CLAUDE_PROJECT_DIR", "CURSOR_PROJECT_DIR", "CURSOR_WORKSPACE"] as const) {
       const v = (env[key] ?? "").trim();
-      if (v && !isPluginInstallCwd(v)) return basename(v) || "unknown";
+      if (v && !isPluginInstallCwd(v, env)) return basename(v) || "unknown";
     }
     return "unknown";
   }
   const workspace = resolveWorkspaceCwd(raw, env, raw);
-  if (isPluginInstallCwd(workspace)) return "unknown";
+  if (isPluginInstallCwd(workspace, env)) return "unknown";
   return basename(workspace) || "unknown";
 }

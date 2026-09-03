@@ -389,6 +389,13 @@ describe("isInjectableRecallHit", () => {
       description: "Antigravity MCP capture digest.",
     })).toBe(false);
   });
+
+  it("rejects an unmarked legacy MCP digest that still has What Happened", () => {
+    expect(isInjectableRecallHit({
+      summary: "## What Happened\nAntigravity MCP tools ran.\n## Key Facts\n- memoree_read\n",
+      description: "Antigravity MCP tools ran: memoree_read, memoree_grep",
+    })).toBe(false);
+  });
 });
 
 describe("pickInjectableRecallHit", () => {

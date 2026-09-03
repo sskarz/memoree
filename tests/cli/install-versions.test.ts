@@ -50,8 +50,9 @@ describe("pathCliVersion", () => {
   });
 
   it("parses the first semver from PATH memoree --version", () => {
-    const execFile = vi.fn((_file: string, _args: string[], opts?: { env?: NodeJS.ProcessEnv }) => {
+    const execFile = vi.fn((_file: string, _args: string[], opts?: { env?: NodeJS.ProcessEnv; timeout?: number }) => {
       expect(opts?.env?.[VERSION_PROBE_ENV]).toBe("1");
+      expect(opts?.timeout).toBe(3_000);
       return "memoree 0.7.145\n";
     });
     expect(pathCliVersion(execFile as unknown as ExecFile)).toBe("0.7.145");

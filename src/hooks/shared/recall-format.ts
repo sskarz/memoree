@@ -16,9 +16,7 @@
  */
 
 import { LINE_TERMINATOR_RE } from "./context-renderer.js";
-
-/** Keep in sync with `MCP_DIGEST_MARKER` in upload-summary.ts. */
-const MCP_DIGEST_MARKER = "<!-- memoree-mcp-summary -->";
+import { isMcpDigestText } from "./mcp-digest.js";
 
 /**
  * Max chars of recalled excerpt to inject (bounds the injection surface).
@@ -111,7 +109,7 @@ const STUB_EXCERPTS = new Set(["", "completed", "in progress"]);
  */
 export function isInjectableRecallHit(hit: Pick<RecallHit, "summary" | "description">): boolean {
   const summary = (hit.summary ?? "").trim();
-  if (summary.includes(MCP_DIGEST_MARKER)) return false;
+  if (isMcpDigestText(summary, hit.description)) return false;
   const excerpt = pickExcerpt(hit).trim().toLowerCase();
   if (STUB_EXCERPTS.has(excerpt)) return false;
   if (!summary) return excerpt.length > 0;

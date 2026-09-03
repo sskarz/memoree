@@ -81,7 +81,8 @@ describe("harness incident gates — source locks for memory labeling / recall",
       expect(src, rel).toContain("deriveProjectKey");
     }
     expect(readSrc("src/hooks/recall.ts")).toContain("deriveProjectKey");
-    expect(readSrc("src/utils/repo-identity.ts")).toContain("resolveWorkspaceCwd");
+    expect(readSrc("src/utils/repo-identity.ts")).toContain("PLUGIN_INSTALL_PROJECT_KEY");
+    expect(readSrc("src/dir-config.ts")).toContain("resolveWorkspaceCwd");
     expect(readSrc("src/utils/project-name.ts")).toContain("isPluginInstallCwd");
   });
 
@@ -90,6 +91,7 @@ describe("harness incident gates — source locks for memory labeling / recall",
     expect(cli).toContain("formatVersionReport");
     expect(readSrc("src/cli/install-versions.ts")).toContain("hook stamp:");
     expect(readSrc("src/cli/install-versions.ts")).toContain("PATH CLI:");
+    expect(readSrc("src/cli/install-versions.ts")).toContain("timeout: 3_000");
   });
 
   it("wiki Key Facts stay verified-only and recall rejects MCP digests", () => {
@@ -97,7 +99,8 @@ describe("harness incident gates — source locks for memory labeling / recall",
     expect(wiki).toMatch(/VERIFIED atomic facts/);
     expect(wiki).toContain("## Corrections");
     expect(wiki).toMatch(/Unverified recommendations belong in Next Steps/);
-    expect(readSrc("src/hooks/shared/recall-format.ts")).toContain("memoree-mcp-summary");
+    expect(readSrc("src/hooks/shared/recall-format.ts")).toContain("isMcpDigestText");
+    expect(readSrc("src/hooks/shared/mcp-digest.ts")).toContain("memoree-mcp-summary");
     expect(readSrc("src/hooks/shared/recall-format.ts")).toContain("Dated technical claims may be stale");
     expect(readSrc("src/mcp/session-summary.ts")).toContain("## Tool activity");
     expect(readSrc("src/hooks/virtual-table-query.ts")).toContain("filterIndexSummaryRows");
